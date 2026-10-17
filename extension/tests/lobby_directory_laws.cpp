@@ -12,6 +12,10 @@ using netw::connect::DirectoryTransport;
 
 class FakeDirectory : public LobbyDirectory {
 public:
+    FakeDirectory() {
+        set_capabilities(CAPABILITY_BROWSE);
+    }
+
     StringName announced = StringName("FakeMultiplayerPeer");
     String joined;
     Dictionary hosted;
@@ -20,9 +24,6 @@ public:
 
     StringName peer_class() override {
         return announced;
-    }
-    Capability capabilities() override {
-        return CAPABILITY_BROWSE;
     }
     void join_lobby(const String &p_address) override {
         joined = p_address;
@@ -52,13 +53,13 @@ TEST_CASE(
     LobbyDirectory *bare = memnew(LobbyDirectory);
 
     NETW_CHECK_EQ(int(bare->peer_class() == StringName()), 1);
-    NETW_CHECK_EQ(int(bare->capabilities()), 0);
+    NETW_CHECK_EQ(int(bare->get_capabilities()), 0);
     NETW_CHECK_EQ(int(bare->is_available()), 1);
-    NETW_CHECK_EQ(int(bare->can_host_here()), 1);
-    NETW_CHECK_EQ(int(bare->can_probe()), 0);
-    NETW_CHECK_EQ(int(bare->accepts_empty_address()), 0);
-    NETW_CHECK_EQ(int(bare->address_label() == String("Lobby")), 1);
-    NETW_CHECK_EQ(int(bare->timeout_hint() == 20.0), 1);
+    NETW_CHECK_EQ(int(bare->get_can_host_here()), 1);
+    NETW_CHECK_EQ(int(bare->get_can_probe()), 0);
+    NETW_CHECK_EQ(int(bare->get_accepts_empty_address()), 0);
+    NETW_CHECK_EQ(int(bare->get_address_label() == String("Lobby")), 1);
+    NETW_CHECK_EQ(int(bare->get_timeout_hint() == 20.0), 1);
     NETW_CHECK_EQ(int(bare->member_name(7) == String("Player 7")), 1);
     NETW_CHECK_EQ(int(bare->local_member_name() == String("Player")), 1);
 
@@ -66,12 +67,13 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Connect][Hosted] LD2 display_name falls through to the peer "
-    "class a directory announces, so a provider naming one names both"
+    "[Networked][Connect][Hosted] LD2 display_name reads the property a "
+    "directory sets"
 ) {
     Held held;
+    held.directory->set_display_name(String("Fake lobby"));
     NETW_CHECK_EQ(
-        int(held.directory->display_name() == String("FakeMultiplayerPeer")),
+        int(held.directory->get_display_name() == String("Fake lobby")),
         1
     );
 }

@@ -1832,6 +1832,7 @@ FOLDER_GROUPS: list[tuple[str, list[str]]] = [
         ],
     ),
     ("Scene Node Path (editor)", ["addons/networked/addons/scene_node_path"]),
+    ("Steam", ["addons/networked_steam"]),
     ("Testing", ["addons/networked_test"]),
 ]
 
@@ -1850,7 +1851,9 @@ def build_class_source_paths() -> dict[str, str]:
     repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     mapping: dict[str, str] = {}
     decl = re.compile(r"^\s*class_name\s+([A-Za-z_][A-Za-z0-9_]*)", re.MULTILINE)
-    for addon in ("addons/networked", "addons/networked_test"):
+    for addon in (
+        "addons/networked", "addons/networked_steam", "addons/networked_test"
+    ):
         base = os.path.join(repo_root, addon)
         if not os.path.isdir(base):
             continue

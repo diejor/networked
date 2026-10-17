@@ -41,7 +41,9 @@ namespace Networked;
 /// <see cref="NetwEndpoint"/>. A <see cref="LobbyDirectory"/> lists its rows
 /// while <see cref="NetwConnection.Browsing"/> is <c>true</c>, and
 /// <see cref="NetwConnection.Add"/> lists a server the game already knows.
-/// <b>Connecting</b> <see cref="NetwConnection.Join"/> and
+/// <see cref="NetwConnection.Invite"/> records an invitation from any service.
+/// <see cref="NetwConnection.Invited"/> carries the <see cref="NetwEndpoint"/>
+/// a player can join. <b>Connecting</b> <see cref="NetwConnection.Join"/> and
 /// <see cref="NetwConnection.Host"/> create the peer, assign it, and settle
 /// their <see cref="NetwPromise"/> once the session is online. A failure
 /// arrives once through <see cref="NetwConnection.Failed"/>, and a player the
@@ -734,6 +736,43 @@ public sealed class NetwConnection : NetwRefCounted
         godot_variant answered = default;
         NetwThunks.Call3(
             _bindAdd,
+            Checked,
+            in slot0,
+            in slot1,
+            in slot2,
+            ref answered);
+        slot0.Dispose();
+        slot1.Dispose();
+        slot2.Dispose();
+        NetwEndpoint result =
+            NetwEndpoint.Adopt(
+                NetwApi.Retained(
+                    VariantUtils.ConvertToGodotObjectPtr(answered)));
+        answered.Dispose();
+        return result;
+    }
+
+    private static readonly IntPtr _bindInvite =
+        NetwApi.MethodBind("NetwConnection", "invite", 3138012286UL);
+
+    /// <summary>
+    /// Keeps a joinable <see cref="NetwEndpoint"/> at
+    /// <paramref name="address"/> and emits
+    /// <see cref="NetwConnection.Invited"/> with <paramref name="fromName"/>.
+    /// Returns <c>null</c> if <paramref name="transport"/> is unavailable or
+    /// the address is empty.
+    /// </summary>
+    public NetwEndpoint Invite(
+        Variant transport,
+        string address,
+        string fromName = "")
+    {
+        godot_variant slot0 = transport.CopyNativeVariant();
+        godot_variant slot1 = VariantUtils.CreateFromString(address);
+        godot_variant slot2 = VariantUtils.CreateFromString(fromName);
+        godot_variant answered = default;
+        NetwThunks.Call3(
+            _bindInvite,
             Checked,
             in slot0,
             in slot1,

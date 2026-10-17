@@ -10,6 +10,11 @@ namespace netw_test {
 
 class StubDirectory : public netw::LobbyDirectory {
 public:
+    StubDirectory() {
+        set_display_name(godot::String("Stub Lobbies"));
+        set_capabilities(CAPABILITY_BROWSE);
+    }
+
     enum Answering {
         ANSWER_NOTHING,
         ANSWER_PEER,
@@ -27,26 +32,13 @@ public:
     int browse_calls = 0;
     int leave_calls = 0;
     int stop_calls = 0;
-    double interval = 0.0;
 
     godot::StringName peer_class() override {
         return godot::StringName("StubLobbyPeer");
     }
 
-    double list_interval() override {
-        return interval;
-    }
-
     void stop_listing() override {
         stop_calls += 1;
-    }
-
-    godot::String display_name() override {
-        return godot::String("Stub Lobbies");
-    }
-
-    Capability capabilities() override {
-        return CAPABILITY_BROWSE;
     }
 
     godot::Dictionary host_settings() override {
@@ -107,15 +99,15 @@ private:
 
 class ProbeDirectory : public netw::LobbyDirectory {
 public:
+    ProbeDirectory() {
+        set_display_name(godot::String("Probe Directory"));
+    }
+
     int leaves = 0;
     int listings = 0;
 
     godot::StringName peer_class() override {
         return godot::StringName("ProbeDirectoryPeer");
-    }
-
-    godot::String display_name() override {
-        return godot::String("Probe Directory");
     }
 
     void join_lobby(const godot::String &p_address) override {

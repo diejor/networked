@@ -51,6 +51,8 @@ One attempt runs at a time, and :ref:`state<class_NetwConnection_property_state>
 
 Each row of :ref:`endpoints<class_NetwConnection_property_endpoints>` is a :ref:`NetwEndpoint<class_NetwEndpoint>`. A :ref:`LobbyDirectory<class_LobbyDirectory>` lists its rows while :ref:`browsing<class_NetwConnection_property_browsing>` is ``true``, and :ref:`add()<class_NetwConnection_method_add>` lists a server the game already knows.
 
+\ :ref:`invite()<class_NetwConnection_method_invite>` records an invitation from any service. :ref:`invited<class_NetwConnection_signal_invited>` carries the :ref:`NetwEndpoint<class_NetwEndpoint>` a player can join.
+
 \ **Connecting**\ 
 
 \ :ref:`join()<class_NetwConnection_method_join>` and :ref:`host()<class_NetwConnection_method_host>` create the peer, assign it, and settle their :ref:`NetwPromise<class_NetwPromise>` once the session is online. A failure arrives once through :ref:`failed<class_NetwConnection_signal_failed>`, and a player the server refuses arrives through :ref:`NetwSession.join_failed<class_NetwSession_signal_join_failed>` instead.
@@ -128,6 +130,8 @@ Methods
    | :ref:`NetwEndpoint<class_NetwEndpoint>`               | :ref:`find<class_NetwConnection_method_find>`\ (\ transport\: :godot:`Variant`, address\: :godot:`String`\ )                                                                                                                                              |
    +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`host<class_NetwConnection_method_host>`\ (\ transport\: :godot:`Variant`, settings\: :godot:`Dictionary` = {}\ )                                                                                                                                    |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwEndpoint<class_NetwEndpoint>`               | :ref:`invite<class_NetwConnection_method_invite>`\ (\ transport\: :godot:`Variant`, address\: :godot:`String`, from_name\: :godot:`String` = ""\ )                                                                                                        |
    +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`join<class_NetwConnection_method_join>`\ (\ endpoint\: :ref:`NetwEndpoint<class_NetwEndpoint>`, settings\: :godot:`Dictionary` = {}\ )                                                                                                              |
    +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -559,6 +563,18 @@ Returns the listed :ref:`NetwEndpoint<class_NetwEndpoint>` for ``transport`` and
 Settles with :godot:`@GlobalScope.ERR_ALREADY_IN_USE <@GlobalScope#class_@GlobalScope_constant_ERR_ALREADY_IN_USE>` while the session is online.
 
 Invalid :ref:`NetwSessionConfig<class_NetwSessionConfig>`, :ref:`NetwClockConfig<class_NetwClockConfig>` or :ref:`NetwLagCompensationConfig<class_NetwLagCompensationConfig>` settings reject the promise before a peer is created.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwConnection_method_invite:
+
+.. rst-class:: classref-method
+
+:ref:`NetwEndpoint<class_NetwEndpoint>` **invite**\ (\ transport\: :godot:`Variant`, address\: :godot:`String`, from_name\: :godot:`String` = ""\ ) :ref:`🔗<class_NetwConnection_method_invite>`
+
+Keeps a joinable :ref:`NetwEndpoint<class_NetwEndpoint>` at ``address`` and emits :ref:`invited<class_NetwConnection_signal_invited>` with ``from_name``. Returns ``null`` if ``transport`` is unavailable or the address is empty.
 
 .. rst-class:: classref-item-separator
 

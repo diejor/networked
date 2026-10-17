@@ -79,43 +79,4 @@ public sealed class WebTorrentLobbyDirectory : LobbyDirectory
             answered.Dispose();
         }
     }
-
-    private static readonly IntPtr _bindGetListInterval =
-        NetwApi.MethodBind(
-            "WebTorrentLobbyDirectory",
-            "get_list_interval",
-            1740695150UL);
-
-    private static readonly IntPtr _bindSetListInterval =
-        NetwApi.MethodBind(
-            "WebTorrentLobbyDirectory",
-            "set_list_interval",
-            373806689UL);
-
-    /// <summary>
-    /// Seconds between searches while <see cref="NetwConnection.Browsing"/> is
-    /// <c>true</c>.
-    /// </summary>
-    public double ListInterval
-    {
-        get
-        {
-            double answered = default;
-            NetwThunks.Ptrcall0_Double(
-                _bindGetListInterval,
-                Checked,
-                ref answered);
-            return answered;
-        }
-        set
-        {
-            double slot0 = value;
-            long discarded = default;
-            NetwThunks.Ptrcall1_Double_Long(
-                _bindSetListInterval,
-                Checked,
-                in slot0,
-                ref discarded);
-        }
-    }
 }

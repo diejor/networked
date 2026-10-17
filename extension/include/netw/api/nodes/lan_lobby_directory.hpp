@@ -20,21 +20,18 @@ protected:
     void _notification(int p_what);
 
 public:
+    LANLobbyDirectory();
+
     static const double BROWSE_WINDOW;
 
     void set_port(int64_t p_port);
     int64_t get_port() const;
     void set_port_count(int64_t p_count);
     int64_t get_port_count() const;
-    void set_list_interval(double p_seconds);
-    double get_list_interval() const;
 
     godot::StringName peer_class() override;
-    godot::String display_name() override;
-    Capability capabilities() override;
     bool is_available() override;
     void list_lobbies() override;
-    double list_interval() override;
     void stop_listing() override;
     void service_entered(NetwMultiplayer *p_api) override;
     void service_exiting(NetwMultiplayer *p_api) override;
@@ -42,7 +39,6 @@ public:
 private:
     int64_t port = 24750;
     int64_t port_count = 8;
-    double listing_interval = 3.0;
     NetwMultiplayer *session = nullptr;
     uint64_t instance = 0;
 

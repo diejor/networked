@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://dkbxtbmxegbkx" path="res://examples/bomber/game/bomber_session.gd" id="1_sess"]
 [ext_resource type="Script" uid="uid://nfi8rw8sbvir" path="res://examples/bomber/game/gamestate.gd" id="5_gbknk"]
-[ext_resource type="Script" uid="uid://beasv4qgrdwtn" path="res://addons/networked/gdscript/steam/steam_lobby_directory.gd" id="9_p4o8j"]
+[ext_resource type="Script" uid="uid://beasv4qgrdwtn" path="res://addons/networked_steam/steam_lobby_directory.gd" id="9_p4o8j"]
 [ext_resource type="Script" uid="uid://d0u2yowat1s3u" path="res://addons/networked/gdscript/nakama/nakama_lobby_directory.gd" id="10_ej8d4"]
 [ext_resource type="Script" uid="uid://certc8teajoaj" path="res://addons/networked_activity/service/discord_activity_service.gd" id="11_disc"]
 [ext_resource type="Script" uid="uid://d16jtw60ivwir" path="res://examples/bomber/game/lobby.gd" id="12_lobby"]
@@ -21,7 +21,7 @@ script = ExtResource("5_gbknk")
 
 [node name="SteamLobbyDirectory" type="LobbyDirectory" parent="LobbyProviders" unique_id=211603405]
 script = ExtResource("9_p4o8j")
-allow_spacewar_fallback = true
+spacewar_when_unset = true
 metadata/_custom_type_script = "uid://beasv4qgrdwtn"
 
 [node name="NakamaLobbyDirectory" type="LobbyDirectory" parent="LobbyProviders" unique_id=1119735850]

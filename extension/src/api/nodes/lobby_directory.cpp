@@ -1,6 +1,7 @@
 #include "netw/api/nodes/lobby_directory.hpp"
 
 #include "godot/class_db.hpp"
+#include "netw/api/connection.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/log.hpp"
 
@@ -48,7 +49,9 @@ void LobbyDirectory::invite(
         );
         return;
     }
-    session->discovery_directory_invited(this, p_address, p_from_name);
+    session->get_connection()->invite(
+        peer_class(), p_address, p_from_name
+    );
 }
 
 void LobbyDirectory::watched_by(NetwMultiplayer *p_session) {
@@ -62,13 +65,13 @@ void LobbyDirectory::unwatched_by(NetwMultiplayer *p_session) {
 }
 
 bool LobbyDirectory::supports(Capability p_capability) {
-    return (int64_t(capabilities()) & int64_t(p_capability)) != 0;
+    return (get_capabilities() & int64_t(p_capability)) != 0;
 }
 
-LobbyDirectory::Capability LobbyDirectory::capabilities() {
-    Capability answered = Capability(0);
-    GDVIRTUAL_CALL(_capabilities, answered);
-    return answered;
+String LobbyDirectory::get_display_name() {
+    return display_name_value.is_empty()
+        ? String(peer_class())
+        : display_name_value;
 }
 
 StringName LobbyDirectory::peer_class() {
@@ -79,68 +82,12 @@ StringName LobbyDirectory::peer_class() {
     return StringName();
 }
 
-String LobbyDirectory::display_name() {
-    String answered;
-    if (GDVIRTUAL_CALL(_display_name, answered)) {
-        return answered;
-    }
-    return String(peer_class());
-}
-
 bool LobbyDirectory::is_available() {
     bool answered = false;
     if (GDVIRTUAL_CALL(_is_available, answered)) {
         return answered;
     }
     return true;
-}
-
-bool LobbyDirectory::can_host_here() {
-    bool answered = false;
-    if (GDVIRTUAL_CALL(_can_host_here, answered)) {
-        return answered;
-    }
-    return true;
-}
-
-bool LobbyDirectory::can_probe() {
-    bool answered = false;
-    if (GDVIRTUAL_CALL(_can_probe, answered)) {
-        return answered;
-    }
-    return false;
-}
-
-String LobbyDirectory::address_label() {
-    String answered;
-    if (GDVIRTUAL_CALL(_address_label, answered)) {
-        return answered;
-    }
-    return String("Lobby");
-}
-
-String LobbyDirectory::address_placeholder() {
-    String answered;
-    if (GDVIRTUAL_CALL(_address_placeholder, answered)) {
-        return answered;
-    }
-    return String();
-}
-
-String LobbyDirectory::address_help() {
-    String answered;
-    if (GDVIRTUAL_CALL(_address_help, answered)) {
-        return answered;
-    }
-    return String();
-}
-
-bool LobbyDirectory::accepts_empty_address() {
-    bool answered = false;
-    if (GDVIRTUAL_CALL(_accepts_empty_address, answered)) {
-        return answered;
-    }
-    return false;
 }
 
 Dictionary LobbyDirectory::host_settings() {
@@ -157,14 +104,6 @@ Dictionary LobbyDirectory::client_settings() {
         return answered;
     }
     return Dictionary();
-}
-
-double LobbyDirectory::timeout_hint() {
-    double answered = 0.0;
-    if (GDVIRTUAL_CALL(_timeout_hint, answered)) {
-        return answered;
-    }
-    return 20.0;
 }
 
 String LobbyDirectory::join_address() {
@@ -201,14 +140,6 @@ String LobbyDirectory::local_member_name() {
 
 void LobbyDirectory::list_lobbies() {
     GDVIRTUAL_CALL(_list_lobbies);
-}
-
-double LobbyDirectory::list_interval() {
-    double answered = 0.0;
-    if (GDVIRTUAL_CALL(_list_interval, answered)) {
-        return answered;
-    }
-    return 0.0;
 }
 
 void LobbyDirectory::stop_listing() {
@@ -284,24 +215,150 @@ void LobbyDirectory::_bind_methods() {
         &LobbyDirectory::local_member_name_default
     );
 
-    GDVIRTUAL_BIND(_capabilities);
+    ClassDB::bind_method(
+        D_METHOD("set_display_name", "value"),
+        &LobbyDirectory::set_display_name
+    );
+    ClassDB::bind_method(
+        D_METHOD("get_display_name"),
+        &LobbyDirectory::get_display_name
+    );
+    ADD_PROPERTY(
+        PropertyInfo(Variant::STRING, "display_name"),
+        "set_display_name",
+        "get_display_name"
+    );
+    ClassDB::bind_method(
+        D_METHOD("set_address_label", "value"),
+        &LobbyDirectory::set_address_label
+    );
+    ClassDB::bind_method(
+        D_METHOD("get_address_label"),
+        &LobbyDirectory::get_address_label
+    );
+    ADD_PROPERTY(
+        PropertyInfo(Variant::STRING, "address_label"),
+        "set_address_label",
+        "get_address_label"
+    );
+    ClassDB::bind_method(
+        D_METHOD("set_address_placeholder", "value"),
+        &LobbyDirectory::set_address_placeholder
+    );
+    ClassDB::bind_method(
+        D_METHOD("get_address_placeholder"),
+        &LobbyDirectory::get_address_placeholder
+    );
+    ADD_PROPERTY(
+        PropertyInfo(Variant::STRING, "address_placeholder"),
+        "set_address_placeholder",
+        "get_address_placeholder"
+    );
+    ClassDB::bind_method(
+        D_METHOD("set_address_help", "value"),
+        &LobbyDirectory::set_address_help
+    );
+    ClassDB::bind_method(
+        D_METHOD("get_address_help"),
+        &LobbyDirectory::get_address_help
+    );
+    ADD_PROPERTY(
+        PropertyInfo(Variant::STRING, "address_help"),
+        "set_address_help",
+        "get_address_help"
+    );
+    ClassDB::bind_method(
+        D_METHOD("set_accepts_empty_address", "value"),
+        &LobbyDirectory::set_accepts_empty_address
+    );
+    ClassDB::bind_method(
+        D_METHOD("get_accepts_empty_address"),
+        &LobbyDirectory::get_accepts_empty_address
+    );
+    ADD_PROPERTY(
+        PropertyInfo(Variant::BOOL, "accepts_empty_address"),
+        "set_accepts_empty_address",
+        "get_accepts_empty_address"
+    );
+    ClassDB::bind_method(
+        D_METHOD("set_can_host_here", "value"),
+        &LobbyDirectory::set_can_host_here
+    );
+    ClassDB::bind_method(
+        D_METHOD("get_can_host_here"),
+        &LobbyDirectory::get_can_host_here
+    );
+    ADD_PROPERTY(
+        PropertyInfo(Variant::BOOL, "can_host_here"),
+        "set_can_host_here",
+        "get_can_host_here"
+    );
+    ClassDB::bind_method(
+        D_METHOD("set_can_probe", "value"),
+        &LobbyDirectory::set_can_probe
+    );
+    ClassDB::bind_method(
+        D_METHOD("get_can_probe"),
+        &LobbyDirectory::get_can_probe
+    );
+    ADD_PROPERTY(
+        PropertyInfo(Variant::BOOL, "can_probe"),
+        "set_can_probe",
+        "get_can_probe"
+    );
+    ClassDB::bind_method(
+        D_METHOD("set_timeout_hint", "value"),
+        &LobbyDirectory::set_timeout_hint
+    );
+    ClassDB::bind_method(
+        D_METHOD("get_timeout_hint"),
+        &LobbyDirectory::get_timeout_hint
+    );
+    ADD_PROPERTY(
+        PropertyInfo(Variant::FLOAT, "timeout_hint"),
+        "set_timeout_hint",
+        "get_timeout_hint"
+    );
+    ClassDB::bind_method(
+        D_METHOD("set_list_interval", "value"),
+        &LobbyDirectory::set_list_interval
+    );
+    ClassDB::bind_method(
+        D_METHOD("get_list_interval"),
+        &LobbyDirectory::get_list_interval
+    );
+    ADD_PROPERTY(
+        PropertyInfo(Variant::FLOAT, "list_interval"),
+        "set_list_interval",
+        "get_list_interval"
+    );
+    ClassDB::bind_method(
+        D_METHOD("set_capabilities", "value"),
+        &LobbyDirectory::set_capabilities
+    );
+    ClassDB::bind_method(
+        D_METHOD("get_capabilities"),
+        &LobbyDirectory::get_capabilities
+    );
+    ADD_PROPERTY(
+        PropertyInfo(
+            Variant::INT,
+            "capabilities",
+            PROPERTY_HINT_FLAGS,
+            "Browse,Friends Only Support,Invites,Friend Names"
+        ),
+        "set_capabilities",
+        "get_capabilities"
+    );
+
     GDVIRTUAL_BIND(_peer_class);
-    GDVIRTUAL_BIND(_display_name);
     GDVIRTUAL_BIND(_is_available);
-    GDVIRTUAL_BIND(_can_host_here);
-    GDVIRTUAL_BIND(_can_probe);
-    GDVIRTUAL_BIND(_address_label);
-    GDVIRTUAL_BIND(_address_placeholder);
-    GDVIRTUAL_BIND(_address_help);
-    GDVIRTUAL_BIND(_accepts_empty_address);
     GDVIRTUAL_BIND(_host_settings);
     GDVIRTUAL_BIND(_client_settings);
-    GDVIRTUAL_BIND(_timeout_hint);
     GDVIRTUAL_BIND(_join_address);
     GDVIRTUAL_BIND(_member_name, "peer_id");
     GDVIRTUAL_BIND(_local_member_name);
     GDVIRTUAL_BIND(_list_lobbies);
-    GDVIRTUAL_BIND(_list_interval);
     GDVIRTUAL_BIND(_stop_listing);
     GDVIRTUAL_BIND(_leave_lobby);
     GDVIRTUAL_BIND(_host_lobby, "settings");

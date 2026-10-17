@@ -10,6 +10,15 @@
 All classes
 ===========
 
+Steam
+=====
+
+.. toctree::
+    :maxdepth: 1
+    :name: toc-class-ref-steam
+
+    class_steamlobbydirectory
+
 Testing
 =======
 
@@ -77,8 +86,6 @@ Gdscript
     class_nakamasessionservice
     class_nakamawrapper
     class_statusdot
-    class_steamlobbydirectory
-    class_steamwrapper
 
 Other classes
 =============
@@ -87,7 +94,6 @@ Other classes
     :maxdepth: 1
     :name: toc-class-ref-other-classes
 
-    class_addons--networked--plugin.gd
     class_dictionaryrecord
     class_filesystemdatabase
     class_lanlobbydirectory

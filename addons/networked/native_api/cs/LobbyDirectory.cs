@@ -16,6 +16,11 @@ namespace Networked;
 /// <code>
 /// extends LobbyDirectory
 ///
+/// func _init() -&gt; void:
+///     display_name = "Rooms"
+///     address_label = "Room ID"
+///     capabilities = CAPABILITY_BROWSE
+///
 /// func _peer_class() -&gt; StringName:
 ///     return &amp;"RoomMultiplayerPeer"
 ///
@@ -47,7 +52,7 @@ namespace Networked;
 /// A directory whose peer class already has a transport only lists lobbies, and
 /// joining one goes through that transport.
 /// <see cref="WebTorrentLobbyDirectory"/> and <see cref="LANLobbyDirectory"/>
-/// work this way.
+/// work this way. Use <c>SteamLobbyDirectory</c> for Steam lobbies.
 /// </para>
 /// </remarks>
 public class LobbyDirectory : NetwService
@@ -143,7 +148,8 @@ public class LobbyDirectory : NetwService
     }
 
     /// <summary>
-    /// Emitted when the service cannot be used at all.
+    /// Emitted when the service cannot start. <c>reason</c> tells the player
+    /// how to make it available.
     /// </summary>
     public event Action<string> ProviderUnavailable
     {
@@ -156,6 +162,344 @@ public class LobbyDirectory : NetwService
             )
         );
         remove => DisconnectBridge("provider_unavailable", value);
+    }
+
+    private static readonly IntPtr _bindGetDisplayName =
+        NetwApi.MethodBind("LobbyDirectory", "get_display_name", 2841200299UL);
+
+    private static readonly IntPtr _bindSetDisplayName =
+        NetwApi.MethodBind("LobbyDirectory", "set_display_name", 83702148UL);
+
+    /// <summary>
+    /// The name shown in the server browser. An empty value uses
+    /// <c>_peer_class</c>.
+    /// </summary>
+    public string DisplayName
+    {
+        get
+        {
+            godot_variant answered = default;
+            NetwThunks.Call0(_bindGetDisplayName, Checked, ref answered);
+            string result = VariantUtils.ConvertToString(answered);
+            answered.Dispose();
+            return result;
+        }
+        set
+        {
+            godot_variant slot0 = VariantUtils.CreateFromString(value);
+            godot_variant answered = default;
+            NetwThunks.Call1(
+                _bindSetDisplayName,
+                Checked,
+                in slot0,
+                ref answered);
+            slot0.Dispose();
+            answered.Dispose();
+        }
+    }
+
+    private static readonly IntPtr _bindGetAddressLabel =
+        NetwApi.MethodBind("LobbyDirectory", "get_address_label", 201670096UL);
+
+    private static readonly IntPtr _bindSetAddressLabel =
+        NetwApi.MethodBind("LobbyDirectory", "set_address_label", 83702148UL);
+
+    /// <summary>
+    /// The label of the address input.
+    /// </summary>
+    public string AddressLabel
+    {
+        get
+        {
+            godot_variant answered = default;
+            NetwThunks.Call0(_bindGetAddressLabel, Checked, ref answered);
+            string result = VariantUtils.ConvertToString(answered);
+            answered.Dispose();
+            return result;
+        }
+        set
+        {
+            godot_variant slot0 = VariantUtils.CreateFromString(value);
+            godot_variant answered = default;
+            NetwThunks.Call1(
+                _bindSetAddressLabel,
+                Checked,
+                in slot0,
+                ref answered);
+            slot0.Dispose();
+            answered.Dispose();
+        }
+    }
+
+    private static readonly IntPtr _bindGetAddressPlaceholder =
+        NetwApi.MethodBind(
+            "LobbyDirectory",
+            "get_address_placeholder",
+            201670096UL);
+
+    private static readonly IntPtr _bindSetAddressPlaceholder =
+        NetwApi.MethodBind(
+            "LobbyDirectory",
+            "set_address_placeholder",
+            83702148UL);
+
+    /// <summary>
+    /// The placeholder of the address input.
+    /// </summary>
+    public string AddressPlaceholder
+    {
+        get
+        {
+            godot_variant answered = default;
+            NetwThunks.Call0(_bindGetAddressPlaceholder, Checked, ref answered);
+            string result = VariantUtils.ConvertToString(answered);
+            answered.Dispose();
+            return result;
+        }
+        set
+        {
+            godot_variant slot0 = VariantUtils.CreateFromString(value);
+            godot_variant answered = default;
+            NetwThunks.Call1(
+                _bindSetAddressPlaceholder,
+                Checked,
+                in slot0,
+                ref answered);
+            slot0.Dispose();
+            answered.Dispose();
+        }
+    }
+
+    private static readonly IntPtr _bindGetAddressHelp =
+        NetwApi.MethodBind("LobbyDirectory", "get_address_help", 201670096UL);
+
+    private static readonly IntPtr _bindSetAddressHelp =
+        NetwApi.MethodBind("LobbyDirectory", "set_address_help", 83702148UL);
+
+    /// <summary>
+    /// Help shown under the address input.
+    /// </summary>
+    public string AddressHelp
+    {
+        get
+        {
+            godot_variant answered = default;
+            NetwThunks.Call0(_bindGetAddressHelp, Checked, ref answered);
+            string result = VariantUtils.ConvertToString(answered);
+            answered.Dispose();
+            return result;
+        }
+        set
+        {
+            godot_variant slot0 = VariantUtils.CreateFromString(value);
+            godot_variant answered = default;
+            NetwThunks.Call1(
+                _bindSetAddressHelp,
+                Checked,
+                in slot0,
+                ref answered);
+            slot0.Dispose();
+            answered.Dispose();
+        }
+    }
+
+    private static readonly IntPtr _bindGetAcceptsEmptyAddress =
+        NetwApi.MethodBind(
+            "LobbyDirectory",
+            "get_accepts_empty_address",
+            36873697UL);
+
+    private static readonly IntPtr _bindSetAcceptsEmptyAddress =
+        NetwApi.MethodBind(
+            "LobbyDirectory",
+            "set_accepts_empty_address",
+            2586408642UL);
+
+    /// <summary>
+    /// Whether joining accepts an empty address.
+    /// </summary>
+    public bool AcceptsEmptyAddress
+    {
+        get
+        {
+            byte answered = default;
+            NetwThunks.Ptrcall0_Byte(
+                _bindGetAcceptsEmptyAddress,
+                Checked,
+                ref answered);
+            return answered != 0;
+        }
+        set
+        {
+            byte slot0 = value ? (byte)1 : (byte)0;
+            long discarded = default;
+            NetwThunks.Ptrcall1_Byte_Long(
+                _bindSetAcceptsEmptyAddress,
+                Checked,
+                in slot0,
+                ref discarded);
+        }
+    }
+
+    private static readonly IntPtr _bindGetCanHostHere =
+        NetwApi.MethodBind("LobbyDirectory", "get_can_host_here", 36873697UL);
+
+    private static readonly IntPtr _bindSetCanHostHere =
+        NetwApi.MethodBind("LobbyDirectory", "set_can_host_here", 2586408642UL);
+
+    /// <summary>
+    /// Whether this build can host lobbies.
+    /// </summary>
+    public bool CanHostHere
+    {
+        get
+        {
+            byte answered = default;
+            NetwThunks.Ptrcall0_Byte(
+                _bindGetCanHostHere,
+                Checked,
+                ref answered);
+            return answered != 0;
+        }
+        set
+        {
+            byte slot0 = value ? (byte)1 : (byte)0;
+            long discarded = default;
+            NetwThunks.Ptrcall1_Byte_Long(
+                _bindSetCanHostHere,
+                Checked,
+                in slot0,
+                ref discarded);
+        }
+    }
+
+    private static readonly IntPtr _bindGetCanProbe =
+        NetwApi.MethodBind("LobbyDirectory", "get_can_probe", 36873697UL);
+
+    private static readonly IntPtr _bindSetCanProbe =
+        NetwApi.MethodBind("LobbyDirectory", "set_can_probe", 2586408642UL);
+
+    /// <summary>
+    /// Whether a lobby can be checked without joining it.
+    /// </summary>
+    public bool CanProbe
+    {
+        get
+        {
+            byte answered = default;
+            NetwThunks.Ptrcall0_Byte(_bindGetCanProbe, Checked, ref answered);
+            return answered != 0;
+        }
+        set
+        {
+            byte slot0 = value ? (byte)1 : (byte)0;
+            long discarded = default;
+            NetwThunks.Ptrcall1_Byte_Long(
+                _bindSetCanProbe,
+                Checked,
+                in slot0,
+                ref discarded);
+        }
+    }
+
+    private static readonly IntPtr _bindGetTimeoutHint =
+        NetwApi.MethodBind("LobbyDirectory", "get_timeout_hint", 1740695150UL);
+
+    private static readonly IntPtr _bindSetTimeoutHint =
+        NetwApi.MethodBind("LobbyDirectory", "set_timeout_hint", 373806689UL);
+
+    /// <summary>
+    /// Seconds before a host or join request fails with
+    /// <c>@GlobalScope.ERR_TIMEOUT</c>.
+    /// </summary>
+    public double TimeoutHint
+    {
+        get
+        {
+            double answered = default;
+            NetwThunks.Ptrcall0_Double(
+                _bindGetTimeoutHint,
+                Checked,
+                ref answered);
+            return answered;
+        }
+        set
+        {
+            double slot0 = value;
+            long discarded = default;
+            NetwThunks.Ptrcall1_Double_Long(
+                _bindSetTimeoutHint,
+                Checked,
+                in slot0,
+                ref discarded);
+        }
+    }
+
+    private static readonly IntPtr _bindGetListInterval =
+        NetwApi.MethodBind("LobbyDirectory", "get_list_interval", 1740695150UL);
+
+    private static readonly IntPtr _bindSetListInterval =
+        NetwApi.MethodBind("LobbyDirectory", "set_list_interval", 373806689UL);
+
+    /// <summary>
+    /// Seconds between <c>_list_lobbies</c> calls while
+    /// <see cref="NetwConnection.Browsing"/> is enabled. Zero lists once when
+    /// browsing starts.
+    /// </summary>
+    public double ListInterval
+    {
+        get
+        {
+            double answered = default;
+            NetwThunks.Ptrcall0_Double(
+                _bindGetListInterval,
+                Checked,
+                ref answered);
+            return answered;
+        }
+        set
+        {
+            double slot0 = value;
+            long discarded = default;
+            NetwThunks.Ptrcall1_Double_Long(
+                _bindSetListInterval,
+                Checked,
+                in slot0,
+                ref discarded);
+        }
+    }
+
+    private static readonly IntPtr _bindGetCapabilities =
+        NetwApi.MethodBind("LobbyDirectory", "get_capabilities", 3905245786UL);
+
+    private static readonly IntPtr _bindSetCapabilities =
+        NetwApi.MethodBind("LobbyDirectory", "set_capabilities", 1286410249UL);
+
+    /// <summary>
+    /// The <see cref="LobbyDirectory.Capability"/> flags this directory
+    /// supports.
+    /// </summary>
+    public long Capabilities
+    {
+        get
+        {
+            long answered = default;
+            NetwThunks.Ptrcall0_Long(
+                _bindGetCapabilities,
+                Checked,
+                ref answered);
+            return answered;
+        }
+        set
+        {
+            long slot0 = value;
+            long discarded = default;
+            NetwThunks.Ptrcall1_Long_Long(
+                _bindSetCapabilities,
+                Checked,
+                in slot0,
+                ref discarded);
+        }
     }
 
     private static readonly IntPtr _bindDeliver =
@@ -230,8 +574,8 @@ public class LobbyDirectory : NetwService
         NetwApi.MethodBind("LobbyDirectory", "invite", 3186203200UL);
 
     /// <summary>
-    /// Reports that <paramref name="fromName"/> invited the player to the lobby
-    /// at <paramref name="address"/>, which arrives as
+    /// Calls <see cref="NetwConnection.Invite"/> for this directory's
+    /// <see cref="MultiplayerPeer"/> class and emits
     /// <see cref="NetwConnection.Invited"/>.
     /// </summary>
     public void Invite(string address, string fromName)
@@ -254,8 +598,8 @@ public class LobbyDirectory : NetwService
         NetwApi.MethodBind("LobbyDirectory", "supports", 1766254199UL);
 
     /// <summary>
-    /// Returns <c>true</c> when <c>_capabilities</c> includes
-    /// <paramref name="capability"/>.
+    /// Returns <c>true</c> when <see cref="LobbyDirectory.Capabilities"/>
+    /// includes <paramref name="capability"/>.
     /// </summary>
     public bool Supports(LobbyDirectory.Capability capability)
     {

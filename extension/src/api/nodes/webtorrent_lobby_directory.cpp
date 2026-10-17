@@ -41,6 +41,12 @@ PackedStringArray tracker_urls(const Variant &p_listed) {
 
 } // namespace
 
+WebTorrentLobbyDirectory::WebTorrentLobbyDirectory() {
+    set_display_name(String("WebTorrent"));
+    set_capabilities(CAPABILITY_BROWSE);
+    set_list_interval(10.0);
+}
+
 void WebTorrentLobbyDirectory::set_trackers(
     const PackedStringArray &p_trackers
 ) {
@@ -61,28 +67,8 @@ PackedStringArray WebTorrentLobbyDirectory::get_trackers() const {
     return trackers;
 }
 
-void WebTorrentLobbyDirectory::set_list_interval(double p_seconds) {
-    listing_interval = p_seconds;
-}
-
-double WebTorrentLobbyDirectory::get_list_interval() const {
-    return listing_interval;
-}
-
-double WebTorrentLobbyDirectory::list_interval() {
-    return listing_interval;
-}
-
 StringName WebTorrentLobbyDirectory::peer_class() {
     return StringName("WebRTCMultiplayerPeer");
-}
-
-String WebTorrentLobbyDirectory::display_name() {
-    return String("WebTorrent");
-}
-
-LobbyDirectory::Capability WebTorrentLobbyDirectory::capabilities() {
-    return CAPABILITY_BROWSE;
 }
 
 Dictionary WebTorrentLobbyDirectory::webrtc_defaults() const {
@@ -221,24 +207,6 @@ void WebTorrentLobbyDirectory::_bind_methods() {
         PropertyInfo(Variant::PACKED_STRING_ARRAY, "trackers"),
         "set_trackers",
         "get_trackers"
-    );
-    ClassDB::bind_method(
-        D_METHOD("set_list_interval", "seconds"),
-        &WebTorrentLobbyDirectory::set_list_interval
-    );
-    ClassDB::bind_method(
-        D_METHOD("get_list_interval"),
-        &WebTorrentLobbyDirectory::get_list_interval
-    );
-    ADD_PROPERTY(
-        PropertyInfo(
-            Variant::FLOAT,
-            "list_interval",
-            PROPERTY_HINT_RANGE,
-            "0,60,0.1,or_greater,suffix:s"
-        ),
-        "set_list_interval",
-        "get_list_interval"
     );
 }
 

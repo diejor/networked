@@ -60,11 +60,12 @@ netw::connect::Transport *make_twin() {
 
 class TwinDirectory : public netw::LobbyDirectory {
 public:
+    TwinDirectory() {
+        set_display_name(godot::String("the directory"));
+    }
+
     StringName peer_class() override {
         return StringName(TWIN_PEER_CLASS);
-    }
-    String display_name() override {
-        return String("the directory");
     }
     void join_lobby(const String &) override {
     }
