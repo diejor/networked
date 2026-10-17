@@ -38,11 +38,11 @@ Properties
 .. table::
    :widths: auto
 
-   +--------------+------------------------------------------------------------------------------------------------------+--------+
-   | :godot:`int` | :ref:`input_gate_deadline_ticks<class_NetwLagCompensationConfig_property_input_gate_deadline_ticks>` | ``12`` |
-   +--------------+------------------------------------------------------------------------------------------------------+--------+
-   | :godot:`int` | :ref:`max_future_action_ticks<class_NetwLagCompensationConfig_property_max_future_action_ticks>`     | ``8``  |
-   +--------------+------------------------------------------------------------------------------------------------------+--------+
+   +--------------+------------------------------------------------------------------------------------------------------+
+   | :godot:`int` | :ref:`input_gate_deadline_ticks<class_NetwLagCompensationConfig_property_input_gate_deadline_ticks>` |
+   +--------------+------------------------------------------------------------------------------------------------------+
+   | :godot:`int` | :ref:`max_future_action_ticks<class_NetwLagCompensationConfig_property_max_future_action_ticks>`     |
+   +--------------+------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -71,7 +71,7 @@ Property Descriptions
 
 .. rst-class:: classref-property
 
-:godot:`int` **input_gate_deadline_ticks** = ``12`` :ref:`🔗<class_NetwLagCompensationConfig_property_input_gate_deadline_ticks>`
+:godot:`int` **input_gate_deadline_ticks** :ref:`🔗<class_NetwLagCompensationConfig_property_input_gate_deadline_ticks>`
 
 .. rst-class:: classref-property-setget
 
@@ -88,7 +88,7 @@ How many ticks a :ref:`NetwAction.TIMING_TICK_ALIGNED_STATE_READY<class_NetwActi
 
 .. rst-class:: classref-property
 
-:godot:`int` **max_future_action_ticks** = ``8`` :ref:`🔗<class_NetwLagCompensationConfig_property_max_future_action_ticks>`
+:godot:`int` **max_future_action_ticks** :ref:`🔗<class_NetwLagCompensationConfig_property_max_future_action_ticks>`
 
 .. rst-class:: classref-property-setget
 

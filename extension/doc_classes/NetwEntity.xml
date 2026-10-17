@@ -125,16 +125,16 @@
 		</method>
 	</methods>
 	<members>
-		<member name="action_requester" type="int" setter="" getter="get_action_requester" default="0">
+		<member name="action_requester" type="int" setter="" getter="get_action_requester">
 			The peer whose [NetwAction] spawned this entity, or [code]0[/code].
 		</member>
-		<member name="action_spawn_tick" type="int" setter="" getter="get_action_spawn_tick" default="-1">
+		<member name="action_spawn_tick" type="int" setter="" getter="get_action_spawn_tick">
 			The tick of the [NetwAction] that spawned this entity, or [code]-1[/code] when no action spawned it.
 		</member>
 		<member name="active_despawn_opts" type="NetwDespawnOpts" setter="" getter="get_active_despawn_opts">
 			The [NetwDespawnOpts] of the despawn in progress, readable during [signal despawning], or [code]null[/code].
 		</member>
-		<member name="authority" type="int" setter="set_authority" getter="get_authority" enum="NetwEntity.Authority" default="0">
+		<member name="authority" type="int" setter="set_authority" getter="get_authority" enum="NetwEntity.Authority">
 			Who holds Godot multiplayer authority for the root and its children. Set it
 			before tree entry. Later changes are refused.
 			At spawn, a non-server Godot authority on the root selects
@@ -144,7 +144,7 @@
 		<member name="control_kind" type="int" setter="" getter="get_control_kind" enum="NetwEntity.ControlKind">
 			Whether a peer or the server controls this entity. See [enum ControlKind].
 		</member>
-		<member name="controller" type="int" setter="set_controller" getter="get_controller" default="1">
+		<member name="controller" type="int" setter="set_controller" getter="get_controller">
 			The peer that steers the root, or [code]1[/code] for the server. While
 			[member stage] is [constant STAGE_UNBOUND], a write sets the starting
 			controller. After that, only the server can write it, and [member hold]
@@ -165,7 +165,7 @@
 		<member name="hold" type="int" setter="" getter="get_hold" enum="NetwEntity.Hold">
 			How strongly [member controller] holds this entity. Control the server gives out by itself holds [constant HOLD_NONE].
 		</member>
-		<member name="initial_controller" type="int" setter="set_initial_controller" getter="get_initial_controller" enum="NetwEntity.InitialController" default="0">
+		<member name="initial_controller" type="int" setter="set_initial_controller" getter="get_initial_controller" enum="NetwEntity.InitialController">
 			Who controls the entity when it spawns. Set it in the root's [code]_init[/code].
 			[codeblock]
 			func _init() -&gt; void:
@@ -185,7 +185,7 @@
 		<member name="is_player" type="bool" setter="" getter="get_is_player">
 			[code]true[/code] when this entity represents a player, meaning [member peer_id] is not [code]0[/code].
 		</member>
-		<member name="is_scene" type="bool" setter="" getter="get_is_scene" default="false">
+		<member name="is_scene" type="bool" setter="" getter="get_is_scene">
 			[code]true[/code] when this entity is a multiplayer scene, which [member scene] returns for it and every entity under it. Declared with [method Netw.configure_scene] in [code]_init[/code].
 			[codeblock]
 			func _init() -&gt; void:
@@ -199,7 +199,7 @@
 			A root with an empty [member name] and a [member Node.owner] becomes
 			a template automatically.
 		</member>
-		<member name="lifecycle" type="int" setter="set_lifecycle" getter="get_lifecycle" enum="NetwEntity.Lifecycle" default="0">
+		<member name="lifecycle" type="int" setter="set_lifecycle" getter="get_lifecycle" enum="NetwEntity.Lifecycle">
 			Who may spawn, move and despawn this entity. Set it in [code]_init[/code] beside [member transfer].
 			A refused call pushes an error and returns its failure value. [method Node.reparent] cannot be refused, so it warns and the move stays on this peer.
 			During a prediction replay these calls return [constant @GlobalScope.ERR_BUSY] with no error, so a predicted step spawns only on a fresh tick.
@@ -212,14 +212,14 @@
 		<member name="multiplayer" type="MultiplayerAPI" setter="" getter="get_multiplayer">
 			The root's [member Node.multiplayer], or [code]null[/code] before the entity spawns.
 		</member>
-		<member name="name" type="StringName" setter="set_name" getter="get_name" default="&amp;&quot;&quot;">
+		<member name="name" type="StringName" setter="set_name" getter="get_name">
 			The name that identifies this entity on every peer, and in saves and logs.
 			A node placed in a scene sets it in [method Object._init], since an entity without one stays inactive. [method Netw.spawn_player] sets it to the player's [member NetwPlayer.username], so a game giving one player several entities sets a distinct name on each.
 		</member>
-		<member name="on_controller_disconnect" type="int" setter="set_on_controller_disconnect" getter="get_on_controller_disconnect" enum="NetwEntity.DisconnectRule" default="0">
+		<member name="on_controller_disconnect" type="int" setter="set_on_controller_disconnect" getter="get_on_controller_disconnect" enum="NetwEntity.DisconnectRule">
 			What happens to the entity when its [member controller] disconnects. An entity spawned for a player still despawns with its [member peer_id].
 		</member>
-		<member name="on_parent_despawn" type="int" setter="set_on_parent_despawn" getter="get_on_parent_despawn" enum="NetwEntity.ParentDespawnRule" default="0">
+		<member name="on_parent_despawn" type="int" setter="set_on_parent_despawn" getter="get_on_parent_despawn" enum="NetwEntity.ParentDespawnRule">
 			What happens to this entity when an entity above it is despawned with [method despawn]. A parent freed without [method despawn] frees this entity too.
 			[codeblock]
 			func _init() -&gt; void:
@@ -230,7 +230,7 @@
 		<member name="owner" type="Node" setter="" getter="get_owner">
 			The root [Node] that holds this entity, or [code]null[/code] once it is freed.
 		</member>
-		<member name="peer_id" type="int" setter="" getter="get_peer_id" default="0">
+		<member name="peer_id" type="int" setter="" getter="get_peer_id">
 			The player peer represented by this root, or [code]0[/code] for an NPC or
 			prop. [method Netw.spawn_player] sets it. The root appears in
 			[member NetwPlayer.entities] and despawns when that peer disconnects.
@@ -245,7 +245,7 @@
 		<member name="prediction" type="NetwPrediction" setter="" getter="get_prediction">
 			The entity's [NetwPrediction], holding its prediction settings and counters. Never [code]null[/code]. How the entity steps is on [member simulation].
 		</member>
-		<member name="replication_priority" type="float" setter="set_replication_priority" getter="get_replication_priority" default="1.0">
+		<member name="replication_priority" type="float" setter="set_replication_priority" getter="get_replication_priority">
 			Relative priority when a peer's bandwidth cannot carry every property update.
 			[code]4.0[/code] sends about four times as often as [code]1.0[/code] when
 			both keep changing. Must be greater than zero. [member interest] determines
@@ -270,7 +270,7 @@
 		<member name="stage" type="int" setter="" getter="get_stage" enum="NetwEntity.Stage">
 			Where the entity is in its lifecycle.
 		</member>
-		<member name="transfer" type="int" setter="set_transfer" getter="get_transfer" enum="NetwEntity.Transfer" default="0">
+		<member name="transfer" type="int" setter="set_transfer" getter="get_transfer" enum="NetwEntity.Transfer">
 			Whether peers may request control through [method claim_control].
 			[constant TRANSFER_IMMEDIATE] requires [constant AUTHORITY_CONTROLLER]. Set
 			it before tree entry.
@@ -361,17 +361,17 @@
 				Emitted once after the owner's [method Node._ready] completes.
 			</description>
 		</signal>
+		<signal name="spawning">
+			<description>
+				Emitted once after identity, authority and spawn properties are applied. The owner is in the tree, but [method Node._ready] may still be running.
+			</description>
+		</signal>
 		<signal name="stage_changed">
 			<param index="0" name="previous" type="int" enum="NetwEntity.Stage" />
 			<param index="1" name="current" type="int" enum="NetwEntity.Stage" />
 			<description>
 				Emitted synchronously after [member stage] changes, before [signal spawning], [signal despawning] or [signal despawned]. Unchanged values and rejected changes emit nothing.
 				[constant STAGE_LIVE] does not imply readiness. Use [signal spawned] for that. A handler can change [member stage] again before later listeners run, so [param previous] and [param current] identify the reported change.
-			</description>
-		</signal>
-		<signal name="spawning">
-			<description>
-				Emitted once after identity, authority and spawn properties are applied. The owner is in the tree, but [method Node._ready] may still be running.
 			</description>
 		</signal>
 	</signals>

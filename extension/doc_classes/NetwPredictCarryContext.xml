@@ -14,16 +14,16 @@
 	<tutorials>
 	</tutorials>
 	<members>
-		<member name="delta" type="float" setter="" getter="get_delta" default="0.0">
+		<member name="delta" type="float" setter="" getter="get_delta">
 			The length of the tick, in seconds.
 		</member>
-		<member name="input" type="Dictionary" setter="" getter="get_input" default="{}">
+		<member name="input" type="Dictionary" setter="" getter="get_input">
 			The [method NetwPropertyConfig.input] values of the tick.
 		</member>
-		<member name="label" type="int" setter="" getter="get_label" default="-1">
+		<member name="label" type="int" setter="" getter="get_label">
 			The tick of the input.
 		</member>
-		<member name="state" type="Dictionary" setter="" getter="get_state" default="{}">
+		<member name="state" type="Dictionary" setter="" getter="get_state">
 			The [method NetwPropertyConfig.state] values at the start of the tick.
 		</member>
 	</members>

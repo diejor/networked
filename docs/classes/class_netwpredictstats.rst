@@ -34,11 +34,11 @@ Properties
 .. table::
    :widths: auto
 
-   +--------------+-----------------------------------------------------------------+-------+
-   | :godot:`int` | :ref:`corrections<class_NetwPredictStats_property_corrections>` | ``0`` |
-   +--------------+-----------------------------------------------------------------+-------+
-   | :godot:`int` | :ref:`installs<class_NetwPredictStats_property_installs>`       | ``0`` |
-   +--------------+-----------------------------------------------------------------+-------+
+   +--------------+-----------------------------------------------------------------+
+   | :godot:`int` | :ref:`corrections<class_NetwPredictStats_property_corrections>` |
+   +--------------+-----------------------------------------------------------------+
+   | :godot:`int` | :ref:`installs<class_NetwPredictStats_property_installs>`       |
+   +--------------+-----------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -53,7 +53,7 @@ Property Descriptions
 
 .. rst-class:: classref-property
 
-:godot:`int` **corrections** = ``0`` :ref:`🔗<class_NetwPredictStats_property_corrections>`
+:godot:`int` **corrections** :ref:`🔗<class_NetwPredictStats_property_corrections>`
 
 .. rst-class:: classref-property-setget
 
@@ -69,7 +69,7 @@ Times this entity's prediction disagreed with the server and was corrected since
 
 .. rst-class:: classref-property
 
-:godot:`int` **installs** = ``0`` :ref:`🔗<class_NetwPredictStats_property_installs>`
+:godot:`int` **installs** :ref:`🔗<class_NetwPredictStats_property_installs>`
 
 .. rst-class:: classref-property-setget
 

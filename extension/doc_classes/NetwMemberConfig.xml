@@ -111,34 +111,34 @@
 		</method>
 	</methods>
 	<members>
-		<member name="context_name" type="StringName" setter="set_context_name" getter="get_context_name" default="&amp;&quot;&quot;">
+		<member name="context_name" type="StringName" setter="set_context_name" getter="get_context_name">
 			The name of the method, property or signal.
 		</member>
-		<member name="context_node_ref" type="Variant" setter="set_context_node_ref" getter="get_context_node_ref" default="null">
+		<member name="context_node_ref" type="Variant" setter="set_context_node_ref" getter="get_context_node_ref">
 			A weak reference to the node a property was declared on, used to read the property's type.
 		</member>
 		<member name="context_script" type="Script" setter="set_context_script" getter="get_context_script">
 			The script that declares the member, or [code]null[/code] for a node without a script.
 		</member>
-		<member name="context_type" type="int" setter="set_context_type" getter="get_context_type" default="0">
+		<member name="context_type" type="int" setter="set_context_type" getter="get_context_type">
 			[code]0[/code] for an RPC or spawn function, [code]1[/code] for a property, [code]2[/code] for a signal.
 		</member>
-		<member name="defer_signal_name" type="StringName" setter="set_defer_signal_name" getter="get_defer_signal_name" default="&amp;&quot;&quot;">
+		<member name="defer_signal_name" type="StringName" setter="set_defer_signal_name" getter="get_defer_signal_name">
 			Set by [method defer_until].
 		</member>
-		<member name="interpolators" type="Array" setter="set_interpolators" getter="get_interpolators" default="[]">
+		<member name="interpolators" type="Array" setter="set_interpolators" getter="get_interpolators">
 			Set by [method interpolate].
 		</member>
-		<member name="is_call_local" type="bool" setter="set_is_call_local" getter="get_is_call_local" default="false">
+		<member name="is_call_local" type="bool" setter="set_is_call_local" getter="get_is_call_local">
 			Set by [method call_local] and [method call_remote].
 		</member>
-		<member name="quantizers" type="Array" setter="set_quantizers" getter="get_quantizers" default="[]">
+		<member name="quantizers" type="Array" setter="set_quantizers" getter="get_quantizers">
 			Set by [method quantize].
 		</member>
-		<member name="transfer_mode" type="int" setter="set_transfer_mode" getter="get_transfer_mode" enum="NetwMemberConfig.TransferMode" default="0">
+		<member name="transfer_mode" type="int" setter="set_transfer_mode" getter="get_transfer_mode" enum="NetwMemberConfig.TransferMode">
 			Set by [method reliable] and [method unreliable].
 		</member>
-		<member name="write_policy" type="int" setter="set_write_policy" getter="get_write_policy" enum="NetwMemberConfig.Policy" default="0">
+		<member name="write_policy" type="int" setter="set_write_policy" getter="get_write_policy" enum="NetwMemberConfig.Policy">
 			Who may send it. Set by [method authority], [method controller], [method any_peer] and [method server]. Unset RPC settings fall back to [annotation @GDScript.@rpc].
 		</member>
 	</members>

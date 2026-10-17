@@ -36,11 +36,11 @@ Properties
 .. table::
    :widths: auto
 
-   +------------------------------------------------------+------------------------------------------------------------+---------+
-   | :ref:`SceneIsolation<enum_NetwScene_SceneIsolation>` | :ref:`isolation<class_NetwSceneConfig_property_isolation>` | ``0``   |
-   +------------------------------------------------------+------------------------------------------------------------+---------+
-   | :godot:`StringName`                                  | :ref:`label<class_NetwSceneConfig_property_label>`         | ``&""`` |
-   +------------------------------------------------------+------------------------------------------------------------+---------+
+   +------------------------------------------------------+------------------------------------------------------------+
+   | :ref:`SceneIsolation<enum_NetwScene_SceneIsolation>` | :ref:`isolation<class_NetwSceneConfig_property_isolation>` |
+   +------------------------------------------------------+------------------------------------------------------------+
+   | :godot:`StringName`                                  | :ref:`label<class_NetwSceneConfig_property_label>`         |
+   +------------------------------------------------------+------------------------------------------------------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -69,7 +69,7 @@ Property Descriptions
 
 .. rst-class:: classref-property
 
-:ref:`SceneIsolation<enum_NetwScene_SceneIsolation>` **isolation** = ``0`` :ref:`🔗<class_NetwSceneConfig_property_isolation>`
+:ref:`SceneIsolation<enum_NetwScene_SceneIsolation>` **isolation** :ref:`🔗<class_NetwSceneConfig_property_isolation>`
 
 .. rst-class:: classref-property-setget
 
@@ -85,7 +85,7 @@ Property Descriptions
 
 .. rst-class:: classref-property
 
-:godot:`StringName` **label** = ``&""`` :ref:`🔗<class_NetwSceneConfig_property_label>`
+:godot:`StringName` **label** :ref:`🔗<class_NetwSceneConfig_property_label>`
 
 .. rst-class:: classref-property-setget
 

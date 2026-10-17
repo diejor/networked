@@ -58,29 +58,29 @@ Properties
 .. table::
    :widths: auto
 
-   +-------------------------------------------------------+--------------------------------------------------------------------+-----------+
-   | :ref:`NetwClock<class_NetwClock>`                     | :ref:`clock<class_NetwSession_property_clock>`                     |           |
-   +-------------------------------------------------------+--------------------------------------------------------------------+-----------+
-   | :ref:`NetwSessionConfig<class_NetwSessionConfig>`     | :ref:`config<class_NetwSession_property_config>`                   |           |
-   +-------------------------------------------------------+--------------------------------------------------------------------+-----------+
-   | :ref:`NetwConnection<class_NetwConnection>`           | :ref:`connection<class_NetwSession_property_connection>`           |           |
-   +-------------------------------------------------------+--------------------------------------------------------------------+-----------+
-   | :godot:`bool`                                         | :ref:`is_local_client<class_NetwSession_property_is_local_client>` | ``false`` |
-   +-------------------------------------------------------+--------------------------------------------------------------------+-----------+
-   | :godot:`bool`                                         | :ref:`is_online<class_NetwSession_property_is_online>`             | ``false`` |
-   +-------------------------------------------------------+--------------------------------------------------------------------+-----------+
-   | :ref:`NetwPlayer<class_NetwPlayer>`                   | :ref:`local_player<class_NetwSession_property_local_player>`       |           |
-   +-------------------------------------------------------+--------------------------------------------------------------------+-----------+
-   | :godot:`Array`\[:ref:`NetwPlayer<class_NetwPlayer>`\] | :ref:`players<class_NetwSession_property_players>`                 | ``[]``    |
-   +-------------------------------------------------------+--------------------------------------------------------------------+-----------+
-   | :ref:`Role<enum_NetwSession_Role>`                    | :ref:`role<class_NetwSession_property_role>`                       | ``0``     |
-   +-------------------------------------------------------+--------------------------------------------------------------------+-----------+
-   | :godot:`Node`                                         | :ref:`root<class_NetwSession_property_root>`                       |           |
-   +-------------------------------------------------------+--------------------------------------------------------------------+-----------+
-   | :godot:`Array`\[:ref:`NetwScene<class_NetwScene>`\]   | :ref:`scenes<class_NetwSession_property_scenes>`                   | ``[]``    |
-   +-------------------------------------------------------+--------------------------------------------------------------------+-----------+
-   | :godot:`Dictionary`                                   | :ref:`stats<class_NetwSession_property_stats>`                     | ``{}``    |
-   +-------------------------------------------------------+--------------------------------------------------------------------+-----------+
+   +-------------------------------------------------------+--------------------------------------------------------------------+
+   | :ref:`NetwClock<class_NetwClock>`                     | :ref:`clock<class_NetwSession_property_clock>`                     |
+   +-------------------------------------------------------+--------------------------------------------------------------------+
+   | :ref:`NetwSessionConfig<class_NetwSessionConfig>`     | :ref:`config<class_NetwSession_property_config>`                   |
+   +-------------------------------------------------------+--------------------------------------------------------------------+
+   | :ref:`NetwConnection<class_NetwConnection>`           | :ref:`connection<class_NetwSession_property_connection>`           |
+   +-------------------------------------------------------+--------------------------------------------------------------------+
+   | :godot:`bool`                                         | :ref:`is_local_client<class_NetwSession_property_is_local_client>` |
+   +-------------------------------------------------------+--------------------------------------------------------------------+
+   | :godot:`bool`                                         | :ref:`is_online<class_NetwSession_property_is_online>`             |
+   +-------------------------------------------------------+--------------------------------------------------------------------+
+   | :ref:`NetwPlayer<class_NetwPlayer>`                   | :ref:`local_player<class_NetwSession_property_local_player>`       |
+   +-------------------------------------------------------+--------------------------------------------------------------------+
+   | :godot:`Array`\[:ref:`NetwPlayer<class_NetwPlayer>`\] | :ref:`players<class_NetwSession_property_players>`                 |
+   +-------------------------------------------------------+--------------------------------------------------------------------+
+   | :ref:`Role<enum_NetwSession_Role>`                    | :ref:`role<class_NetwSession_property_role>`                       |
+   +-------------------------------------------------------+--------------------------------------------------------------------+
+   | :godot:`Node`                                         | :ref:`root<class_NetwSession_property_root>`                       |
+   +-------------------------------------------------------+--------------------------------------------------------------------+
+   | :godot:`Array`\[:ref:`NetwScene<class_NetwScene>`\]   | :ref:`scenes<class_NetwSession_property_scenes>`                   |
+   +-------------------------------------------------------+--------------------------------------------------------------------+
+   | :godot:`Dictionary`                                   | :ref:`stats<class_NetwSession_property_stats>`                     |
+   +-------------------------------------------------------+--------------------------------------------------------------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -505,7 +505,7 @@ The :ref:`NetwConnection<class_NetwConnection>` of this session, to find servers
 
 .. rst-class:: classref-property
 
-:godot:`bool` **is_local_client** = ``false`` :ref:`🔗<class_NetwSession_property_is_local_client>`
+:godot:`bool` **is_local_client** :ref:`🔗<class_NetwSession_property_is_local_client>`
 
 .. rst-class:: classref-property-setget
 
@@ -521,7 +521,7 @@ The :ref:`NetwConnection<class_NetwConnection>` of this session, to find servers
 
 .. rst-class:: classref-property
 
-:godot:`bool` **is_online** = ``false`` :ref:`🔗<class_NetwSession_property_is_online>`
+:godot:`bool` **is_online** :ref:`🔗<class_NetwSession_property_is_online>`
 
 .. rst-class:: classref-property-setget
 
@@ -553,7 +553,7 @@ The :ref:`NetwPlayer<class_NetwPlayer>` of this peer, ``null`` until :ref:`local
 
 .. rst-class:: classref-property
 
-:godot:`Array`\[:ref:`NetwPlayer<class_NetwPlayer>`\] **players** = ``[]`` :ref:`🔗<class_NetwSession_property_players>`
+:godot:`Array`\[:ref:`NetwPlayer<class_NetwPlayer>`\] **players** :ref:`🔗<class_NetwSession_property_players>`
 
 .. rst-class:: classref-property-setget
 
@@ -569,7 +569,7 @@ Every :ref:`NetwPlayer<class_NetwPlayer>` that has joined, including those whose
 
 .. rst-class:: classref-property
 
-:ref:`Role<enum_NetwSession_Role>` **role** = ``0`` :ref:`🔗<class_NetwSession_property_role>`
+:ref:`Role<enum_NetwSession_Role>` **role** :ref:`🔗<class_NetwSession_property_role>`
 
 .. rst-class:: classref-property-setget
 
@@ -601,7 +601,7 @@ The :godot:`Node` replicated nodes are under, ``null`` when the session is not i
 
 .. rst-class:: classref-property
 
-:godot:`Array`\[:ref:`NetwScene<class_NetwScene>`\] **scenes** = ``[]`` :ref:`🔗<class_NetwSession_property_scenes>`
+:godot:`Array`\[:ref:`NetwScene<class_NetwScene>`\] **scenes** :ref:`🔗<class_NetwSession_property_scenes>`
 
 .. rst-class:: classref-property-setget
 
@@ -617,7 +617,7 @@ Every live scene. Use :ref:`find_scene()<class_NetwSession_method_find_scene>` t
 
 .. rst-class:: classref-property
 
-:godot:`Dictionary` **stats** = ``{}`` :ref:`🔗<class_NetwSession_property_stats>`
+:godot:`Dictionary` **stats** :ref:`🔗<class_NetwSession_property_stats>`
 
 .. rst-class:: classref-property-setget
 

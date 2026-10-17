@@ -40,27 +40,27 @@ Properties
 .. table::
    :widths: auto
 
-   +---------------------------------------------------------+-----------------------------------------------------------------------------+-----------+
-   | :godot:`StringName`                                     | :ref:`context_name<class_NetwMemberConfig_property_context_name>`           | ``&""``   |
-   +---------------------------------------------------------+-----------------------------------------------------------------------------+-----------+
-   | :godot:`Variant`                                        | :ref:`context_node_ref<class_NetwMemberConfig_property_context_node_ref>`   | ``null``  |
-   +---------------------------------------------------------+-----------------------------------------------------------------------------+-----------+
-   | :godot:`Script`                                         | :ref:`context_script<class_NetwMemberConfig_property_context_script>`       |           |
-   +---------------------------------------------------------+-----------------------------------------------------------------------------+-----------+
-   | :godot:`int`                                            | :ref:`context_type<class_NetwMemberConfig_property_context_type>`           | ``0``     |
-   +---------------------------------------------------------+-----------------------------------------------------------------------------+-----------+
-   | :godot:`StringName`                                     | :ref:`defer_signal_name<class_NetwMemberConfig_property_defer_signal_name>` | ``&""``   |
-   +---------------------------------------------------------+-----------------------------------------------------------------------------+-----------+
-   | :godot:`Array`                                          | :ref:`interpolators<class_NetwMemberConfig_property_interpolators>`         | ``[]``    |
-   +---------------------------------------------------------+-----------------------------------------------------------------------------+-----------+
-   | :godot:`bool`                                           | :ref:`is_call_local<class_NetwMemberConfig_property_is_call_local>`         | ``false`` |
-   +---------------------------------------------------------+-----------------------------------------------------------------------------+-----------+
-   | :godot:`Array`                                          | :ref:`quantizers<class_NetwMemberConfig_property_quantizers>`               | ``[]``    |
-   +---------------------------------------------------------+-----------------------------------------------------------------------------+-----------+
-   | :ref:`TransferMode<enum_NetwMemberConfig_TransferMode>` | :ref:`transfer_mode<class_NetwMemberConfig_property_transfer_mode>`         | ``0``     |
-   +---------------------------------------------------------+-----------------------------------------------------------------------------+-----------+
-   | :ref:`Policy<enum_NetwMemberConfig_Policy>`             | :ref:`write_policy<class_NetwMemberConfig_property_write_policy>`           | ``0``     |
-   +---------------------------------------------------------+-----------------------------------------------------------------------------+-----------+
+   +---------------------------------------------------------+-----------------------------------------------------------------------------+
+   | :godot:`StringName`                                     | :ref:`context_name<class_NetwMemberConfig_property_context_name>`           |
+   +---------------------------------------------------------+-----------------------------------------------------------------------------+
+   | :godot:`Variant`                                        | :ref:`context_node_ref<class_NetwMemberConfig_property_context_node_ref>`   |
+   +---------------------------------------------------------+-----------------------------------------------------------------------------+
+   | :godot:`Script`                                         | :ref:`context_script<class_NetwMemberConfig_property_context_script>`       |
+   +---------------------------------------------------------+-----------------------------------------------------------------------------+
+   | :godot:`int`                                            | :ref:`context_type<class_NetwMemberConfig_property_context_type>`           |
+   +---------------------------------------------------------+-----------------------------------------------------------------------------+
+   | :godot:`StringName`                                     | :ref:`defer_signal_name<class_NetwMemberConfig_property_defer_signal_name>` |
+   +---------------------------------------------------------+-----------------------------------------------------------------------------+
+   | :godot:`Array`                                          | :ref:`interpolators<class_NetwMemberConfig_property_interpolators>`         |
+   +---------------------------------------------------------+-----------------------------------------------------------------------------+
+   | :godot:`bool`                                           | :ref:`is_call_local<class_NetwMemberConfig_property_is_call_local>`         |
+   +---------------------------------------------------------+-----------------------------------------------------------------------------+
+   | :godot:`Array`                                          | :ref:`quantizers<class_NetwMemberConfig_property_quantizers>`               |
+   +---------------------------------------------------------+-----------------------------------------------------------------------------+
+   | :ref:`TransferMode<enum_NetwMemberConfig_TransferMode>` | :ref:`transfer_mode<class_NetwMemberConfig_property_transfer_mode>`         |
+   +---------------------------------------------------------+-----------------------------------------------------------------------------+
+   | :ref:`Policy<enum_NetwMemberConfig_Policy>`             | :ref:`write_policy<class_NetwMemberConfig_property_write_policy>`           |
+   +---------------------------------------------------------+-----------------------------------------------------------------------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -186,7 +186,7 @@ Property Descriptions
 
 .. rst-class:: classref-property
 
-:godot:`StringName` **context_name** = ``&""`` :ref:`🔗<class_NetwMemberConfig_property_context_name>`
+:godot:`StringName` **context_name** :ref:`🔗<class_NetwMemberConfig_property_context_name>`
 
 .. rst-class:: classref-property-setget
 
@@ -203,7 +203,7 @@ The name of the method, property or signal.
 
 .. rst-class:: classref-property
 
-:godot:`Variant` **context_node_ref** = ``null`` :ref:`🔗<class_NetwMemberConfig_property_context_node_ref>`
+:godot:`Variant` **context_node_ref** :ref:`🔗<class_NetwMemberConfig_property_context_node_ref>`
 
 .. rst-class:: classref-property-setget
 
@@ -237,7 +237,7 @@ The script that declares the member, or ``null`` for a node without a script.
 
 .. rst-class:: classref-property
 
-:godot:`int` **context_type** = ``0`` :ref:`🔗<class_NetwMemberConfig_property_context_type>`
+:godot:`int` **context_type** :ref:`🔗<class_NetwMemberConfig_property_context_type>`
 
 .. rst-class:: classref-property-setget
 
@@ -254,7 +254,7 @@ The script that declares the member, or ``null`` for a node without a script.
 
 .. rst-class:: classref-property
 
-:godot:`StringName` **defer_signal_name** = ``&""`` :ref:`🔗<class_NetwMemberConfig_property_defer_signal_name>`
+:godot:`StringName` **defer_signal_name** :ref:`🔗<class_NetwMemberConfig_property_defer_signal_name>`
 
 .. rst-class:: classref-property-setget
 
@@ -271,7 +271,7 @@ Set by :ref:`defer_until()<class_NetwMemberConfig_method_defer_until>`.
 
 .. rst-class:: classref-property
 
-:godot:`Array` **interpolators** = ``[]`` :ref:`🔗<class_NetwMemberConfig_property_interpolators>`
+:godot:`Array` **interpolators** :ref:`🔗<class_NetwMemberConfig_property_interpolators>`
 
 .. rst-class:: classref-property-setget
 
@@ -288,7 +288,7 @@ Set by :ref:`interpolate()<class_NetwMemberConfig_method_interpolate>`.
 
 .. rst-class:: classref-property
 
-:godot:`bool` **is_call_local** = ``false`` :ref:`🔗<class_NetwMemberConfig_property_is_call_local>`
+:godot:`bool` **is_call_local** :ref:`🔗<class_NetwMemberConfig_property_is_call_local>`
 
 .. rst-class:: classref-property-setget
 
@@ -305,7 +305,7 @@ Set by :ref:`call_local()<class_NetwMemberConfig_method_call_local>` and :ref:`c
 
 .. rst-class:: classref-property
 
-:godot:`Array` **quantizers** = ``[]`` :ref:`🔗<class_NetwMemberConfig_property_quantizers>`
+:godot:`Array` **quantizers** :ref:`🔗<class_NetwMemberConfig_property_quantizers>`
 
 .. rst-class:: classref-property-setget
 
@@ -322,7 +322,7 @@ Set by :ref:`quantize()<class_NetwMemberConfig_method_quantize>`.
 
 .. rst-class:: classref-property
 
-:ref:`TransferMode<enum_NetwMemberConfig_TransferMode>` **transfer_mode** = ``0`` :ref:`🔗<class_NetwMemberConfig_property_transfer_mode>`
+:ref:`TransferMode<enum_NetwMemberConfig_TransferMode>` **transfer_mode** :ref:`🔗<class_NetwMemberConfig_property_transfer_mode>`
 
 .. rst-class:: classref-property-setget
 
@@ -339,7 +339,7 @@ Set by :ref:`reliable()<class_NetwMemberConfig_method_reliable>` and :ref:`unrel
 
 .. rst-class:: classref-property
 
-:ref:`Policy<enum_NetwMemberConfig_Policy>` **write_policy** = ``0`` :ref:`🔗<class_NetwMemberConfig_property_write_policy>`
+:ref:`Policy<enum_NetwMemberConfig_Policy>` **write_policy** :ref:`🔗<class_NetwMemberConfig_property_write_policy>`
 
 .. rst-class:: classref-property-setget
 

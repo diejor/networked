@@ -257,58 +257,58 @@
 		</method>
 	</methods>
 	<members>
-		<member name="carry_channel" type="StringName" setter="set_carry_channel" getter="get_carry_channel" default="&amp;&quot;&quot;">
+		<member name="carry_channel" type="StringName" setter="set_carry_channel" getter="get_carry_channel">
 			Set by [method carry_along].
 		</member>
-		<member name="converge_stiffness" type="float" setter="set_converge_stiffness" getter="get_converge_stiffness" default="0.0">
+		<member name="converge_stiffness" type="float" setter="set_converge_stiffness" getter="get_converge_stiffness">
 			Set by [method converge].
 		</member>
-		<member name="epsilon_override" type="float" setter="set_epsilon_override" getter="get_epsilon_override" default="-1.0">
+		<member name="epsilon_override" type="float" setter="set_epsilon_override" getter="get_epsilon_override">
 			Set by [method epsilon]. A negative value uses [member NetwPrediction.divergence_epsilon].
 		</member>
-		<member name="explicit_reconcile_only" type="bool" setter="set_explicit_reconcile_only" getter="get_explicit_reconcile_only" default="false">
+		<member name="explicit_reconcile_only" type="bool" setter="set_explicit_reconcile_only" getter="get_explicit_reconcile_only">
 			Set by [method reconcile_only].
 		</member>
-		<member name="explicit_teleport_only" type="bool" setter="set_explicit_teleport_only" getter="get_explicit_teleport_only" default="false">
+		<member name="explicit_teleport_only" type="bool" setter="set_explicit_teleport_only" getter="get_explicit_teleport_only">
 			Set by [method teleport_only].
 		</member>
-		<member name="in_broadcast_set" type="bool" setter="set_in_broadcast_set" getter="get_in_broadcast_set" default="false">
+		<member name="in_broadcast_set" type="bool" setter="set_in_broadcast_set" getter="get_in_broadcast_set">
 			Set by [method broadcast].
 		</member>
-		<member name="in_input_set" type="bool" setter="set_in_input_set" getter="get_in_input_set" default="false">
+		<member name="in_input_set" type="bool" setter="set_in_input_set" getter="get_in_input_set">
 			Set by [method input].
 		</member>
-		<member name="in_state_set" type="bool" setter="set_in_state_set" getter="get_in_state_set" default="false">
+		<member name="in_state_set" type="bool" setter="set_in_state_set" getter="get_in_state_set">
 			Set by [method state].
 		</member>
-		<member name="is_property" type="bool" setter="set_is_property" getter="get_is_property" default="true">
+		<member name="is_property" type="bool" setter="set_is_property" getter="get_is_property">
 			Identifies this configuration as a property configuration.
 		</member>
-		<member name="is_spawn_state" type="bool" setter="set_is_spawn_state" getter="get_is_spawn_state" default="false">
+		<member name="is_spawn_state" type="bool" setter="set_is_spawn_state" getter="get_is_spawn_state">
 			Set by [method on_spawn].
 		</member>
-		<member name="lane" type="int" setter="set_lane" getter="get_lane" enum="NetwPropertyConfig.Lane" default="0">
+		<member name="lane" type="int" setter="set_lane" getter="get_lane" enum="NetwPropertyConfig.Lane">
 			Whether changes are sent unreliably or reliably. Set by [method volatile] and [method retained].
 		</member>
-		<member name="property_class" type="int" setter="set_property_class" getter="get_property_class" enum="NetwPropertyConfig.PropertyClass" default="0">
+		<member name="property_class" type="int" setter="set_property_class" getter="get_property_class" enum="NetwPropertyConfig.PropertyClass">
 			Whether a difference in the value causes a correction. Set by [method causal], [method derived] and [method cosmetic].
 		</member>
-		<member name="set_audience" type="int" setter="set_set_audience" getter="get_set_audience" enum="NetwPropertyConfig.Audience" default="0">
+		<member name="set_audience" type="int" setter="set_set_audience" getter="get_set_audience" enum="NetwPropertyConfig.Audience">
 			Set by [method audience] and [method input].
 		</member>
-		<member name="set_heartbeat_ticks" type="int" setter="set_set_heartbeat_ticks" getter="get_set_heartbeat_ticks" default="-1">
+		<member name="set_heartbeat_ticks" type="int" setter="set_set_heartbeat_ticks" getter="get_set_heartbeat_ticks">
 			Set by [method heartbeat], or [constant UNSET].
 		</member>
-		<member name="set_masked" type="bool" setter="set_set_masked" getter="get_set_masked" default="false">
+		<member name="set_masked" type="bool" setter="set_set_masked" getter="get_set_masked">
 			Set by [method masked].
 		</member>
-		<member name="set_trigger" type="int" setter="set_set_trigger" getter="get_set_trigger" enum="NetwPropertyConfig.Trigger" default="-1">
+		<member name="set_trigger" type="int" setter="set_set_trigger" getter="get_set_trigger" enum="NetwPropertyConfig.Trigger">
 			Set by [method on_change], or [constant UNSET].
 		</member>
-		<member name="set_window" type="int" setter="set_set_window" getter="get_set_window" default="-1">
+		<member name="set_window" type="int" setter="set_set_window" getter="get_set_window">
 			Set by [method windowed], or [constant UNSET].
 		</member>
-		<member name="teleport_at_override" type="float" setter="set_teleport_at_override" getter="get_teleport_at_override" default="-1.0">
+		<member name="teleport_at_override" type="float" setter="set_teleport_at_override" getter="get_teleport_at_override">
 			Set by [method teleport_at]. A negative value uses [member NetwPrediction.teleport_threshold].
 		</member>
 	</members>

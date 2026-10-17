@@ -55,7 +55,7 @@
 		</method>
 	</methods>
 	<members>
-		<member name="id" type="int" setter="set_id" getter="get_id" default="0">
+		<member name="id" type="int" setter="set_id" getter="get_id">
 			The channel number, from [code]100[/code] to [code]254[/code].
 		</member>
 	</members>

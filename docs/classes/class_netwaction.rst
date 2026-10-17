@@ -47,17 +47,17 @@ Properties
 .. table::
    :widths: auto
 
-   +-----------------------------------------------+---------------------------------------------------------------+----------------+
-   | :godot:`Callable`                             | :ref:`confirm<class_NetwAction_property_confirm>`             | ``Callable()`` |
-   +-----------------------------------------------+---------------------------------------------------------------+----------------+
-   | :godot:`Callable`                             | :ref:`predict<class_NetwAction_property_predict>`             | ``Callable()`` |
-   +-----------------------------------------------+---------------------------------------------------------------+----------------+
-   | :godot:`Callable`                             | :ref:`revert<class_NetwAction_property_revert>`               | ``Callable()`` |
-   +-----------------------------------------------+---------------------------------------------------------------+----------------+
-   | :godot:`int`                                  | :ref:`timeout_ticks<class_NetwAction_property_timeout_ticks>` | ``0``          |
-   +-----------------------------------------------+---------------------------------------------------------------+----------------+
-   | :ref:`TimingMode<enum_NetwAction_TimingMode>` | :ref:`timing_mode<class_NetwAction_property_timing_mode>`     | ``2``          |
-   +-----------------------------------------------+---------------------------------------------------------------+----------------+
+   +-----------------------------------------------+---------------------------------------------------------------+
+   | :godot:`Callable`                             | :ref:`confirm<class_NetwAction_property_confirm>`             |
+   +-----------------------------------------------+---------------------------------------------------------------+
+   | :godot:`Callable`                             | :ref:`predict<class_NetwAction_property_predict>`             |
+   +-----------------------------------------------+---------------------------------------------------------------+
+   | :godot:`Callable`                             | :ref:`revert<class_NetwAction_property_revert>`               |
+   +-----------------------------------------------+---------------------------------------------------------------+
+   | :godot:`int`                                  | :ref:`timeout_ticks<class_NetwAction_property_timeout_ticks>` |
+   +-----------------------------------------------+---------------------------------------------------------------+
+   | :ref:`TimingMode<enum_NetwAction_TimingMode>` | :ref:`timing_mode<class_NetwAction_property_timing_mode>`     |
+   +-----------------------------------------------+---------------------------------------------------------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -152,7 +152,7 @@ Property Descriptions
 
 .. rst-class:: classref-property
 
-:godot:`Callable` **confirm** = ``Callable()`` :ref:`🔗<class_NetwAction_property_confirm>`
+:godot:`Callable` **confirm** :ref:`🔗<class_NetwAction_property_confirm>`
 
 .. rst-class:: classref-property-setget
 
@@ -169,7 +169,7 @@ Called with the :godot:`Node` :ref:`predict<class_NetwAction_property_predict>` 
 
 .. rst-class:: classref-property
 
-:godot:`Callable` **predict** = ``Callable()`` :ref:`🔗<class_NetwAction_property_predict>`
+:godot:`Callable` **predict** :ref:`🔗<class_NetwAction_property_predict>`
 
 .. rst-class:: classref-property-setget
 
@@ -186,7 +186,7 @@ Shows the action locally and returns a :godot:`Node`, usually a placeholder, tha
 
 .. rst-class:: classref-property
 
-:godot:`Callable` **revert** = ``Callable()`` :ref:`🔗<class_NetwAction_property_revert>`
+:godot:`Callable` **revert** :ref:`🔗<class_NetwAction_property_revert>`
 
 .. rst-class:: classref-property-setget
 
@@ -203,7 +203,7 @@ Called with the :godot:`Node` :ref:`predict<class_NetwAction_property_predict>` 
 
 .. rst-class:: classref-property
 
-:godot:`int` **timeout_ticks** = ``0`` :ref:`🔗<class_NetwAction_property_timeout_ticks>`
+:godot:`int` **timeout_ticks** :ref:`🔗<class_NetwAction_property_timeout_ticks>`
 
 .. rst-class:: classref-property-setget
 
@@ -220,7 +220,7 @@ How many ticks to wait for the server before reverting. ``0`` waits 120 ticks.
 
 .. rst-class:: classref-property
 
-:ref:`TimingMode<enum_NetwAction_TimingMode>` **timing_mode** = ``2`` :ref:`🔗<class_NetwAction_property_timing_mode>`
+:ref:`TimingMode<enum_NetwAction_TimingMode>` **timing_mode** :ref:`🔗<class_NetwAction_property_timing_mode>`
 
 .. rst-class:: classref-property-setget
 

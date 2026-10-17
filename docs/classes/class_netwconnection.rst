@@ -92,17 +92,17 @@ Properties
 .. table::
    :widths: auto
 
-   +-----------------------------------------------------------+---------------------------------------------------------------------+-----------+
-   | :godot:`bool`                                             | :ref:`browsing<class_NetwConnection_property_browsing>`             | ``false`` |
-   +-----------------------------------------------------------+---------------------------------------------------------------------+-----------+
-   | :godot:`Array`\[:ref:`NetwEndpoint<class_NetwEndpoint>`\] | :ref:`endpoints<class_NetwConnection_property_endpoints>`           | ``[]``    |
-   +-----------------------------------------------------------+---------------------------------------------------------------------+-----------+
-   | :godot:`String`                                           | :ref:`join_address<class_NetwConnection_property_join_address>`     | ``""``    |
-   +-----------------------------------------------------------+---------------------------------------------------------------------+-----------+
-   | :godot:`float`                                            | :ref:`probe_interval<class_NetwConnection_property_probe_interval>` | ``10.0``  |
-   +-----------------------------------------------------------+---------------------------------------------------------------------+-----------+
-   | :ref:`State<enum_NetwConnection_State>`                   | :ref:`state<class_NetwConnection_property_state>`                   | ``0``     |
-   +-----------------------------------------------------------+---------------------------------------------------------------------+-----------+
+   +-----------------------------------------------------------+---------------------------------------------------------------------+
+   | :godot:`bool`                                             | :ref:`browsing<class_NetwConnection_property_browsing>`             |
+   +-----------------------------------------------------------+---------------------------------------------------------------------+
+   | :godot:`Array`\[:ref:`NetwEndpoint<class_NetwEndpoint>`\] | :ref:`endpoints<class_NetwConnection_property_endpoints>`           |
+   +-----------------------------------------------------------+---------------------------------------------------------------------+
+   | :godot:`String`                                           | :ref:`join_address<class_NetwConnection_property_join_address>`     |
+   +-----------------------------------------------------------+---------------------------------------------------------------------+
+   | :godot:`float`                                            | :ref:`probe_interval<class_NetwConnection_property_probe_interval>` |
+   +-----------------------------------------------------------+---------------------------------------------------------------------+
+   | :ref:`State<enum_NetwConnection_State>`                   | :ref:`state<class_NetwConnection_property_state>`                   |
+   +-----------------------------------------------------------+---------------------------------------------------------------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -371,7 +371,7 @@ Property Descriptions
 
 .. rst-class:: classref-property
 
-:godot:`bool` **browsing** = ``false`` :ref:`🔗<class_NetwConnection_property_browsing>`
+:godot:`bool` **browsing** :ref:`🔗<class_NetwConnection_property_browsing>`
 
 .. rst-class:: classref-property-setget
 
@@ -388,7 +388,7 @@ While ``true``, every :ref:`LobbyDirectory<class_LobbyDirectory>` keeps listing 
 
 .. rst-class:: classref-property
 
-:godot:`Array`\[:ref:`NetwEndpoint<class_NetwEndpoint>`\] **endpoints** = ``[]`` :ref:`🔗<class_NetwConnection_property_endpoints>`
+:godot:`Array`\[:ref:`NetwEndpoint<class_NetwEndpoint>`\] **endpoints** :ref:`🔗<class_NetwConnection_property_endpoints>`
 
 .. rst-class:: classref-property-setget
 
@@ -404,7 +404,7 @@ The rows from :ref:`add()<class_NetwConnection_method_add>` come first.
 
 .. rst-class:: classref-property
 
-:godot:`String` **join_address** = ``""`` :ref:`🔗<class_NetwConnection_property_join_address>`
+:godot:`String` **join_address** :ref:`🔗<class_NetwConnection_property_join_address>`
 
 .. rst-class:: classref-property-setget
 
@@ -420,7 +420,7 @@ Empty while the session is not hosting.
 
 .. rst-class:: classref-property
 
-:godot:`float` **probe_interval** = ``10.0`` :ref:`🔗<class_NetwConnection_property_probe_interval>`
+:godot:`float` **probe_interval** :ref:`🔗<class_NetwConnection_property_probe_interval>`
 
 .. rst-class:: classref-property-setget
 
@@ -437,7 +437,7 @@ Seconds between probes of a row from :ref:`add()<class_NetwConnection_method_add
 
 .. rst-class:: classref-property
 
-:ref:`State<enum_NetwConnection_State>` **state** = ``0`` :ref:`🔗<class_NetwConnection_property_state>`
+:ref:`State<enum_NetwConnection_State>` **state** :ref:`🔗<class_NetwConnection_property_state>`
 
 .. rst-class:: classref-property-setget
 

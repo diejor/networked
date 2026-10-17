@@ -40,15 +40,15 @@ Properties
 .. table::
    :widths: auto
 
-   +---------------------------------------------+--------------------------------------------------------------+--------+
-   | :ref:`NetwServerInfo<class_NetwServerInfo>` | :ref:`info<class_NetwProbeResult_property_info>`             |        |
-   +---------------------------------------------+--------------------------------------------------------------+--------+
-   | :godot:`int`                                | :ref:`latency_ms<class_NetwProbeResult_property_latency_ms>` | ``0``  |
-   +---------------------------------------------+--------------------------------------------------------------+--------+
-   | :godot:`String`                             | :ref:`message<class_NetwProbeResult_property_message>`       | ``""`` |
-   +---------------------------------------------+--------------------------------------------------------------+--------+
-   | :ref:`Status<enum_NetwProbeResult_Status>`  | :ref:`status<class_NetwProbeResult_property_status>`         | ``3``  |
-   +---------------------------------------------+--------------------------------------------------------------+--------+
+   +---------------------------------------------+--------------------------------------------------------------+
+   | :ref:`NetwServerInfo<class_NetwServerInfo>` | :ref:`info<class_NetwProbeResult_property_info>`             |
+   +---------------------------------------------+--------------------------------------------------------------+
+   | :godot:`int`                                | :ref:`latency_ms<class_NetwProbeResult_property_latency_ms>` |
+   +---------------------------------------------+--------------------------------------------------------------+
+   | :godot:`String`                             | :ref:`message<class_NetwProbeResult_property_message>`       |
+   +---------------------------------------------+--------------------------------------------------------------+
+   | :ref:`Status<enum_NetwProbeResult_Status>`  | :ref:`status<class_NetwProbeResult_property_status>`         |
+   +---------------------------------------------+--------------------------------------------------------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -177,7 +177,7 @@ What the server says about itself, or ``null``.
 
 .. rst-class:: classref-property
 
-:godot:`int` **latency_ms** = ``0`` :ref:`🔗<class_NetwProbeResult_property_latency_ms>`
+:godot:`int` **latency_ms** :ref:`🔗<class_NetwProbeResult_property_latency_ms>`
 
 .. rst-class:: classref-property-setget
 
@@ -194,7 +194,7 @@ The round trip time in milliseconds, or ``-1`` when not measured.
 
 .. rst-class:: classref-property
 
-:godot:`String` **message** = ``""`` :ref:`🔗<class_NetwProbeResult_property_message>`
+:godot:`String` **message** :ref:`🔗<class_NetwProbeResult_property_message>`
 
 .. rst-class:: classref-property-setget
 
@@ -211,7 +211,7 @@ Details for logs, not for players.
 
 .. rst-class:: classref-property
 
-:ref:`Status<enum_NetwProbeResult_Status>` **status** = ``3`` :ref:`🔗<class_NetwProbeResult_property_status>`
+:ref:`Status<enum_NetwProbeResult_Status>` **status** :ref:`🔗<class_NetwProbeResult_property_status>`
 
 .. rst-class:: classref-property-setget
 

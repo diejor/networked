@@ -89,19 +89,19 @@ Properties
 .. table::
    :widths: auto
 
-   +---------------------+----------------------------------------------------------+-----------+
-   | :godot:`bool`       | :ref:`is_valid<class_NetwTable_property_is_valid>`       | ``false`` |
-   +---------------------+----------------------------------------------------------+-----------+
-   | :godot:`bool`       | :ref:`reliable<class_NetwTable_property_reliable>`       | ``false`` |
-   +---------------------+----------------------------------------------------------+-----------+
-   | :godot:`RID`        | :ref:`rid<class_NetwTable_property_rid>`                 | ``RID()`` |
-   +---------------------+----------------------------------------------------------+-----------+
-   | :godot:`StringName` | :ref:`schema_name<class_NetwTable_property_schema_name>` | ``&""``   |
-   +---------------------+----------------------------------------------------------+-----------+
-   | :godot:`int`        | :ref:`tick<class_NetwTable_property_tick>`               | ``-1``    |
-   +---------------------+----------------------------------------------------------+-----------+
-   | :godot:`int`        | :ref:`wire_hash<class_NetwTable_property_wire_hash>`     | ``0``     |
-   +---------------------+----------------------------------------------------------+-----------+
+   +---------------------+----------------------------------------------------------+
+   | :godot:`bool`       | :ref:`is_valid<class_NetwTable_property_is_valid>`       |
+   +---------------------+----------------------------------------------------------+
+   | :godot:`bool`       | :ref:`reliable<class_NetwTable_property_reliable>`       |
+   +---------------------+----------------------------------------------------------+
+   | :godot:`RID`        | :ref:`rid<class_NetwTable_property_rid>`                 |
+   +---------------------+----------------------------------------------------------+
+   | :godot:`StringName` | :ref:`schema_name<class_NetwTable_property_schema_name>` |
+   +---------------------+----------------------------------------------------------+
+   | :godot:`int`        | :ref:`tick<class_NetwTable_property_tick>`               |
+   +---------------------+----------------------------------------------------------+
+   | :godot:`int`        | :ref:`wire_hash<class_NetwTable_property_wire_hash>`     |
+   +---------------------+----------------------------------------------------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -167,7 +167,7 @@ Property Descriptions
 
 .. rst-class:: classref-property
 
-:godot:`bool` **is_valid** = ``false`` :ref:`🔗<class_NetwTable_property_is_valid>`
+:godot:`bool` **is_valid** :ref:`🔗<class_NetwTable_property_is_valid>`
 
 .. rst-class:: classref-property-setget
 
@@ -183,7 +183,7 @@ Whether the session this handle belongs to still exists. Once it is gone, every 
 
 .. rst-class:: classref-property
 
-:godot:`bool` **reliable** = ``false`` :ref:`🔗<class_NetwTable_property_reliable>`
+:godot:`bool` **reliable** :ref:`🔗<class_NetwTable_property_reliable>`
 
 .. rst-class:: classref-property-setget
 
@@ -200,7 +200,7 @@ Whether this table's commits are sent reliably. Set it for a table that changes 
 
 .. rst-class:: classref-property
 
-:godot:`RID` **rid** = ``RID()`` :ref:`🔗<class_NetwTable_property_rid>`
+:godot:`RID` **rid** :ref:`🔗<class_NetwTable_property_rid>`
 
 .. rst-class:: classref-property-setget
 
@@ -216,7 +216,7 @@ The session's handle for this table.
 
 .. rst-class:: classref-property
 
-:godot:`StringName` **schema_name** = ``&""`` :ref:`🔗<class_NetwTable_property_schema_name>`
+:godot:`StringName` **schema_name** :ref:`🔗<class_NetwTable_property_schema_name>`
 
 .. rst-class:: classref-property-setget
 
@@ -232,7 +232,7 @@ The name this table was declared under, which is the name :ref:`NetwSession.tabl
 
 .. rst-class:: classref-property
 
-:godot:`int` **tick** = ``-1`` :ref:`🔗<class_NetwTable_property_tick>`
+:godot:`int` **tick** :ref:`🔗<class_NetwTable_property_tick>`
 
 .. rst-class:: classref-property-setget
 
@@ -248,7 +248,7 @@ The tick of the latest commit, or ``-1`` before the first commit.
 
 .. rst-class:: classref-property
 
-:godot:`int` **wire_hash** = ``0`` :ref:`🔗<class_NetwTable_property_wire_hash>`
+:godot:`int` **wire_hash** :ref:`🔗<class_NetwTable_property_wire_hash>`
 
 .. rst-class:: classref-property-setget
 

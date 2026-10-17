@@ -30,25 +30,25 @@
 		</method>
 	</methods>
 	<members>
-		<member name="address" type="String" setter="" getter="get_address" default="&quot;&quot;">
+		<member name="address" type="String" setter="" getter="get_address">
 			The address passed to [method NetwConnection.add] or reported by its [LobbyDirectory].
 		</member>
-		<member name="display_name" type="String" setter="" getter="get_display_name" default="&quot;&quot;">
+		<member name="display_name" type="String" setter="" getter="get_display_name">
 			The server name shown in a server browser.
 		</member>
 		<member name="info" type="NetwServerInfo" setter="" getter="get_info">
 			What the server last advertised, or a default [NetwServerInfo] before it answers.
 		</member>
-		<member name="is_listed" type="bool" setter="" getter="get_is_listed" default="false">
+		<member name="is_listed" type="bool" setter="" getter="get_is_listed">
 			[code]false[/code] once the row is removed. Only [member peer_class] and [member address] keep their values after that.
 		</member>
-		<member name="peer_class" type="StringName" setter="" getter="get_peer_class" default="&amp;&quot;&quot;">
+		<member name="peer_class" type="StringName" setter="" getter="get_peer_class">
 			The [MultiplayerPeer] class used to connect to this server.
 		</member>
-		<member name="source" type="String" setter="" getter="get_source" default="&quot;&quot;">
+		<member name="source" type="String" setter="" getter="get_source">
 			The name of the [LobbyDirectory] that listed this row, or [code]""[/code] when the game added it with [method NetwConnection.add].
 		</member>
-		<member name="status" type="int" setter="" getter="get_status" enum="NetwEndpoint.Status" default="0">
+		<member name="status" type="int" setter="" getter="get_status" enum="NetwEndpoint.Status">
 			What the last probe answered.
 		</member>
 	</members>

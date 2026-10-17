@@ -16,20 +16,20 @@
 	<tutorials>
 	</tutorials>
 	<members>
-		<member name="entities" type="NetwEntity[]" setter="" getter="get_entities" default="[]">
+		<member name="entities" type="NetwEntity[]" setter="" getter="get_entities">
 			The entities spawned for this player with [method Netw.spawn_player], in no particular order. Empty for a spectator.
 		</member>
-		<member name="is_active" type="bool" setter="" getter="get_is_active" default="false">
+		<member name="is_active" type="bool" setter="" getter="get_is_active">
 			[code]false[/code] once the player has left. Check it before using a player you stored.
 		</member>
-		<member name="peer_id" type="int" setter="" getter="get_peer_id" default="0">
+		<member name="peer_id" type="int" setter="" getter="get_peer_id">
 			The peer this player is connected as. Another player may reuse it after this one leaves.
 		</member>
 		<member name="scene" type="NetwScene" setter="" getter="get_scene">
 			The scene this player is in, or [code]null[/code]. It is the scene holding one of its [member entities], or else the scene it watches with [method NetwScene.watch]. It is [code]null[/code] when there are two.
 			A client only knows about the scenes it receives.
 		</member>
-		<member name="username" type="StringName" setter="" getter="get_username" default="&amp;&quot;&quot;">
+		<member name="username" type="StringName" setter="" getter="get_username">
 			The username from [method Netw.prepare_join]. It is kept after the player leaves. Two players may join with the same name, unless [method Netw.configure_admission] refuses it.
 		</member>
 	</members>

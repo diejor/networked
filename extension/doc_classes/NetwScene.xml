@@ -83,31 +83,31 @@
 		</method>
 	</methods>
 	<members>
-		<member name="entities" type="NetwEntity[]" setter="" getter="get_entities" default="[]">
+		<member name="entities" type="NetwEntity[]" setter="" getter="get_entities">
 			Every entity in this scene.
 		</member>
 		<member name="entity" type="NetwEntity" setter="" getter="get_entity">
 			The [NetwEntity] on [member root], or [code]null[/code] when no scene was found.
 		</member>
-		<member name="is_declared" type="bool" setter="" getter="get_is_declared" default="false">
+		<member name="is_declared" type="bool" setter="" getter="get_is_declared">
 			Whether a scene was found. [code]false[/code] for an entity outside every scene or not in the tree, and every other member is empty.
 		</member>
-		<member name="label" type="StringName" setter="" getter="get_label" default="&amp;&quot;&quot;">
+		<member name="label" type="StringName" setter="" getter="get_label">
 			The name [method Netw.scene] finds this scene by. See [method NetwSceneConfig.labeled].
 		</member>
-		<member name="local_player_entities" type="NetwEntity[]" setter="" getter="get_local_player_entities" default="[]">
+		<member name="local_player_entities" type="NetwEntity[]" setter="" getter="get_local_player_entities">
 			Every entity in [member player_entities] that was spawned for this peer.
 		</member>
-		<member name="player_entities" type="NetwEntity[]" setter="" getter="get_player_entities" default="[]">
+		<member name="player_entities" type="NetwEntity[]" setter="" getter="get_player_entities">
 			Every entity spawned for a player with [method Netw.spawn_player] that is in this scene, in no particular order. An entity is removed as soon as it is despawned, before its node is freed.
 		</member>
-		<member name="rid" type="RID" setter="" getter="get_rid" default="RID()">
+		<member name="rid" type="RID" setter="" getter="get_rid">
 			The [RID] of the scene's entity, invalid outside a session. The [code]scene_*[/code] methods of [NetwMultiplayer] take it.
 		</member>
 		<member name="root" type="Node" setter="" getter="get_root">
 			The node the scene was declared on, [code]null[/code] outside a session. When the scene is [method NetwSceneConfig.isolated], [method Netw.spawn] returns the [StretchViewportContainer] holding [member world], and this is the node inside [member world].
 		</member>
-		<member name="viewers" type="NetwPlayer[]" setter="" getter="get_viewers" default="[]">
+		<member name="viewers" type="NetwPlayer[]" setter="" getter="get_viewers">
 			Every player this scene replicates to, see [method is_watching].
 		</member>
 		<member name="world" type="Node" setter="" getter="get_world">

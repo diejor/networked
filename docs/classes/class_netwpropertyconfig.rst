@@ -49,43 +49,43 @@ Properties
 .. table::
    :widths: auto
 
-   +-------------------------------------------------------------+-------------------------------------------------------------------------------------------+-----------+
-   | :godot:`StringName`                                         | :ref:`carry_channel<class_NetwPropertyConfig_property_carry_channel>`                     | ``&""``   |
-   +-------------------------------------------------------------+-------------------------------------------------------------------------------------------+-----------+
-   | :godot:`float`                                              | :ref:`converge_stiffness<class_NetwPropertyConfig_property_converge_stiffness>`           | ``0.0``   |
-   +-------------------------------------------------------------+-------------------------------------------------------------------------------------------+-----------+
-   | :godot:`float`                                              | :ref:`epsilon_override<class_NetwPropertyConfig_property_epsilon_override>`               | ``-1.0``  |
-   +-------------------------------------------------------------+-------------------------------------------------------------------------------------------+-----------+
-   | :godot:`bool`                                               | :ref:`explicit_reconcile_only<class_NetwPropertyConfig_property_explicit_reconcile_only>` | ``false`` |
-   +-------------------------------------------------------------+-------------------------------------------------------------------------------------------+-----------+
-   | :godot:`bool`                                               | :ref:`explicit_teleport_only<class_NetwPropertyConfig_property_explicit_teleport_only>`   | ``false`` |
-   +-------------------------------------------------------------+-------------------------------------------------------------------------------------------+-----------+
-   | :godot:`bool`                                               | :ref:`in_broadcast_set<class_NetwPropertyConfig_property_in_broadcast_set>`               | ``false`` |
-   +-------------------------------------------------------------+-------------------------------------------------------------------------------------------+-----------+
-   | :godot:`bool`                                               | :ref:`in_input_set<class_NetwPropertyConfig_property_in_input_set>`                       | ``false`` |
-   +-------------------------------------------------------------+-------------------------------------------------------------------------------------------+-----------+
-   | :godot:`bool`                                               | :ref:`in_state_set<class_NetwPropertyConfig_property_in_state_set>`                       | ``false`` |
-   +-------------------------------------------------------------+-------------------------------------------------------------------------------------------+-----------+
-   | :godot:`bool`                                               | :ref:`is_property<class_NetwPropertyConfig_property_is_property>`                         | ``true``  |
-   +-------------------------------------------------------------+-------------------------------------------------------------------------------------------+-----------+
-   | :godot:`bool`                                               | :ref:`is_spawn_state<class_NetwPropertyConfig_property_is_spawn_state>`                   | ``false`` |
-   +-------------------------------------------------------------+-------------------------------------------------------------------------------------------+-----------+
-   | :ref:`Lane<enum_NetwPropertyConfig_Lane>`                   | :ref:`lane<class_NetwPropertyConfig_property_lane>`                                       | ``0``     |
-   +-------------------------------------------------------------+-------------------------------------------------------------------------------------------+-----------+
-   | :ref:`PropertyClass<enum_NetwPropertyConfig_PropertyClass>` | :ref:`property_class<class_NetwPropertyConfig_property_property_class>`                   | ``0``     |
-   +-------------------------------------------------------------+-------------------------------------------------------------------------------------------+-----------+
-   | :ref:`Audience<enum_NetwPropertyConfig_Audience>`           | :ref:`set_audience<class_NetwPropertyConfig_property_set_audience>`                       | ``0``     |
-   +-------------------------------------------------------------+-------------------------------------------------------------------------------------------+-----------+
-   | :godot:`int`                                                | :ref:`set_heartbeat_ticks<class_NetwPropertyConfig_property_set_heartbeat_ticks>`         | ``-1``    |
-   +-------------------------------------------------------------+-------------------------------------------------------------------------------------------+-----------+
-   | :godot:`bool`                                               | :ref:`set_masked<class_NetwPropertyConfig_property_set_masked>`                           | ``false`` |
-   +-------------------------------------------------------------+-------------------------------------------------------------------------------------------+-----------+
-   | :ref:`Trigger<enum_NetwPropertyConfig_Trigger>`             | :ref:`set_trigger<class_NetwPropertyConfig_property_set_trigger>`                         | ``-1``    |
-   +-------------------------------------------------------------+-------------------------------------------------------------------------------------------+-----------+
-   | :godot:`int`                                                | :ref:`set_window<class_NetwPropertyConfig_property_set_window>`                           | ``-1``    |
-   +-------------------------------------------------------------+-------------------------------------------------------------------------------------------+-----------+
-   | :godot:`float`                                              | :ref:`teleport_at_override<class_NetwPropertyConfig_property_teleport_at_override>`       | ``-1.0``  |
-   +-------------------------------------------------------------+-------------------------------------------------------------------------------------------+-----------+
+   +-------------------------------------------------------------+-------------------------------------------------------------------------------------------+
+   | :godot:`StringName`                                         | :ref:`carry_channel<class_NetwPropertyConfig_property_carry_channel>`                     |
+   +-------------------------------------------------------------+-------------------------------------------------------------------------------------------+
+   | :godot:`float`                                              | :ref:`converge_stiffness<class_NetwPropertyConfig_property_converge_stiffness>`           |
+   +-------------------------------------------------------------+-------------------------------------------------------------------------------------------+
+   | :godot:`float`                                              | :ref:`epsilon_override<class_NetwPropertyConfig_property_epsilon_override>`               |
+   +-------------------------------------------------------------+-------------------------------------------------------------------------------------------+
+   | :godot:`bool`                                               | :ref:`explicit_reconcile_only<class_NetwPropertyConfig_property_explicit_reconcile_only>` |
+   +-------------------------------------------------------------+-------------------------------------------------------------------------------------------+
+   | :godot:`bool`                                               | :ref:`explicit_teleport_only<class_NetwPropertyConfig_property_explicit_teleport_only>`   |
+   +-------------------------------------------------------------+-------------------------------------------------------------------------------------------+
+   | :godot:`bool`                                               | :ref:`in_broadcast_set<class_NetwPropertyConfig_property_in_broadcast_set>`               |
+   +-------------------------------------------------------------+-------------------------------------------------------------------------------------------+
+   | :godot:`bool`                                               | :ref:`in_input_set<class_NetwPropertyConfig_property_in_input_set>`                       |
+   +-------------------------------------------------------------+-------------------------------------------------------------------------------------------+
+   | :godot:`bool`                                               | :ref:`in_state_set<class_NetwPropertyConfig_property_in_state_set>`                       |
+   +-------------------------------------------------------------+-------------------------------------------------------------------------------------------+
+   | :godot:`bool`                                               | :ref:`is_property<class_NetwPropertyConfig_property_is_property>`                         |
+   +-------------------------------------------------------------+-------------------------------------------------------------------------------------------+
+   | :godot:`bool`                                               | :ref:`is_spawn_state<class_NetwPropertyConfig_property_is_spawn_state>`                   |
+   +-------------------------------------------------------------+-------------------------------------------------------------------------------------------+
+   | :ref:`Lane<enum_NetwPropertyConfig_Lane>`                   | :ref:`lane<class_NetwPropertyConfig_property_lane>`                                       |
+   +-------------------------------------------------------------+-------------------------------------------------------------------------------------------+
+   | :ref:`PropertyClass<enum_NetwPropertyConfig_PropertyClass>` | :ref:`property_class<class_NetwPropertyConfig_property_property_class>`                   |
+   +-------------------------------------------------------------+-------------------------------------------------------------------------------------------+
+   | :ref:`Audience<enum_NetwPropertyConfig_Audience>`           | :ref:`set_audience<class_NetwPropertyConfig_property_set_audience>`                       |
+   +-------------------------------------------------------------+-------------------------------------------------------------------------------------------+
+   | :godot:`int`                                                | :ref:`set_heartbeat_ticks<class_NetwPropertyConfig_property_set_heartbeat_ticks>`         |
+   +-------------------------------------------------------------+-------------------------------------------------------------------------------------------+
+   | :godot:`bool`                                               | :ref:`set_masked<class_NetwPropertyConfig_property_set_masked>`                           |
+   +-------------------------------------------------------------+-------------------------------------------------------------------------------------------+
+   | :ref:`Trigger<enum_NetwPropertyConfig_Trigger>`             | :ref:`set_trigger<class_NetwPropertyConfig_property_set_trigger>`                         |
+   +-------------------------------------------------------------+-------------------------------------------------------------------------------------------+
+   | :godot:`int`                                                | :ref:`set_window<class_NetwPropertyConfig_property_set_window>`                           |
+   +-------------------------------------------------------------+-------------------------------------------------------------------------------------------+
+   | :godot:`float`                                              | :ref:`teleport_at_override<class_NetwPropertyConfig_property_teleport_at_override>`       |
+   +-------------------------------------------------------------+-------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -296,7 +296,7 @@ Property Descriptions
 
 .. rst-class:: classref-property
 
-:godot:`StringName` **carry_channel** = ``&""`` :ref:`🔗<class_NetwPropertyConfig_property_carry_channel>`
+:godot:`StringName` **carry_channel** :ref:`🔗<class_NetwPropertyConfig_property_carry_channel>`
 
 .. rst-class:: classref-property-setget
 
@@ -313,7 +313,7 @@ Set by :ref:`carry_along()<class_NetwPropertyConfig_method_carry_along>`.
 
 .. rst-class:: classref-property
 
-:godot:`float` **converge_stiffness** = ``0.0`` :ref:`🔗<class_NetwPropertyConfig_property_converge_stiffness>`
+:godot:`float` **converge_stiffness** :ref:`🔗<class_NetwPropertyConfig_property_converge_stiffness>`
 
 .. rst-class:: classref-property-setget
 
@@ -330,7 +330,7 @@ Set by :ref:`converge()<class_NetwPropertyConfig_method_converge>`.
 
 .. rst-class:: classref-property
 
-:godot:`float` **epsilon_override** = ``-1.0`` :ref:`🔗<class_NetwPropertyConfig_property_epsilon_override>`
+:godot:`float` **epsilon_override** :ref:`🔗<class_NetwPropertyConfig_property_epsilon_override>`
 
 .. rst-class:: classref-property-setget
 
@@ -347,7 +347,7 @@ Set by :ref:`epsilon()<class_NetwPropertyConfig_method_epsilon>`. A negative val
 
 .. rst-class:: classref-property
 
-:godot:`bool` **explicit_reconcile_only** = ``false`` :ref:`🔗<class_NetwPropertyConfig_property_explicit_reconcile_only>`
+:godot:`bool` **explicit_reconcile_only** :ref:`🔗<class_NetwPropertyConfig_property_explicit_reconcile_only>`
 
 .. rst-class:: classref-property-setget
 
@@ -364,7 +364,7 @@ Set by :ref:`reconcile_only()<class_NetwPropertyConfig_method_reconcile_only>`.
 
 .. rst-class:: classref-property
 
-:godot:`bool` **explicit_teleport_only** = ``false`` :ref:`🔗<class_NetwPropertyConfig_property_explicit_teleport_only>`
+:godot:`bool` **explicit_teleport_only** :ref:`🔗<class_NetwPropertyConfig_property_explicit_teleport_only>`
 
 .. rst-class:: classref-property-setget
 
@@ -381,7 +381,7 @@ Set by :ref:`teleport_only()<class_NetwPropertyConfig_method_teleport_only>`.
 
 .. rst-class:: classref-property
 
-:godot:`bool` **in_broadcast_set** = ``false`` :ref:`🔗<class_NetwPropertyConfig_property_in_broadcast_set>`
+:godot:`bool` **in_broadcast_set** :ref:`🔗<class_NetwPropertyConfig_property_in_broadcast_set>`
 
 .. rst-class:: classref-property-setget
 
@@ -398,7 +398,7 @@ Set by :ref:`broadcast()<class_NetwPropertyConfig_method_broadcast>`.
 
 .. rst-class:: classref-property
 
-:godot:`bool` **in_input_set** = ``false`` :ref:`🔗<class_NetwPropertyConfig_property_in_input_set>`
+:godot:`bool` **in_input_set** :ref:`🔗<class_NetwPropertyConfig_property_in_input_set>`
 
 .. rst-class:: classref-property-setget
 
@@ -415,7 +415,7 @@ Set by :ref:`input()<class_NetwPropertyConfig_method_input>`.
 
 .. rst-class:: classref-property
 
-:godot:`bool` **in_state_set** = ``false`` :ref:`🔗<class_NetwPropertyConfig_property_in_state_set>`
+:godot:`bool` **in_state_set** :ref:`🔗<class_NetwPropertyConfig_property_in_state_set>`
 
 .. rst-class:: classref-property-setget
 
@@ -432,7 +432,7 @@ Set by :ref:`state()<class_NetwPropertyConfig_method_state>`.
 
 .. rst-class:: classref-property
 
-:godot:`bool` **is_property** = ``true`` :ref:`🔗<class_NetwPropertyConfig_property_is_property>`
+:godot:`bool` **is_property** :ref:`🔗<class_NetwPropertyConfig_property_is_property>`
 
 .. rst-class:: classref-property-setget
 
@@ -449,7 +449,7 @@ Identifies this configuration as a property configuration.
 
 .. rst-class:: classref-property
 
-:godot:`bool` **is_spawn_state** = ``false`` :ref:`🔗<class_NetwPropertyConfig_property_is_spawn_state>`
+:godot:`bool` **is_spawn_state** :ref:`🔗<class_NetwPropertyConfig_property_is_spawn_state>`
 
 .. rst-class:: classref-property-setget
 
@@ -466,7 +466,7 @@ Set by :ref:`on_spawn()<class_NetwPropertyConfig_method_on_spawn>`.
 
 .. rst-class:: classref-property
 
-:ref:`Lane<enum_NetwPropertyConfig_Lane>` **lane** = ``0`` :ref:`🔗<class_NetwPropertyConfig_property_lane>`
+:ref:`Lane<enum_NetwPropertyConfig_Lane>` **lane** :ref:`🔗<class_NetwPropertyConfig_property_lane>`
 
 .. rst-class:: classref-property-setget
 
@@ -483,7 +483,7 @@ Whether changes are sent unreliably or reliably. Set by :ref:`volatile()<class_N
 
 .. rst-class:: classref-property
 
-:ref:`PropertyClass<enum_NetwPropertyConfig_PropertyClass>` **property_class** = ``0`` :ref:`🔗<class_NetwPropertyConfig_property_property_class>`
+:ref:`PropertyClass<enum_NetwPropertyConfig_PropertyClass>` **property_class** :ref:`🔗<class_NetwPropertyConfig_property_property_class>`
 
 .. rst-class:: classref-property-setget
 
@@ -500,7 +500,7 @@ Whether a difference in the value causes a correction. Set by :ref:`causal()<cla
 
 .. rst-class:: classref-property
 
-:ref:`Audience<enum_NetwPropertyConfig_Audience>` **set_audience** = ``0`` :ref:`🔗<class_NetwPropertyConfig_property_set_audience>`
+:ref:`Audience<enum_NetwPropertyConfig_Audience>` **set_audience** :ref:`🔗<class_NetwPropertyConfig_property_set_audience>`
 
 .. rst-class:: classref-property-setget
 
@@ -517,7 +517,7 @@ Set by :ref:`audience()<class_NetwPropertyConfig_method_audience>` and :ref:`inp
 
 .. rst-class:: classref-property
 
-:godot:`int` **set_heartbeat_ticks** = ``-1`` :ref:`🔗<class_NetwPropertyConfig_property_set_heartbeat_ticks>`
+:godot:`int` **set_heartbeat_ticks** :ref:`🔗<class_NetwPropertyConfig_property_set_heartbeat_ticks>`
 
 .. rst-class:: classref-property-setget
 
@@ -534,7 +534,7 @@ Set by :ref:`heartbeat()<class_NetwPropertyConfig_method_heartbeat>`, or :ref:`U
 
 .. rst-class:: classref-property
 
-:godot:`bool` **set_masked** = ``false`` :ref:`🔗<class_NetwPropertyConfig_property_set_masked>`
+:godot:`bool` **set_masked** :ref:`🔗<class_NetwPropertyConfig_property_set_masked>`
 
 .. rst-class:: classref-property-setget
 
@@ -551,7 +551,7 @@ Set by :ref:`masked()<class_NetwPropertyConfig_method_masked>`.
 
 .. rst-class:: classref-property
 
-:ref:`Trigger<enum_NetwPropertyConfig_Trigger>` **set_trigger** = ``-1`` :ref:`🔗<class_NetwPropertyConfig_property_set_trigger>`
+:ref:`Trigger<enum_NetwPropertyConfig_Trigger>` **set_trigger** :ref:`🔗<class_NetwPropertyConfig_property_set_trigger>`
 
 .. rst-class:: classref-property-setget
 
@@ -568,7 +568,7 @@ Set by :ref:`on_change()<class_NetwPropertyConfig_method_on_change>`, or :ref:`U
 
 .. rst-class:: classref-property
 
-:godot:`int` **set_window** = ``-1`` :ref:`🔗<class_NetwPropertyConfig_property_set_window>`
+:godot:`int` **set_window** :ref:`🔗<class_NetwPropertyConfig_property_set_window>`
 
 .. rst-class:: classref-property-setget
 
@@ -585,7 +585,7 @@ Set by :ref:`windowed()<class_NetwPropertyConfig_method_windowed>`, or :ref:`UNS
 
 .. rst-class:: classref-property
 
-:godot:`float` **teleport_at_override** = ``-1.0`` :ref:`🔗<class_NetwPropertyConfig_property_teleport_at_override>`
+:godot:`float` **teleport_at_override** :ref:`🔗<class_NetwPropertyConfig_property_teleport_at_override>`
 
 .. rst-class:: classref-property-setget
 

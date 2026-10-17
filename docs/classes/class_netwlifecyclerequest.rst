@@ -37,19 +37,19 @@ Properties
 .. table::
    :widths: auto
 
-   +---------------------------------------------+---------------------------------------------------------------------+-----------+
-   | :godot:`bool`                               | :ref:`denied<class_NetwLifecycleRequest_property_denied>`           | ``false`` |
-   +---------------------------------------------+---------------------------------------------------------------------+-----------+
-   | :godot:`Node`                               | :ref:`destination<class_NetwLifecycleRequest_property_destination>` |           |
-   +---------------------------------------------+---------------------------------------------------------------------+-----------+
-   | :ref:`NetwEntity<class_NetwEntity>`         | :ref:`entity<class_NetwLifecycleRequest_property_entity>`           |           |
-   +---------------------------------------------+---------------------------------------------------------------------+-----------+
-   | :ref:`Kind<enum_NetwLifecycleRequest_Kind>` | :ref:`kind<class_NetwLifecycleRequest_property_kind>`               | ``0``     |
-   +---------------------------------------------+---------------------------------------------------------------------+-----------+
-   | :godot:`String`                             | :ref:`reason<class_NetwLifecycleRequest_property_reason>`           | ``""``    |
-   +---------------------------------------------+---------------------------------------------------------------------+-----------+
-   | :godot:`int`                                | :ref:`requester<class_NetwLifecycleRequest_property_requester>`     | ``0``     |
-   +---------------------------------------------+---------------------------------------------------------------------+-----------+
+   +---------------------------------------------+---------------------------------------------------------------------+
+   | :godot:`bool`                               | :ref:`denied<class_NetwLifecycleRequest_property_denied>`           |
+   +---------------------------------------------+---------------------------------------------------------------------+
+   | :godot:`Node`                               | :ref:`destination<class_NetwLifecycleRequest_property_destination>` |
+   +---------------------------------------------+---------------------------------------------------------------------+
+   | :ref:`NetwEntity<class_NetwEntity>`         | :ref:`entity<class_NetwLifecycleRequest_property_entity>`           |
+   +---------------------------------------------+---------------------------------------------------------------------+
+   | :ref:`Kind<enum_NetwLifecycleRequest_Kind>` | :ref:`kind<class_NetwLifecycleRequest_property_kind>`               |
+   +---------------------------------------------+---------------------------------------------------------------------+
+   | :godot:`String`                             | :ref:`reason<class_NetwLifecycleRequest_property_reason>`           |
+   +---------------------------------------------+---------------------------------------------------------------------+
+   | :godot:`int`                                | :ref:`requester<class_NetwLifecycleRequest_property_requester>`     |
+   +---------------------------------------------+---------------------------------------------------------------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -115,7 +115,7 @@ Property Descriptions
 
 .. rst-class:: classref-property
 
-:godot:`bool` **denied** = ``false`` :ref:`🔗<class_NetwLifecycleRequest_property_denied>`
+:godot:`bool` **denied** :ref:`🔗<class_NetwLifecycleRequest_property_denied>`
 
 .. rst-class:: classref-property-setget
 
@@ -164,7 +164,7 @@ The entity the change is about. On a spawn it is the server's copy, holding the 
 
 .. rst-class:: classref-property
 
-:ref:`Kind<enum_NetwLifecycleRequest_Kind>` **kind** = ``0`` :ref:`🔗<class_NetwLifecycleRequest_property_kind>`
+:ref:`Kind<enum_NetwLifecycleRequest_Kind>` **kind** :ref:`🔗<class_NetwLifecycleRequest_property_kind>`
 
 .. rst-class:: classref-property-setget
 
@@ -180,7 +180,7 @@ Which change the controller made.
 
 .. rst-class:: classref-property
 
-:godot:`String` **reason** = ``""`` :ref:`🔗<class_NetwLifecycleRequest_property_reason>`
+:godot:`String` **reason** :ref:`🔗<class_NetwLifecycleRequest_property_reason>`
 
 .. rst-class:: classref-property-setget
 
@@ -196,7 +196,7 @@ What the server passed to :ref:`deny()<class_NetwLifecycleRequest_method_deny>`,
 
 .. rst-class:: classref-property
 
-:godot:`int` **requester** = ``0`` :ref:`🔗<class_NetwLifecycleRequest_property_requester>`
+:godot:`int` **requester** :ref:`🔗<class_NetwLifecycleRequest_property_requester>`
 
 .. rst-class:: classref-property-setget
 

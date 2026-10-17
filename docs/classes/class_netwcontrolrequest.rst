@@ -35,13 +35,13 @@ Properties
 .. table::
    :widths: auto
 
-   +-----------------------------------+---------------------------------------------------------------+-----------+
-   | :godot:`bool`                     | :ref:`denied<class_NetwControlRequest_property_denied>`       | ``false`` |
-   +-----------------------------------+---------------------------------------------------------------+-----------+
-   | :ref:`Hold<enum_NetwEntity_Hold>` | :ref:`hold<class_NetwControlRequest_property_hold>`           | ``2``     |
-   +-----------------------------------+---------------------------------------------------------------+-----------+
-   | :godot:`int`                      | :ref:`requester<class_NetwControlRequest_property_requester>` | ``0``     |
-   +-----------------------------------+---------------------------------------------------------------+-----------+
+   +-----------------------------------+---------------------------------------------------------------+
+   | :godot:`bool`                     | :ref:`denied<class_NetwControlRequest_property_denied>`       |
+   +-----------------------------------+---------------------------------------------------------------+
+   | :ref:`Hold<enum_NetwEntity_Hold>` | :ref:`hold<class_NetwControlRequest_property_hold>`           |
+   +-----------------------------------+---------------------------------------------------------------+
+   | :godot:`int`                      | :ref:`requester<class_NetwControlRequest_property_requester>` |
+   +-----------------------------------+---------------------------------------------------------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -68,7 +68,7 @@ Property Descriptions
 
 .. rst-class:: classref-property
 
-:godot:`bool` **denied** = ``false`` :ref:`🔗<class_NetwControlRequest_property_denied>`
+:godot:`bool` **denied** :ref:`🔗<class_NetwControlRequest_property_denied>`
 
 .. rst-class:: classref-property-setget
 
@@ -85,7 +85,7 @@ Whether the request should be rejected. Writing ``false`` over a :ref:`deny()<cl
 
 .. rst-class:: classref-property
 
-:ref:`Hold<enum_NetwEntity_Hold>` **hold** = ``2`` :ref:`🔗<class_NetwControlRequest_property_hold>`
+:ref:`Hold<enum_NetwEntity_Hold>` **hold** :ref:`🔗<class_NetwControlRequest_property_hold>`
 
 .. rst-class:: classref-property-setget
 
@@ -101,7 +101,7 @@ The :ref:`Hold<enum_NetwEntity_Hold>` the peer asked to hold the entity with.
 
 .. rst-class:: classref-property
 
-:godot:`int` **requester** = ``0`` :ref:`🔗<class_NetwControlRequest_property_requester>`
+:godot:`int` **requester** :ref:`🔗<class_NetwControlRequest_property_requester>`
 
 .. rst-class:: classref-property-setget
 

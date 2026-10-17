@@ -174,7 +174,7 @@ TEST_CASE(
         "Godot build cannot step physics on demand, so it runs "
         "SCHEDULE_FRAME. Install a NetwPhysicsStepper with "
         "NetwSession.install_physics_stepper.",
-        1
+        netw::gd::can_step_space(3) ? 0 : 1
     );
 
     using namespace TestSteppedScheduleLaws;

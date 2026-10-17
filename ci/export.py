@@ -374,9 +374,11 @@ def smoke_web(directory: Path, *, seconds: float) -> dict:
     if browser is None:
         raise fail("no chromium or chrome on PATH, so the page cannot be booted here")
     validate_web(directory)
-    with tempfile.TemporaryDirectory() as profile:
+    profile = tempfile.mkdtemp()
+    log_lines: list[str] = []
+    try:
         with serving(directory) as url:
-            completed = subprocess.run(
+            proc = subprocess.Popen(
                 [
                     browser,
                     "--headless=new",
@@ -386,16 +388,41 @@ def smoke_web(directory: Path, *, seconds: float) -> dict:
                     "--enable-logging=stderr",
                     "--v=0",
                     "--user-data-dir=%s" % profile,
-                    "--virtual-time-budget=%d" % int(seconds * 1000),
-                    "--dump-dom",
                     url,
                 ],
-                capture_output=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
                 text=True,
-                timeout=seconds + 180,
             )
-    log = (completed.stdout or "") + (completed.stderr or "")
-    console = [line for line in log.splitlines() if "INFO:CONSOLE" in line and "chrome-extension://" not in line]
+
+            def reader():
+                for line in proc.stderr:
+                    log_lines.append(line)
+
+            thread = threading.Thread(target=reader, daemon=True)
+            thread.start()
+
+            deadline = time.time() + seconds
+            while time.time() < deadline:
+                console = [line for line in log_lines if "INFO:CONSOLE" in line and "chrome-extension://" not in line]
+                has_banner = any("Godot Engine v" in line for line in console)
+                has_config = any("Build configuration:" in line for line in console)
+                if has_banner and has_config:
+                    break
+                if proc.poll() is not None and not thread.is_alive():
+                    break
+                time.sleep(0.1)
+
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except Exception:
+                proc.kill()
+    finally:
+        shutil.rmtree(profile, ignore_errors=True)
+
+    log = "".join(log_lines)
+    console = [line for line in log_lines if "INFO:CONSOLE" in line and "chrome-extension://" not in line]
     banner = next((line for line in console if "Godot Engine v" in line), "")
     configuration = next((line for line in console if "Build configuration:" in line), "")
     engine_errors = [line for line in console if "ERROR: " in line]

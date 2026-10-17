@@ -78,27 +78,27 @@ Properties
 .. table::
    :widths: auto
 
-   +-------------------------------------------------------+---------------------------------------------------------------------------+----------------+
-   | :godot:`Array`\[:godot:`NodePath`\]                   | :ref:`bodies<class_NetwSimulation_property_bodies>`                       | ``[]``         |
-   +-------------------------------------------------------+---------------------------------------------------------------------------+----------------+
-   | :godot:`bool`                                         | :ref:`claim_on_contact<class_NetwSimulation_property_claim_on_contact>`   | ``false``      |
-   +-------------------------------------------------------+---------------------------------------------------------------------------+----------------+
-   | :godot:`int`                                          | :ref:`max_restore_ticks<class_NetwSimulation_property_max_restore_ticks>` | ``6``          |
-   +-------------------------------------------------------+---------------------------------------------------------------------------+----------------+
-   | :ref:`Mode<enum_NetwSimulation_Mode>`                 | :ref:`mode<class_NetwSimulation_property_mode>`                           | ``0``          |
-   +-------------------------------------------------------+---------------------------------------------------------------------------+----------------+
-   | :godot:`float`                                        | :ref:`release_on_rest<class_NetwSimulation_property_release_on_rest>`     | ``0.0``        |
-   +-------------------------------------------------------+---------------------------------------------------------------------------+----------------+
-   | :ref:`Replicas<enum_NetwSimulation_Replicas>`         | :ref:`replicas<class_NetwSimulation_property_replicas>`                   | ``0``          |
-   +-------------------------------------------------------+---------------------------------------------------------------------------+----------------+
-   | :ref:`Restore<enum_NetwSimulation_Restore>`           | :ref:`restore<class_NetwSimulation_property_restore>`                     | ``2``          |
-   +-------------------------------------------------------+---------------------------------------------------------------------------+----------------+
-   | :ref:`Schedule<enum_NetwSimulation_Schedule>`         | :ref:`schedule<class_NetwSimulation_property_schedule>`                   | ``3``          |
-   +-------------------------------------------------------+---------------------------------------------------------------------------+----------------+
-   | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] | :ref:`selected<class_NetwSimulation_property_selected>`                   | ``[]``         |
-   +-------------------------------------------------------+---------------------------------------------------------------------------+----------------+
-   | :godot:`Callable`                                     | :ref:`step<class_NetwSimulation_property_step>`                           | ``Callable()`` |
-   +-------------------------------------------------------+---------------------------------------------------------------------------+----------------+
+   +-------------------------------------------------------+---------------------------------------------------------------------------+
+   | :godot:`Array`\[:godot:`NodePath`\]                   | :ref:`bodies<class_NetwSimulation_property_bodies>`                       |
+   +-------------------------------------------------------+---------------------------------------------------------------------------+
+   | :godot:`bool`                                         | :ref:`claim_on_contact<class_NetwSimulation_property_claim_on_contact>`   |
+   +-------------------------------------------------------+---------------------------------------------------------------------------+
+   | :godot:`int`                                          | :ref:`max_restore_ticks<class_NetwSimulation_property_max_restore_ticks>` |
+   +-------------------------------------------------------+---------------------------------------------------------------------------+
+   | :ref:`Mode<enum_NetwSimulation_Mode>`                 | :ref:`mode<class_NetwSimulation_property_mode>`                           |
+   +-------------------------------------------------------+---------------------------------------------------------------------------+
+   | :godot:`float`                                        | :ref:`release_on_rest<class_NetwSimulation_property_release_on_rest>`     |
+   +-------------------------------------------------------+---------------------------------------------------------------------------+
+   | :ref:`Replicas<enum_NetwSimulation_Replicas>`         | :ref:`replicas<class_NetwSimulation_property_replicas>`                   |
+   +-------------------------------------------------------+---------------------------------------------------------------------------+
+   | :ref:`Restore<enum_NetwSimulation_Restore>`           | :ref:`restore<class_NetwSimulation_property_restore>`                     |
+   +-------------------------------------------------------+---------------------------------------------------------------------------+
+   | :ref:`Schedule<enum_NetwSimulation_Schedule>`         | :ref:`schedule<class_NetwSimulation_property_schedule>`                   |
+   +-------------------------------------------------------+---------------------------------------------------------------------------+
+   | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] | :ref:`selected<class_NetwSimulation_property_selected>`                   |
+   +-------------------------------------------------------+---------------------------------------------------------------------------+
+   | :godot:`Callable`                                     | :ref:`step<class_NetwSimulation_property_step>`                           |
+   +-------------------------------------------------------+---------------------------------------------------------------------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -305,7 +305,7 @@ Property Descriptions
 
 .. rst-class:: classref-property
 
-:godot:`Array`\[:godot:`NodePath`\] **bodies** = ``[]`` :ref:`🔗<class_NetwSimulation_property_bodies>`
+:godot:`Array`\[:godot:`NodePath`\] **bodies** :ref:`🔗<class_NetwSimulation_property_bodies>`
 
 .. rst-class:: classref-property-setget
 
@@ -324,7 +324,7 @@ Set it in ``_init``. A later write warns and is ignored.
 
 .. rst-class:: classref-property
 
-:godot:`bool` **claim_on_contact** = ``false`` :ref:`🔗<class_NetwSimulation_property_claim_on_contact>`
+:godot:`bool` **claim_on_contact** :ref:`🔗<class_NetwSimulation_property_claim_on_contact>`
 
 .. rst-class:: classref-property-setget
 
@@ -343,7 +343,7 @@ It raises :godot:`RigidBody3D.max_contacts_reported <RigidBody3D#class_RigidBody
 
 .. rst-class:: classref-property
 
-:godot:`int` **max_restore_ticks** = ``6`` :ref:`🔗<class_NetwSimulation_property_max_restore_ticks>`
+:godot:`int` **max_restore_ticks** :ref:`🔗<class_NetwSimulation_property_max_restore_ticks>`
 
 .. rst-class:: classref-property-setget
 
@@ -360,7 +360,7 @@ The most ticks :ref:`RESTORE_EXTRAPOLATED<class_NetwSimulation_constant_RESTORE_
 
 .. rst-class:: classref-property
 
-:ref:`Mode<enum_NetwSimulation_Mode>` **mode** = ``0`` :ref:`🔗<class_NetwSimulation_property_mode>`
+:ref:`Mode<enum_NetwSimulation_Mode>` **mode** :ref:`🔗<class_NetwSimulation_property_mode>`
 
 .. rst-class:: classref-property-setget
 
@@ -376,7 +376,7 @@ The mode this entity runs in on this peer. :ref:`mode_changed<class_NetwSimulati
 
 .. rst-class:: classref-property
 
-:godot:`float` **release_on_rest** = ``0.0`` :ref:`🔗<class_NetwSimulation_property_release_on_rest>`
+:godot:`float` **release_on_rest** :ref:`🔗<class_NetwSimulation_property_release_on_rest>`
 
 .. rst-class:: classref-property-setget
 
@@ -395,7 +395,7 @@ It needs :ref:`NetwEntity.TRANSFER_IMMEDIATE<class_NetwEntity_constant_TRANSFER_
 
 .. rst-class:: classref-property
 
-:ref:`Replicas<enum_NetwSimulation_Replicas>` **replicas** = ``0`` :ref:`🔗<class_NetwSimulation_property_replicas>`
+:ref:`Replicas<enum_NetwSimulation_Replicas>` **replicas** :ref:`🔗<class_NetwSimulation_property_replicas>`
 
 .. rst-class:: classref-property-setget
 
@@ -414,7 +414,7 @@ It can change at any time.
 
 .. rst-class:: classref-property
 
-:ref:`Restore<enum_NetwSimulation_Restore>` **restore** = ``2`` :ref:`🔗<class_NetwSimulation_property_restore>`
+:ref:`Restore<enum_NetwSimulation_Restore>` **restore** :ref:`🔗<class_NetwSimulation_property_restore>`
 
 .. rst-class:: classref-property-setget
 
@@ -431,7 +431,7 @@ How a sample from the authority lands on a :ref:`MODE_ACTIVE<class_NetwSimulatio
 
 .. rst-class:: classref-property
 
-:ref:`Schedule<enum_NetwSimulation_Schedule>` **schedule** = ``3`` :ref:`🔗<class_NetwSimulation_property_schedule>`
+:ref:`Schedule<enum_NetwSimulation_Schedule>` **schedule** :ref:`🔗<class_NetwSimulation_property_schedule>`
 
 .. rst-class:: classref-property-setget
 
@@ -448,7 +448,7 @@ When :ref:`step<class_NetwSimulation_property_step>` runs and when the physics s
 
 .. rst-class:: classref-property
 
-:godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **selected** = ``[]`` :ref:`🔗<class_NetwSimulation_property_selected>`
+:godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **selected** :ref:`🔗<class_NetwSimulation_property_selected>`
 
 .. rst-class:: classref-property-setget
 
@@ -464,7 +464,7 @@ The entities this entity selects on this peer right now.
 
 .. rst-class:: classref-property
 
-:godot:`Callable` **step** = ``Callable()`` :ref:`🔗<class_NetwSimulation_property_step>`
+:godot:`Callable` **step** :ref:`🔗<class_NetwSimulation_property_step>`
 
 .. rst-class:: classref-property-setget
 

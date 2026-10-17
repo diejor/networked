@@ -44,21 +44,21 @@ Properties
 .. table::
    :widths: auto
 
-   +-----------------------------------------------------+------------------------------------------------------------------------------------------+---------+
-   | :godot:`StringName`                                 | :ref:`app_id<class_NetwSessionConfig_property_app_id>`                                   | ``&""`` |
-   +-----------------------------------------------------+------------------------------------------------------------------------------------------+---------+
-   | :godot:`int`                                        | :ref:`bandwidth_kbps<class_NetwSessionConfig_property_bandwidth_kbps>`                   | ``0``   |
-   +-----------------------------------------------------+------------------------------------------------------------------------------------------+---------+
-   | :ref:`Role<enum_NetwSession_Role>`                  | :ref:`desired_role<class_NetwSessionConfig_property_desired_role>`                       | ``3``   |
-   +-----------------------------------------------------+------------------------------------------------------------------------------------------+---------+
-   | :ref:`NetwLinkConditions<class_NetwLinkConditions>` | :ref:`link_conditions<class_NetwSessionConfig_property_link_conditions>`                 |         |
-   +-----------------------------------------------------+------------------------------------------------------------------------------------------+---------+
-   | :ref:`NetwServerInfo<class_NetwServerInfo>`         | :ref:`server_info<class_NetwSessionConfig_property_server_info>`                         |         |
-   +-----------------------------------------------------+------------------------------------------------------------------------------------------+---------+
-   | :godot:`int`                                        | :ref:`transfer_deadline_ticks<class_NetwSessionConfig_property_transfer_deadline_ticks>` | ``300`` |
-   +-----------------------------------------------------+------------------------------------------------------------------------------------------+---------+
-   | :ref:`TransferMode<enum_NetwSession_TransferMode>`  | :ref:`transfer_mode<class_NetwSessionConfig_property_transfer_mode>`                     | ``0``   |
-   +-----------------------------------------------------+------------------------------------------------------------------------------------------+---------+
+   +-----------------------------------------------------+------------------------------------------------------------------------------------------+
+   | :godot:`StringName`                                 | :ref:`app_id<class_NetwSessionConfig_property_app_id>`                                   |
+   +-----------------------------------------------------+------------------------------------------------------------------------------------------+
+   | :godot:`int`                                        | :ref:`bandwidth_kbps<class_NetwSessionConfig_property_bandwidth_kbps>`                   |
+   +-----------------------------------------------------+------------------------------------------------------------------------------------------+
+   | :ref:`Role<enum_NetwSession_Role>`                  | :ref:`desired_role<class_NetwSessionConfig_property_desired_role>`                       |
+   +-----------------------------------------------------+------------------------------------------------------------------------------------------+
+   | :ref:`NetwLinkConditions<class_NetwLinkConditions>` | :ref:`link_conditions<class_NetwSessionConfig_property_link_conditions>`                 |
+   +-----------------------------------------------------+------------------------------------------------------------------------------------------+
+   | :ref:`NetwServerInfo<class_NetwServerInfo>`         | :ref:`server_info<class_NetwSessionConfig_property_server_info>`                         |
+   +-----------------------------------------------------+------------------------------------------------------------------------------------------+
+   | :godot:`int`                                        | :ref:`transfer_deadline_ticks<class_NetwSessionConfig_property_transfer_deadline_ticks>` |
+   +-----------------------------------------------------+------------------------------------------------------------------------------------------+
+   | :ref:`TransferMode<enum_NetwSession_TransferMode>`  | :ref:`transfer_mode<class_NetwSessionConfig_property_transfer_mode>`                     |
+   +-----------------------------------------------------+------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -97,7 +97,7 @@ Property Descriptions
 
 .. rst-class:: classref-property
 
-:godot:`StringName` **app_id** = ``&""`` :ref:`🔗<class_NetwSessionConfig_property_app_id>`
+:godot:`StringName` **app_id** :ref:`🔗<class_NetwSessionConfig_property_app_id>`
 
 .. rst-class:: classref-property-setget
 
@@ -114,7 +114,7 @@ The game and build. Peers with a different :ref:`app_id<class_NetwSessionConfig_
 
 .. rst-class:: classref-property
 
-:godot:`int` **bandwidth_kbps** = ``0`` :ref:`🔗<class_NetwSessionConfig_property_bandwidth_kbps>`
+:godot:`int` **bandwidth_kbps** :ref:`🔗<class_NetwSessionConfig_property_bandwidth_kbps>`
 
 .. rst-class:: classref-property-setget
 
@@ -133,7 +133,7 @@ While a peer loses packets its budget halves, and each round trip without loss a
 
 .. rst-class:: classref-property
 
-:ref:`Role<enum_NetwSession_Role>` **desired_role** = ``3`` :ref:`🔗<class_NetwSessionConfig_property_desired_role>`
+:ref:`Role<enum_NetwSession_Role>` **desired_role** :ref:`🔗<class_NetwSessionConfig_property_desired_role>`
 
 .. rst-class:: classref-property-setget
 
@@ -193,7 +193,7 @@ What this server shows in server browsers. The player count and :ref:`NetwServer
 
 .. rst-class:: classref-property
 
-:godot:`int` **transfer_deadline_ticks** = ``300`` :ref:`🔗<class_NetwSessionConfig_property_transfer_deadline_ticks>`
+:godot:`int` **transfer_deadline_ticks** :ref:`🔗<class_NetwSessionConfig_property_transfer_deadline_ticks>`
 
 .. rst-class:: classref-property-setget
 
@@ -210,7 +210,7 @@ How many ticks a new server waits for each client to report its world after the 
 
 .. rst-class:: classref-property
 
-:ref:`TransferMode<enum_NetwSession_TransferMode>` **transfer_mode** = ``0`` :ref:`🔗<class_NetwSessionConfig_property_transfer_mode>`
+:ref:`TransferMode<enum_NetwSession_TransferMode>` **transfer_mode** :ref:`🔗<class_NetwSessionConfig_property_transfer_mode>`
 
 .. rst-class:: classref-property-setget
 

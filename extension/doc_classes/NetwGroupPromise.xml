@@ -84,25 +84,25 @@
 		</method>
 	</methods>
 	<members>
-		<member name="code" type="int" setter="" getter="get_code" enum="Error" default="0">
+		<member name="code" type="int" setter="" getter="get_code" enum="Error">
 			The error when [member is_failed], otherwise [constant @GlobalScope.OK].
 		</member>
-		<member name="detail" type="String" setter="" getter="get_detail" default="&quot;&quot;">
+		<member name="detail" type="String" setter="" getter="get_detail">
 			A readable reason for [member code], or empty. For display only.
 		</member>
-		<member name="expected_peers" type="PackedInt32Array" setter="" getter="get_expected_peers" default="PackedInt32Array()">
+		<member name="expected_peers" type="PackedInt32Array" setter="" getter="get_expected_peers">
 			The peers that have not answered yet.
 		</member>
-		<member name="is_completed" type="bool" setter="" getter="get_is_completed" default="false">
+		<member name="is_completed" type="bool" setter="" getter="get_is_completed">
 			[code]true[/code] when every peer answered.
 		</member>
-		<member name="is_failed" type="bool" setter="" getter="get_is_failed" default="false">
+		<member name="is_failed" type="bool" setter="" getter="get_is_failed">
 			[code]true[/code] when the group failed.
 		</member>
-		<member name="is_settled" type="bool" setter="" getter="get_is_settled" default="false">
+		<member name="is_settled" type="bool" setter="" getter="get_is_settled">
 			[code]true[/code] when the group completed or failed.
 		</member>
-		<member name="results" type="Dictionary" setter="" getter="get_results" default="{}">
+		<member name="results" type="Dictionary" setter="" getter="get_results">
 			The results received so far, as [code]peer_id -&gt; value[/code].
 		</member>
 	</members>

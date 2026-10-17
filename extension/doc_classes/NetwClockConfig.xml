@@ -43,46 +43,46 @@
 		</method>
 	</methods>
 	<members>
-		<member name="display_offset" type="int" setter="set_display_offset" getter="get_display_offset" default="2">
+		<member name="display_offset" type="int" setter="set_display_offset" getter="get_display_offset">
 			How many ticks in the past remote [NetwEntity] instances are shown. A small value helps hide lag.
 		</member>
-		<member name="enable_drift_logging" type="bool" setter="set_enable_drift_logging" getter="get_enable_drift_logging" default="false">
+		<member name="enable_drift_logging" type="bool" setter="set_enable_drift_logging" getter="get_enable_drift_logging">
 			Logs average clock drift over 60-second windows to the console.
 		</member>
-		<member name="jitter_multiplier" type="float" setter="set_jitter_multiplier" getter="get_jitter_multiplier" default="2.0">
+		<member name="jitter_multiplier" type="float" setter="set_jitter_multiplier" getter="get_jitter_multiplier">
 			How much jitter adds to [member NetwClock.recommended_display_offset].
 		</member>
-		<member name="jitter_stability_threshold" type="float" setter="set_jitter_stability_threshold" getter="get_jitter_stability_threshold" default="0.05">
+		<member name="jitter_stability_threshold" type="float" setter="set_jitter_stability_threshold" getter="get_jitter_stability_threshold">
 			Seconds of jitter under which the connection counts as stable.
 		</member>
-		<member name="jitter_window" type="int" setter="set_jitter_window" getter="get_jitter_window" default="16">
+		<member name="jitter_window" type="int" setter="set_jitter_window" getter="get_jitter_window">
 			How many recent pings are averaged.
 		</member>
-		<member name="max_ticks_per_frame" type="int" setter="set_max_ticks_per_frame" getter="get_max_ticks_per_frame" default="8">
+		<member name="max_ticks_per_frame" type="int" setter="set_max_ticks_per_frame" getter="get_max_ticks_per_frame">
 			The most ticks run in one physics frame.
 		</member>
-		<member name="panic_snap_threshold" type="int" setter="set_panic_snap_threshold" getter="get_panic_snap_threshold" default="20">
+		<member name="panic_snap_threshold" type="int" setter="set_panic_snap_threshold" getter="get_panic_snap_threshold">
 			Ticks of difference from the server past which the clock snaps, even with [constant NetwClock.SYNC_MODE_STRETCH].
 		</member>
-		<member name="ping_interval" type="float" setter="set_ping_interval" getter="get_ping_interval" default="0.1">
+		<member name="ping_interval" type="float" setter="set_ping_interval" getter="get_ping_interval">
 			Seconds between pings to the server.
 		</member>
-		<member name="stall_threshold" type="float" setter="set_stall_threshold" getter="get_stall_threshold" default="1.0">
+		<member name="stall_threshold" type="float" setter="set_stall_threshold" getter="get_stall_threshold">
 			Seconds. A longer frame is treated as a hitch and skipped.
 		</member>
-		<member name="stretch_nudge_factor" type="float" setter="set_stretch_nudge_factor" getter="get_stretch_nudge_factor" default="0.05">
+		<member name="stretch_nudge_factor" type="float" setter="set_stretch_nudge_factor" getter="get_stretch_nudge_factor">
 			The share of the difference [constant NetwClock.SYNC_MODE_STRETCH] corrects each frame.
 		</member>
-		<member name="sync_mode" type="int" setter="set_sync_mode" getter="get_sync_mode" enum="NetwClock.SyncMode" default="1">
+		<member name="sync_mode" type="int" setter="set_sync_mode" getter="get_sync_mode" enum="NetwClock.SyncMode">
 			How the clock is corrected toward the server's.
 		</member>
-		<member name="tickrate" type="int" setter="set_tickrate" getter="get_tickrate" default="30">
+		<member name="tickrate" type="int" setter="set_tickrate" getter="get_tickrate">
 			Ticks per second. Higher is more precise, and costs more bandwidth and CPU.
 		</member>
-		<member name="tickrate_mismatch_action" type="int" setter="set_tickrate_mismatch_action" getter="get_tickrate_mismatch_action" enum="NetwClock.MismatchAction" default="0">
+		<member name="tickrate_mismatch_action" type="int" setter="set_tickrate_mismatch_action" getter="get_tickrate_mismatch_action" enum="NetwClock.MismatchAction">
 			What happens when a peer has a different [member tickrate].
 		</member>
-		<member name="use_physics_interpolation" type="bool" setter="set_use_physics_interpolation" getter="get_use_physics_interpolation" default="true">
+		<member name="use_physics_interpolation" type="bool" setter="set_use_physics_interpolation" getter="get_use_physics_interpolation">
 			Whether [member NetwClock.tick_factor] follows [method Engine.get_physics_interpolation_fraction].
 		</member>
 	</members>

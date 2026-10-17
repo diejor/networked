@@ -29,10 +29,10 @@
 		</method>
 	</methods>
 	<members>
-		<member name="hook_method" type="StringName" setter="set_hook_method" getter="get_hook_method" default="&amp;&quot;&quot;">
+		<member name="hook_method" type="StringName" setter="set_hook_method" getter="get_hook_method">
 			Set by [method before_removal].
 		</member>
-		<member name="linger_seconds" type="float" setter="set_linger_seconds" getter="get_linger_seconds" default="0.0">
+		<member name="linger_seconds" type="float" setter="set_linger_seconds" getter="get_linger_seconds">
 			Seconds the node stays in the tree before it is freed, as [constant NetwMultiplayer.ENTITY_STATE_LINGERING]. [code]0.0[/code] frees it at once.
 		</member>
 	</members>

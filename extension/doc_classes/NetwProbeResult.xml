@@ -79,13 +79,13 @@
 		<member name="info" type="NetwServerInfo" setter="set_info" getter="get_info">
 			What the server says about itself, or [code]null[/code].
 		</member>
-		<member name="latency_ms" type="int" setter="set_latency_ms" getter="get_latency_ms" default="0">
+		<member name="latency_ms" type="int" setter="set_latency_ms" getter="get_latency_ms">
 			The round trip time in milliseconds, or [code]-1[/code] when not measured.
 		</member>
-		<member name="message" type="String" setter="set_message" getter="get_message" default="&quot;&quot;">
+		<member name="message" type="String" setter="set_message" getter="get_message">
 			Details for logs, not for players.
 		</member>
-		<member name="status" type="int" setter="set_status" getter="get_status" enum="NetwProbeResult.Status" default="3">
+		<member name="status" type="int" setter="set_status" getter="get_status" enum="NetwProbeResult.Status">
 			The result.
 		</member>
 	</members>

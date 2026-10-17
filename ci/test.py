@@ -121,7 +121,8 @@ def _lane_env(lane: str | None) -> dict[str, str]:
     if lane is None:
         return {}
     home = TMP / "home" / lane
-    home.mkdir(parents=True, exist_ok=True)
+    for sub in ("share", "config", "cache"):
+        (home / sub).mkdir(parents=True, exist_ok=True)
     return {
         "HOME": str(home),
         "XDG_DATA_HOME": str(home / "share"),
@@ -161,9 +162,9 @@ def _godot(
         sys.stdout.write(text)
     else:
         try:
-            events = diagnostic_report.read(diagnostics)
+            events = diagnostic_report.read(diagnostics) if diagnostics.is_file() else []
             passed = completed.returncode == 0
-            if result_report is not None:
+            if result_report is not None and result_report.is_file():
                 result = reports.read(result_report)
                 passed = passed and not (result.failures or result.errors)
         except Exception:

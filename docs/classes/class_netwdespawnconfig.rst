@@ -34,11 +34,11 @@ Properties
 .. table::
    :widths: auto
 
-   +---------------------+------------------------------------------------------------------------+---------+
-   | :godot:`StringName` | :ref:`hook_method<class_NetwDespawnConfig_property_hook_method>`       | ``&""`` |
-   +---------------------+------------------------------------------------------------------------+---------+
-   | :godot:`float`      | :ref:`linger_seconds<class_NetwDespawnConfig_property_linger_seconds>` | ``0.0`` |
-   +---------------------+------------------------------------------------------------------------+---------+
+   +---------------------+------------------------------------------------------------------------+
+   | :godot:`StringName` | :ref:`hook_method<class_NetwDespawnConfig_property_hook_method>`       |
+   +---------------------+------------------------------------------------------------------------+
+   | :godot:`float`      | :ref:`linger_seconds<class_NetwDespawnConfig_property_linger_seconds>` |
+   +---------------------+------------------------------------------------------------------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -67,7 +67,7 @@ Property Descriptions
 
 .. rst-class:: classref-property
 
-:godot:`StringName` **hook_method** = ``&""`` :ref:`🔗<class_NetwDespawnConfig_property_hook_method>`
+:godot:`StringName` **hook_method** :ref:`🔗<class_NetwDespawnConfig_property_hook_method>`
 
 .. rst-class:: classref-property-setget
 
@@ -84,7 +84,7 @@ Set by :ref:`before_removal()<class_NetwDespawnConfig_method_before_removal>`.
 
 .. rst-class:: classref-property
 
-:godot:`float` **linger_seconds** = ``0.0`` :ref:`🔗<class_NetwDespawnConfig_property_linger_seconds>`
+:godot:`float` **linger_seconds** :ref:`🔗<class_NetwDespawnConfig_property_linger_seconds>`
 
 .. rst-class:: classref-property-setget
 

@@ -75,38 +75,38 @@
 		</method>
 	</methods>
 	<members>
-		<member name="bodies" type="NodePath[]" setter="set_bodies" getter="get_bodies" default="[]">
+		<member name="bodies" type="NodePath[]" setter="set_bodies" getter="get_bodies">
 			The physics bodies this entity runs, as paths from the entity root. They are frozen on a [constant MODE_PROXY] copy. Empty means the root, when it is a [RigidBody2D] or [RigidBody3D].
 			Set it in [code]_init[/code]. A later write warns and is ignored.
 		</member>
-		<member name="claim_on_contact" type="bool" setter="set_claim_on_contact" getter="get_claim_on_contact" default="false">
+		<member name="claim_on_contact" type="bool" setter="set_claim_on_contact" getter="get_claim_on_contact">
 			When a body of this entity runs here as [constant MODE_AUTHORITY] and touches a free entity that also sets it, this peer claims that entity with [constant NetwEntity.HOLD_YIELDABLE]. A claimed entity claims what it touches in the same tick.
 			It raises [member RigidBody3D.max_contacts_reported] on the bodies. [signal RigidBody3D.body_entered] and [signal RigidBody3D.body_exited] need the game's own [member RigidBody3D.contact_monitor]. It needs [constant NetwEntity.TRANSFER_IMMEDIATE] on an entity with no [method NetwPropertyConfig.state] property and no prediction, and does nothing otherwise.
 		</member>
-		<member name="max_restore_ticks" type="int" setter="set_max_restore_ticks" getter="get_max_restore_ticks" default="6">
+		<member name="max_restore_ticks" type="int" setter="set_max_restore_ticks" getter="get_max_restore_ticks">
 			The most ticks [constant RESTORE_EXTRAPOLATED] carries a sample forward.
 		</member>
-		<member name="mode" type="int" setter="" getter="get_mode" enum="NetwSimulation.Mode" default="0">
+		<member name="mode" type="int" setter="" getter="get_mode" enum="NetwSimulation.Mode">
 			The mode this entity runs in on this peer. [signal mode_changed] reports each change.
 		</member>
-		<member name="release_on_rest" type="float" setter="set_release_on_rest" getter="get_release_on_rest" default="0.0">
+		<member name="release_on_rest" type="float" setter="set_release_on_rest" getter="get_release_on_rest">
 			The seconds the bodies must sleep before this peer releases the entity with [method NetwEntity.release_control], or [code]0[/code] to never release. It only releases an entity this peer holds with [constant NetwEntity.HOLD_YIELDABLE].
 			It needs [constant NetwEntity.TRANSFER_IMMEDIATE] on an entity with no [method NetwPropertyConfig.state] property and no prediction, and does nothing otherwise.
 		</member>
-		<member name="replicas" type="int" setter="set_replicas" getter="get_replicas" enum="NetwSimulation.Replicas" default="0">
+		<member name="replicas" type="int" setter="set_replicas" getter="get_replicas" enum="NetwSimulation.Replicas">
 			How this peer simulates copies whose state it receives from another peer.
 			It can change at any time.
 		</member>
-		<member name="restore" type="int" setter="set_restore" getter="get_restore" enum="NetwSimulation.Restore" default="2">
+		<member name="restore" type="int" setter="set_restore" getter="get_restore" enum="NetwSimulation.Restore">
 			How a sample from the authority lands on a [constant MODE_ACTIVE] copy. Under [constant NetwDisplay.LIVE_MODE_CHASE] the body snaps to it and the drawn position glides, up to [member NetwPrediction.teleport_threshold].
 		</member>
-		<member name="schedule" type="int" setter="set_schedule" getter="get_schedule" enum="NetwSimulation.Schedule" default="3">
+		<member name="schedule" type="int" setter="set_schedule" getter="get_schedule" enum="NetwSimulation.Schedule">
 			When [member step] runs and when the physics server moves the bodies.
 		</member>
-		<member name="selected" type="NetwEntity[]" setter="" getter="get_selected" default="[]">
+		<member name="selected" type="NetwEntity[]" setter="" getter="get_selected">
 			The entities this entity selects on this peer right now.
 		</member>
-		<member name="step" type="Callable" setter="set_step" getter="get_step" default="Callable()">
+		<member name="step" type="Callable" setter="set_step" getter="get_step">
 			Called each tick as [code](delta: float, tick: int, is_fresh: bool)[/code] while [member mode] runs the body. Defaults to the root's [code]_network_tick[/code].
 			[code]is_fresh[/code] is [code]false[/code] in a replay and on a [constant MODE_ACTIVE] copy, so read input only when it is [code]true[/code].
 			A step asks the physics space with a query. An [Area3D]'s overlaps and signals and [method CharacterBody3D.is_on_floor] come from the last physics step, and a replay restores neither.

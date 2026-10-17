@@ -24,7 +24,7 @@
 		</method>
 	</methods>
 	<members>
-		<member name="denied" type="bool" setter="set_denied" getter="get_denied" default="false">
+		<member name="denied" type="bool" setter="set_denied" getter="get_denied">
 			Whether the change is refused. Writing [code]false[/code] after [method deny] has no effect.
 		</member>
 		<member name="destination" type="Node" setter="" getter="get_destination">
@@ -33,13 +33,13 @@
 		<member name="entity" type="NetwEntity" setter="" getter="get_entity">
 			The entity the change is about. On a spawn it is the server's copy, holding the values the controller sent.
 		</member>
-		<member name="kind" type="int" setter="" getter="get_kind" enum="NetwLifecycleRequest.Kind" default="0">
+		<member name="kind" type="int" setter="" getter="get_kind" enum="NetwLifecycleRequest.Kind">
 			Which change the controller made.
 		</member>
-		<member name="reason" type="String" setter="" getter="get_reason" default="&quot;&quot;">
+		<member name="reason" type="String" setter="" getter="get_reason">
 			What the server passed to [method deny], empty until then.
 		</member>
-		<member name="requester" type="int" setter="" getter="get_requester" default="0">
+		<member name="requester" type="int" setter="" getter="get_requester">
 			The peer that made the change.
 		</member>
 	</members>

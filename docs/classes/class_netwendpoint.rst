@@ -43,21 +43,21 @@ Properties
 .. table::
    :widths: auto
 
-   +---------------------------------------------+---------------------------------------------------------------+-----------+
-   | :godot:`String`                             | :ref:`address<class_NetwEndpoint_property_address>`           | ``""``    |
-   +---------------------------------------------+---------------------------------------------------------------+-----------+
-   | :godot:`String`                             | :ref:`display_name<class_NetwEndpoint_property_display_name>` | ``""``    |
-   +---------------------------------------------+---------------------------------------------------------------+-----------+
-   | :ref:`NetwServerInfo<class_NetwServerInfo>` | :ref:`info<class_NetwEndpoint_property_info>`                 |           |
-   +---------------------------------------------+---------------------------------------------------------------+-----------+
-   | :godot:`bool`                               | :ref:`is_listed<class_NetwEndpoint_property_is_listed>`       | ``false`` |
-   +---------------------------------------------+---------------------------------------------------------------+-----------+
-   | :godot:`StringName`                         | :ref:`peer_class<class_NetwEndpoint_property_peer_class>`     | ``&""``   |
-   +---------------------------------------------+---------------------------------------------------------------+-----------+
-   | :godot:`String`                             | :ref:`source<class_NetwEndpoint_property_source>`             | ``""``    |
-   +---------------------------------------------+---------------------------------------------------------------+-----------+
-   | :ref:`Status<enum_NetwEndpoint_Status>`     | :ref:`status<class_NetwEndpoint_property_status>`             | ``0``     |
-   +---------------------------------------------+---------------------------------------------------------------+-----------+
+   +---------------------------------------------+---------------------------------------------------------------+
+   | :godot:`String`                             | :ref:`address<class_NetwEndpoint_property_address>`           |
+   +---------------------------------------------+---------------------------------------------------------------+
+   | :godot:`String`                             | :ref:`display_name<class_NetwEndpoint_property_display_name>` |
+   +---------------------------------------------+---------------------------------------------------------------+
+   | :ref:`NetwServerInfo<class_NetwServerInfo>` | :ref:`info<class_NetwEndpoint_property_info>`                 |
+   +---------------------------------------------+---------------------------------------------------------------+
+   | :godot:`bool`                               | :ref:`is_listed<class_NetwEndpoint_property_is_listed>`       |
+   +---------------------------------------------+---------------------------------------------------------------+
+   | :godot:`StringName`                         | :ref:`peer_class<class_NetwEndpoint_property_peer_class>`     |
+   +---------------------------------------------+---------------------------------------------------------------+
+   | :godot:`String`                             | :ref:`source<class_NetwEndpoint_property_source>`             |
+   +---------------------------------------------+---------------------------------------------------------------+
+   | :ref:`Status<enum_NetwEndpoint_Status>`     | :ref:`status<class_NetwEndpoint_property_status>`             |
+   +---------------------------------------------+---------------------------------------------------------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -164,7 +164,7 @@ Property Descriptions
 
 .. rst-class:: classref-property
 
-:godot:`String` **address** = ``""`` :ref:`🔗<class_NetwEndpoint_property_address>`
+:godot:`String` **address** :ref:`🔗<class_NetwEndpoint_property_address>`
 
 .. rst-class:: classref-property-setget
 
@@ -180,7 +180,7 @@ The address passed to :ref:`NetwConnection.add()<class_NetwConnection_method_add
 
 .. rst-class:: classref-property
 
-:godot:`String` **display_name** = ``""`` :ref:`🔗<class_NetwEndpoint_property_display_name>`
+:godot:`String` **display_name** :ref:`🔗<class_NetwEndpoint_property_display_name>`
 
 .. rst-class:: classref-property-setget
 
@@ -212,7 +212,7 @@ What the server last advertised, or a default :ref:`NetwServerInfo<class_NetwSer
 
 .. rst-class:: classref-property
 
-:godot:`bool` **is_listed** = ``false`` :ref:`🔗<class_NetwEndpoint_property_is_listed>`
+:godot:`bool` **is_listed** :ref:`🔗<class_NetwEndpoint_property_is_listed>`
 
 .. rst-class:: classref-property-setget
 
@@ -228,7 +228,7 @@ What the server last advertised, or a default :ref:`NetwServerInfo<class_NetwSer
 
 .. rst-class:: classref-property
 
-:godot:`StringName` **peer_class** = ``&""`` :ref:`🔗<class_NetwEndpoint_property_peer_class>`
+:godot:`StringName` **peer_class** :ref:`🔗<class_NetwEndpoint_property_peer_class>`
 
 .. rst-class:: classref-property-setget
 
@@ -244,7 +244,7 @@ The :godot:`MultiplayerPeer` class used to connect to this server.
 
 .. rst-class:: classref-property
 
-:godot:`String` **source** = ``""`` :ref:`🔗<class_NetwEndpoint_property_source>`
+:godot:`String` **source** :ref:`🔗<class_NetwEndpoint_property_source>`
 
 .. rst-class:: classref-property-setget
 
@@ -260,7 +260,7 @@ The name of the :ref:`LobbyDirectory<class_LobbyDirectory>` that listed this row
 
 .. rst-class:: classref-property
 
-:ref:`Status<enum_NetwEndpoint_Status>` **status** = ``0`` :ref:`🔗<class_NetwEndpoint_property_status>`
+:ref:`Status<enum_NetwEndpoint_Status>` **status** :ref:`🔗<class_NetwEndpoint_property_status>`
 
 .. rst-class:: classref-property-setget
 

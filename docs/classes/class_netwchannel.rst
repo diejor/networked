@@ -40,9 +40,9 @@ Properties
 .. table::
    :widths: auto
 
-   +--------------+------------------------------------------+-------+
-   | :godot:`int` | :ref:`id<class_NetwChannel_property_id>` | ``0`` |
-   +--------------+------------------------------------------+-------+
+   +--------------+------------------------------------------+
+   | :godot:`int` | :ref:`id<class_NetwChannel_property_id>` |
+   +--------------+------------------------------------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -75,7 +75,7 @@ Property Descriptions
 
 .. rst-class:: classref-property
 
-:godot:`int` **id** = ``0`` :ref:`🔗<class_NetwChannel_property_id>`
+:godot:`int` **id** :ref:`🔗<class_NetwChannel_property_id>`
 
 .. rst-class:: classref-property-setget
 

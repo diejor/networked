@@ -55,43 +55,43 @@
 		</method>
 	</methods>
 	<members>
-		<member name="chase_glide_time" type="float" setter="set_chase_glide_time" getter="get_chase_glide_time" default="0.15">
+		<member name="chase_glide_time" type="float" setter="set_chase_glide_time" getter="get_chase_glide_time">
 			Seconds [constant LIVE_MODE_CHASE] takes to smooth out a correction.
 		</member>
-		<member name="display_lag" type="float" setter="" getter="get_display_lag" default="0.0">
+		<member name="display_lag" type="float" setter="" getter="get_display_lag">
 			How many ticks behind the newest data this entity is drawn.
 		</member>
-		<member name="display_role" type="int" setter="set_display_role" getter="get_display_role" enum="NetwDisplay.DisplayRole" default="0">
+		<member name="display_role" type="int" setter="set_display_role" getter="get_display_role" enum="NetwDisplay.DisplayRole">
 			How this entity is drawn. [constant DISPLAY_ROLE_AUTO] picks one from [member NetwSimulation.mode] and who controls the entity, and is right for most entities.
 		</member>
-		<member name="enable_smart_dilation" type="bool" setter="set_enable_smart_dilation" getter="get_enable_smart_dilation" default="true">
+		<member name="enable_smart_dilation" type="bool" setter="set_enable_smart_dilation" getter="get_enable_smart_dilation">
 			Lets the display delay of a remote entity grow when snapshots arrive late.
 		</member>
-		<member name="floor_smoothing" type="float" setter="set_floor_smoothing" getter="get_floor_smoothing" default="0.05">
+		<member name="floor_smoothing" type="float" setter="set_floor_smoothing" getter="get_floor_smoothing">
 			How quickly, as a fraction per frame, the smallest delay [member enable_smart_dilation] measures follows a new measurement. Lower is smoother.
 		</member>
-		<member name="lag_adapt_rate" type="float" setter="set_lag_adapt_rate" getter="get_lag_adapt_rate" default="0.05">
+		<member name="lag_adapt_rate" type="float" setter="set_lag_adapt_rate" getter="get_lag_adapt_rate">
 			How quickly, as a fraction per frame, [member display_lag] shrinks back toward the smallest delay needed once snapshots arrive on time.
 		</member>
-		<member name="live_mode" type="int" setter="set_live_mode" getter="get_live_mode" enum="NetwDisplay.LiveMode" default="0">
+		<member name="live_mode" type="int" setter="set_live_mode" getter="get_live_mode" enum="NetwDisplay.LiveMode">
 			How an entity this peer simulates is drawn under [constant DISPLAY_ROLE_PREDICTED], in [constant NetwSimulation.MODE_PREDICT] or [constant NetwSimulation.MODE_ACTIVE].
 		</member>
-		<member name="live_smooth_time" type="float" setter="set_live_smooth_time" getter="get_live_smooth_time" default="0.0">
+		<member name="live_smooth_time" type="float" setter="set_live_smooth_time" getter="get_live_smooth_time">
 			Smoothing time in seconds for [constant LIVE_MODE_CHASE]. [code]0[/code] uses one tick.
 		</member>
-		<member name="max_forecast_ticks" type="int" setter="set_max_forecast_ticks" getter="get_max_forecast_ticks" default="6">
+		<member name="max_forecast_ticks" type="int" setter="set_max_forecast_ticks" getter="get_max_forecast_ticks">
 			How many ticks [constant TIMELINE_MODE_FORECAST] may guess ahead before it stops.
 		</member>
-		<member name="pump_mode" type="int" setter="" getter="get_pump_mode" enum="NetwDisplay.DisplayPump" default="-1">
+		<member name="pump_mode" type="int" setter="" getter="get_pump_mode" enum="NetwDisplay.DisplayPump">
 			How this entity is being interpolated right now, or [constant DISPLAY_PUMP_UNRESOLVED] before that is decided.
 		</member>
-		<member name="timeline_mode" type="int" setter="set_timeline_mode" getter="get_timeline_mode" enum="NetwDisplay.TimelineMode" default="0">
+		<member name="timeline_mode" type="int" setter="set_timeline_mode" getter="get_timeline_mode" enum="NetwDisplay.TimelineMode">
 			How a remote entity is displayed.
 		</member>
-		<member name="trace_interval" type="int" setter="set_trace_interval" getter="get_trace_interval" default="0">
+		<member name="trace_interval" type="int" setter="set_trace_interval" getter="get_trace_interval">
 			Frames between interpolation trace logs. [code]0[/code] disables them.
 		</member>
-		<member name="visual_root" type="NodePath" setter="set_visual_root" getter="get_visual_root" default="NodePath(&quot;&quot;)">
+		<member name="visual_root" type="NodePath" setter="set_visual_root" getter="get_visual_root">
 			The child node that receives the smoothed values. Position and rotation are written in global space, and other properties are written as they are. A visual with [member CanvasItem.top_level] set receives every property in global space.
 			The written values replace the visual's own position and rotation, so point this at a plain node and put a model that needs one under it.
 		</member>

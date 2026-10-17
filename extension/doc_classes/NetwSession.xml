@@ -206,28 +206,28 @@
 		<member name="connection" type="NetwConnection" setter="" getter="get_connection">
 			The [NetwConnection] of this session, to find servers and create peers.
 		</member>
-		<member name="is_local_client" type="bool" setter="" getter="get_is_local_client" default="false">
+		<member name="is_local_client" type="bool" setter="" getter="get_is_local_client">
 			[code]true[/code] when this peer has its own player, at [constant ROLE_CLIENT] and [constant ROLE_LISTEN_SERVER].
 		</member>
-		<member name="is_online" type="bool" setter="" getter="get_is_online" default="false">
+		<member name="is_online" type="bool" setter="" getter="get_is_online">
 			Whether a peer is assigned and connected. It stays [code]true[/code] until [signal exited], so it is still [code]true[/code] while [signal exiting] runs and the session's scenes are freed.
 		</member>
 		<member name="local_player" type="NetwPlayer" setter="" getter="get_local_player">
 			The [NetwPlayer] of this peer, [code]null[/code] until [signal local_joined].
 		</member>
-		<member name="players" type="NetwPlayer[]" setter="" getter="get_players" default="[]">
+		<member name="players" type="NetwPlayer[]" setter="" getter="get_players">
 			Every [NetwPlayer] that has joined, including those whose peer has since disconnected. See [member NetwMultiplayer.connected_players] for only the connected ones.
 		</member>
-		<member name="role" type="int" setter="" getter="get_role" enum="NetwSession.Role" default="0">
+		<member name="role" type="int" setter="" getter="get_role" enum="NetwSession.Role">
 			What this peer is in the session.
 		</member>
 		<member name="root" type="Node" setter="" getter="get_root">
 			The [Node] replicated nodes are under, [code]null[/code] when the session is not in the tree.
 		</member>
-		<member name="scenes" type="NetwScene[]" setter="" getter="get_scenes" default="[]">
+		<member name="scenes" type="NetwScene[]" setter="" getter="get_scenes">
 			Every live scene. Use [method find_scene] to find one by name.
 		</member>
-		<member name="stats" type="Dictionary" setter="" getter="get_stats" default="{}">
+		<member name="stats" type="Dictionary" setter="" getter="get_stats">
 			Every counter this session keeps, keyed by [enum NetwMultiplayer.Stat].
 		</member>
 	</members>

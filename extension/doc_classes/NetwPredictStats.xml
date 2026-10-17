@@ -13,10 +13,10 @@
 	<tutorials>
 	</tutorials>
 	<members>
-		<member name="corrections" type="int" setter="" getter="get_corrections" default="0">
+		<member name="corrections" type="int" setter="" getter="get_corrections">
 			Times this entity's prediction disagreed with the server and was corrected since spawn.
 		</member>
-		<member name="installs" type="int" setter="" getter="get_installs" default="0">
+		<member name="installs" type="int" setter="" getter="get_installs">
 			Times the server's state was written onto this entity since spawn, while this peer simulates it without controlling it.
 		</member>
 	</members>

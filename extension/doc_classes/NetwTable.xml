@@ -198,22 +198,22 @@
 		</method>
 	</methods>
 	<members>
-		<member name="is_valid" type="bool" setter="" getter="get_is_valid" default="false">
+		<member name="is_valid" type="bool" setter="" getter="get_is_valid">
 			Whether the session this handle belongs to still exists. Once it is gone, every method returns [constant @GlobalScope.ERR_DOES_NOT_EXIST].
 		</member>
-		<member name="reliable" type="bool" setter="set_reliable" getter="get_reliable" default="false">
+		<member name="reliable" type="bool" setter="set_reliable" getter="get_reliable">
 			Whether this table's commits are sent reliably. Set it for a table that changes rarely.
 		</member>
-		<member name="rid" type="RID" setter="" getter="get_rid" default="RID()">
+		<member name="rid" type="RID" setter="" getter="get_rid">
 			The session's handle for this table.
 		</member>
-		<member name="schema_name" type="StringName" setter="" getter="get_schema_name" default="&amp;&quot;&quot;">
+		<member name="schema_name" type="StringName" setter="" getter="get_schema_name">
 			The name this table was declared under, which is the name [method NetwSession.table] takes.
 		</member>
-		<member name="tick" type="int" setter="" getter="get_tick" default="-1">
+		<member name="tick" type="int" setter="" getter="get_tick">
 			The tick of the latest commit, or [code]-1[/code] before the first commit.
 		</member>
-		<member name="wire_hash" type="int" setter="" getter="get_wire_hash" default="0">
+		<member name="wire_hash" type="int" setter="" getter="get_wire_hash">
 			A hash of this table's schema, sent with its data so peers can detect a schema mismatch.
 		</member>
 	</members>

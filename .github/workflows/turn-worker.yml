@@ -84,7 +84,7 @@ jobs:
         env:
           DEPLOY_OUTPUT: ${{ steps.deploy.outputs.command-output }}
         run: |
-          printf 'Revision `%s`\n' "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          printf "Revision \`%s\`\n" "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
           printf '%s\n' "$DEPLOY_OUTPUT" |
             sed -n 's/.*Current Version ID: /Worker version `/p' |
             sed 's/$/`/' >> "$GITHUB_STEP_SUMMARY"

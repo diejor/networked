@@ -46,23 +46,23 @@ Properties
 .. table::
    :widths: auto
 
-   +------------------------------------------------------------------+----------------------------------------------------------------------------------------------+----------------+
-   | :ref:`LeavePolicy<enum_NetwInterestLayer_LeavePolicy>`           | :ref:`default_leave_policy<class_NetwInterestLayer_property_default_leave_policy>`           | ``0``          |
-   +------------------------------------------------------------------+----------------------------------------------------------------------------------------------+----------------+
-   | :ref:`PerceptionPolicy<enum_NetwInterestLayer_PerceptionPolicy>` | :ref:`default_perception_policy<class_NetwInterestLayer_property_default_perception_policy>` | ``0``          |
-   +------------------------------------------------------------------+----------------------------------------------------------------------------------------------+----------------+
-   | :godot:`Callable`                                                | :ref:`driver<class_NetwInterestLayer_property_driver>`                                       | ``Callable()`` |
-   +------------------------------------------------------------------+----------------------------------------------------------------------------------------------+----------------+
-   | :godot:`Dictionary`                                              | :ref:`entities<class_NetwInterestLayer_property_entities>`                                   | ``{}``         |
-   +------------------------------------------------------------------+----------------------------------------------------------------------------------------------+----------------+
-   | :godot:`StringName`                                              | :ref:`layer_id<class_NetwInterestLayer_property_layer_id>`                                   | ``&""``        |
-   +------------------------------------------------------------------+----------------------------------------------------------------------------------------------+----------------+
-   | :godot:`Callable`                                                | :ref:`monitor<class_NetwInterestLayer_property_monitor>`                                     | ``Callable()`` |
-   +------------------------------------------------------------------+----------------------------------------------------------------------------------------------+----------------+
-   | :ref:`LayerPolicy<enum_NetwInterestLayer_LayerPolicy>`           | :ref:`policy<class_NetwInterestLayer_property_policy>`                                       | ``0``          |
-   +------------------------------------------------------------------+----------------------------------------------------------------------------------------------+----------------+
-   | :godot:`Dictionary`                                              | :ref:`viewers<class_NetwInterestLayer_property_viewers>`                                     | ``{}``         |
-   +------------------------------------------------------------------+----------------------------------------------------------------------------------------------+----------------+
+   +------------------------------------------------------------------+----------------------------------------------------------------------------------------------+
+   | :ref:`LeavePolicy<enum_NetwInterestLayer_LeavePolicy>`           | :ref:`default_leave_policy<class_NetwInterestLayer_property_default_leave_policy>`           |
+   +------------------------------------------------------------------+----------------------------------------------------------------------------------------------+
+   | :ref:`PerceptionPolicy<enum_NetwInterestLayer_PerceptionPolicy>` | :ref:`default_perception_policy<class_NetwInterestLayer_property_default_perception_policy>` |
+   +------------------------------------------------------------------+----------------------------------------------------------------------------------------------+
+   | :godot:`Callable`                                                | :ref:`driver<class_NetwInterestLayer_property_driver>`                                       |
+   +------------------------------------------------------------------+----------------------------------------------------------------------------------------------+
+   | :godot:`Dictionary`                                              | :ref:`entities<class_NetwInterestLayer_property_entities>`                                   |
+   +------------------------------------------------------------------+----------------------------------------------------------------------------------------------+
+   | :godot:`StringName`                                              | :ref:`layer_id<class_NetwInterestLayer_property_layer_id>`                                   |
+   +------------------------------------------------------------------+----------------------------------------------------------------------------------------------+
+   | :godot:`Callable`                                                | :ref:`monitor<class_NetwInterestLayer_property_monitor>`                                     |
+   +------------------------------------------------------------------+----------------------------------------------------------------------------------------------+
+   | :ref:`LayerPolicy<enum_NetwInterestLayer_LayerPolicy>`           | :ref:`policy<class_NetwInterestLayer_property_policy>`                                       |
+   +------------------------------------------------------------------+----------------------------------------------------------------------------------------------+
+   | :godot:`Dictionary`                                              | :ref:`viewers<class_NetwInterestLayer_property_viewers>`                                     |
+   +------------------------------------------------------------------+----------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -307,7 +307,7 @@ Property Descriptions
 
 .. rst-class:: classref-property
 
-:ref:`LeavePolicy<enum_NetwInterestLayer_LeavePolicy>` **default_leave_policy** = ``0`` :ref:`🔗<class_NetwInterestLayer_property_default_leave_policy>`
+:ref:`LeavePolicy<enum_NetwInterestLayer_LeavePolicy>` **default_leave_policy** :ref:`🔗<class_NetwInterestLayer_property_default_leave_policy>`
 
 .. rst-class:: classref-property-setget
 
@@ -324,7 +324,7 @@ What happens to a peer's copy of an entity it stops seeing, unless the entity se
 
 .. rst-class:: classref-property
 
-:ref:`PerceptionPolicy<enum_NetwInterestLayer_PerceptionPolicy>` **default_perception_policy** = ``0`` :ref:`🔗<class_NetwInterestLayer_property_default_perception_policy>`
+:ref:`PerceptionPolicy<enum_NetwInterestLayer_PerceptionPolicy>` **default_perception_policy** :ref:`🔗<class_NetwInterestLayer_property_default_perception_policy>`
 
 .. rst-class:: classref-property-setget
 
@@ -341,7 +341,7 @@ Whether a kept copy is still shown after the peer stops seeing it, unless the en
 
 .. rst-class:: classref-property
 
-:godot:`Callable` **driver** = ``Callable()`` :ref:`🔗<class_NetwInterestLayer_property_driver>`
+:godot:`Callable` **driver** :ref:`🔗<class_NetwInterestLayer_property_driver>`
 
 .. rst-class:: classref-property-setget
 
@@ -365,7 +365,7 @@ Called on the server once per frame with this layer. It returns every entity tha
 
 .. rst-class:: classref-property
 
-:godot:`Dictionary` **entities** = ``{}`` :ref:`🔗<class_NetwInterestLayer_property_entities>`
+:godot:`Dictionary` **entities** :ref:`🔗<class_NetwInterestLayer_property_entities>`
 
 .. rst-class:: classref-property-setget
 
@@ -381,7 +381,7 @@ The entities in the layer, as keys. On a client, only the ones it sees. Returns 
 
 .. rst-class:: classref-property
 
-:godot:`StringName` **layer_id** = ``&""`` :ref:`🔗<class_NetwInterestLayer_property_layer_id>`
+:godot:`StringName` **layer_id** :ref:`🔗<class_NetwInterestLayer_property_layer_id>`
 
 .. rst-class:: classref-property-setget
 
@@ -398,7 +398,7 @@ The name of the layer.
 
 .. rst-class:: classref-property
 
-:godot:`Callable` **monitor** = ``Callable()`` :ref:`🔗<class_NetwInterestLayer_property_monitor>`
+:godot:`Callable` **monitor** :ref:`🔗<class_NetwInterestLayer_property_monitor>`
 
 .. rst-class:: classref-property-setget
 
@@ -420,7 +420,7 @@ Called when a peer starts or stops seeing an entity through this layer. On a cli
 
 .. rst-class:: classref-property
 
-:ref:`LayerPolicy<enum_NetwInterestLayer_LayerPolicy>` **policy** = ``0`` :ref:`🔗<class_NetwInterestLayer_property_policy>`
+:ref:`LayerPolicy<enum_NetwInterestLayer_LayerPolicy>` **policy** :ref:`🔗<class_NetwInterestLayer_property_policy>`
 
 .. rst-class:: classref-property-setget
 
@@ -437,7 +437,7 @@ Whether :ref:`viewers<class_NetwInterestLayer_property_viewers>` are the peers t
 
 .. rst-class:: classref-property
 
-:godot:`Dictionary` **viewers** = ``{}`` :ref:`🔗<class_NetwInterestLayer_property_viewers>`
+:godot:`Dictionary` **viewers** :ref:`🔗<class_NetwInterestLayer_property_viewers>`
 
 .. rst-class:: classref-property-setget
 

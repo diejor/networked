@@ -40,21 +40,21 @@ Properties
 .. table::
    :widths: auto
 
-   +-------------------------------------------------------+-----------------------------------------------------------------------+------------------------+
-   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`code<class_NetwGroupPromise_property_code>`                     | ``0``                  |
-   +-------------------------------------------------------+-----------------------------------------------------------------------+------------------------+
-   | :godot:`String`                                       | :ref:`detail<class_NetwGroupPromise_property_detail>`                 | ``""``                 |
-   +-------------------------------------------------------+-----------------------------------------------------------------------+------------------------+
-   | :godot:`PackedInt32Array`                             | :ref:`expected_peers<class_NetwGroupPromise_property_expected_peers>` | ``PackedInt32Array()`` |
-   +-------------------------------------------------------+-----------------------------------------------------------------------+------------------------+
-   | :godot:`bool`                                         | :ref:`is_completed<class_NetwGroupPromise_property_is_completed>`     | ``false``              |
-   +-------------------------------------------------------+-----------------------------------------------------------------------+------------------------+
-   | :godot:`bool`                                         | :ref:`is_failed<class_NetwGroupPromise_property_is_failed>`           | ``false``              |
-   +-------------------------------------------------------+-----------------------------------------------------------------------+------------------------+
-   | :godot:`bool`                                         | :ref:`is_settled<class_NetwGroupPromise_property_is_settled>`         | ``false``              |
-   +-------------------------------------------------------+-----------------------------------------------------------------------+------------------------+
-   | :godot:`Dictionary`                                   | :ref:`results<class_NetwGroupPromise_property_results>`               | ``{}``                 |
-   +-------------------------------------------------------+-----------------------------------------------------------------------+------------------------+
+   +-------------------------------------------------------+-----------------------------------------------------------------------+
+   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`code<class_NetwGroupPromise_property_code>`                     |
+   +-------------------------------------------------------+-----------------------------------------------------------------------+
+   | :godot:`String`                                       | :ref:`detail<class_NetwGroupPromise_property_detail>`                 |
+   +-------------------------------------------------------+-----------------------------------------------------------------------+
+   | :godot:`PackedInt32Array`                             | :ref:`expected_peers<class_NetwGroupPromise_property_expected_peers>` |
+   +-------------------------------------------------------+-----------------------------------------------------------------------+
+   | :godot:`bool`                                         | :ref:`is_completed<class_NetwGroupPromise_property_is_completed>`     |
+   +-------------------------------------------------------+-----------------------------------------------------------------------+
+   | :godot:`bool`                                         | :ref:`is_failed<class_NetwGroupPromise_property_is_failed>`           |
+   +-------------------------------------------------------+-----------------------------------------------------------------------+
+   | :godot:`bool`                                         | :ref:`is_settled<class_NetwGroupPromise_property_is_settled>`         |
+   +-------------------------------------------------------+-----------------------------------------------------------------------+
+   | :godot:`Dictionary`                                   | :ref:`results<class_NetwGroupPromise_property_results>`               |
+   +-------------------------------------------------------+-----------------------------------------------------------------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -126,7 +126,7 @@ Property Descriptions
 
 .. rst-class:: classref-property
 
-:godot:`Error <@GlobalScope#enum_@globalscope_Error>` **code** = ``0`` :ref:`🔗<class_NetwGroupPromise_property_code>`
+:godot:`Error <@GlobalScope#enum_@globalscope_Error>` **code** :ref:`🔗<class_NetwGroupPromise_property_code>`
 
 .. rst-class:: classref-property-setget
 
@@ -142,7 +142,7 @@ The error when :ref:`is_failed<class_NetwGroupPromise_property_is_failed>`, othe
 
 .. rst-class:: classref-property
 
-:godot:`String` **detail** = ``""`` :ref:`🔗<class_NetwGroupPromise_property_detail>`
+:godot:`String` **detail** :ref:`🔗<class_NetwGroupPromise_property_detail>`
 
 .. rst-class:: classref-property-setget
 
@@ -158,7 +158,7 @@ A readable reason for :ref:`code<class_NetwGroupPromise_property_code>`, or empt
 
 .. rst-class:: classref-property
 
-:godot:`PackedInt32Array` **expected_peers** = ``PackedInt32Array()`` :ref:`🔗<class_NetwGroupPromise_property_expected_peers>`
+:godot:`PackedInt32Array` **expected_peers** :ref:`🔗<class_NetwGroupPromise_property_expected_peers>`
 
 .. rst-class:: classref-property-setget
 
@@ -176,7 +176,7 @@ The peers that have not answered yet.
 
 .. rst-class:: classref-property
 
-:godot:`bool` **is_completed** = ``false`` :ref:`🔗<class_NetwGroupPromise_property_is_completed>`
+:godot:`bool` **is_completed** :ref:`🔗<class_NetwGroupPromise_property_is_completed>`
 
 .. rst-class:: classref-property-setget
 
@@ -192,7 +192,7 @@ The peers that have not answered yet.
 
 .. rst-class:: classref-property
 
-:godot:`bool` **is_failed** = ``false`` :ref:`🔗<class_NetwGroupPromise_property_is_failed>`
+:godot:`bool` **is_failed** :ref:`🔗<class_NetwGroupPromise_property_is_failed>`
 
 .. rst-class:: classref-property-setget
 
@@ -208,7 +208,7 @@ The peers that have not answered yet.
 
 .. rst-class:: classref-property
 
-:godot:`bool` **is_settled** = ``false`` :ref:`🔗<class_NetwGroupPromise_property_is_settled>`
+:godot:`bool` **is_settled** :ref:`🔗<class_NetwGroupPromise_property_is_settled>`
 
 .. rst-class:: classref-property-setget
 
@@ -224,7 +224,7 @@ The peers that have not answered yet.
 
 .. rst-class:: classref-property
 
-:godot:`Dictionary` **results** = ``{}`` :ref:`🔗<class_NetwGroupPromise_property_results>`
+:godot:`Dictionary` **results** :ref:`🔗<class_NetwGroupPromise_property_results>`
 
 .. rst-class:: classref-property-setget
 

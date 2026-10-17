@@ -92,47 +92,47 @@ Properties
 .. table::
    :widths: auto
 
-   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+----------------+
-   | :godot:`int`                                              | :ref:`ack_age_ticks<class_NetwPrediction_property_ack_age_ticks>`                       | ``0``          |
-   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+----------------+
-   | :ref:`Archetype<enum_NetwPrediction_Archetype>`           | :ref:`archetype<class_NetwPrediction_property_archetype>`                               | ``0``          |
-   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+----------------+
-   | :ref:`BreachResponse<enum_NetwPrediction_BreachResponse>` | :ref:`breach_response<class_NetwPrediction_property_breach_response>`                   | ``0``          |
-   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+----------------+
-   | :godot:`int`                                              | :ref:`collision_cooldown_ticks<class_NetwPrediction_property_collision_cooldown_ticks>` | ``6``          |
-   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+----------------+
-   | :godot:`int`                                              | :ref:`consume_buffer_ticks<class_NetwPrediction_property_consume_buffer_ticks>`         | ``0``          |
-   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+----------------+
-   | :godot:`Callable`                                         | :ref:`correction_path_clear<class_NetwPrediction_property_correction_path_clear>`       | ``Callable()`` |
-   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+----------------+
-   | :godot:`float`                                            | :ref:`divergence_epsilon<class_NetwPrediction_property_divergence_epsilon>`             | ``0.01``       |
-   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+----------------+
-   | :godot:`int`                                              | :ref:`epoch<class_NetwPrediction_property_epoch>`                                       | ``-1``         |
-   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+----------------+
-   | :godot:`int`                                              | :ref:`max_consume_lag_ticks<class_NetwPrediction_property_max_consume_lag_ticks>`       | ``60``         |
-   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+----------------+
-   | :godot:`int`                                              | :ref:`max_consume_per_tick<class_NetwPrediction_property_max_consume_per_tick>`         | ``2``          |
-   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+----------------+
-   | :ref:`MissingInput<enum_NetwPrediction_MissingInput>`     | :ref:`missing_policy<class_NetwPrediction_property_missing_policy>`                     | ``0``          |
-   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+----------------+
-   | :godot:`Callable`                                         | :ref:`predict_input<class_NetwPrediction_property_predict_input>`                       | ``Callable()`` |
-   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+----------------+
-   | :ref:`Reconcile<enum_NetwPrediction_Reconcile>`           | :ref:`reconcile_mode<class_NetwPrediction_property_reconcile_mode>`                     | ``0``          |
-   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+----------------+
-   | :ref:`RecoveryPolicy<enum_NetwPrediction_RecoveryPolicy>` | :ref:`recovery_policy<class_NetwPrediction_property_recovery_policy>`                   | ``4``          |
-   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+----------------+
-   | :godot:`int`                                              | :ref:`replay_buffer_depth<class_NetwPrediction_property_replay_buffer_depth>`           | ``0``          |
-   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+----------------+
-   | :godot:`Dictionary`                                       | :ref:`sensors<class_NetwPrediction_property_sensors>`                                   | ``{}``         |
-   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+----------------+
-   | :godot:`bool`                                             | :ref:`sleeping<class_NetwPrediction_property_sleeping>`                                 | ``false``      |
-   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+----------------+
-   | :ref:`NetwPredictStats<class_NetwPredictStats>`           | :ref:`stats<class_NetwPrediction_property_stats>`                                       |                |
-   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+----------------+
-   | :godot:`float`                                            | :ref:`teleport_threshold<class_NetwPrediction_property_teleport_threshold>`             | ``2.0``        |
-   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+----------------+
-   | :godot:`Callable`                                         | :ref:`witness_contacts<class_NetwPrediction_property_witness_contacts>`                 | ``Callable()`` |
-   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+----------------+
+   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+
+   | :godot:`int`                                              | :ref:`ack_age_ticks<class_NetwPrediction_property_ack_age_ticks>`                       |
+   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+
+   | :ref:`Archetype<enum_NetwPrediction_Archetype>`           | :ref:`archetype<class_NetwPrediction_property_archetype>`                               |
+   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+
+   | :ref:`BreachResponse<enum_NetwPrediction_BreachResponse>` | :ref:`breach_response<class_NetwPrediction_property_breach_response>`                   |
+   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+
+   | :godot:`int`                                              | :ref:`collision_cooldown_ticks<class_NetwPrediction_property_collision_cooldown_ticks>` |
+   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+
+   | :godot:`int`                                              | :ref:`consume_buffer_ticks<class_NetwPrediction_property_consume_buffer_ticks>`         |
+   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+
+   | :godot:`Callable`                                         | :ref:`correction_path_clear<class_NetwPrediction_property_correction_path_clear>`       |
+   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+
+   | :godot:`float`                                            | :ref:`divergence_epsilon<class_NetwPrediction_property_divergence_epsilon>`             |
+   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+
+   | :godot:`int`                                              | :ref:`epoch<class_NetwPrediction_property_epoch>`                                       |
+   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+
+   | :godot:`int`                                              | :ref:`max_consume_lag_ticks<class_NetwPrediction_property_max_consume_lag_ticks>`       |
+   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+
+   | :godot:`int`                                              | :ref:`max_consume_per_tick<class_NetwPrediction_property_max_consume_per_tick>`         |
+   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+
+   | :ref:`MissingInput<enum_NetwPrediction_MissingInput>`     | :ref:`missing_policy<class_NetwPrediction_property_missing_policy>`                     |
+   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+
+   | :godot:`Callable`                                         | :ref:`predict_input<class_NetwPrediction_property_predict_input>`                       |
+   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+
+   | :ref:`Reconcile<enum_NetwPrediction_Reconcile>`           | :ref:`reconcile_mode<class_NetwPrediction_property_reconcile_mode>`                     |
+   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+
+   | :ref:`RecoveryPolicy<enum_NetwPrediction_RecoveryPolicy>` | :ref:`recovery_policy<class_NetwPrediction_property_recovery_policy>`                   |
+   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+
+   | :godot:`int`                                              | :ref:`replay_buffer_depth<class_NetwPrediction_property_replay_buffer_depth>`           |
+   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+
+   | :godot:`Dictionary`                                       | :ref:`sensors<class_NetwPrediction_property_sensors>`                                   |
+   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+
+   | :godot:`bool`                                             | :ref:`sleeping<class_NetwPrediction_property_sleeping>`                                 |
+   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+
+   | :ref:`NetwPredictStats<class_NetwPredictStats>`           | :ref:`stats<class_NetwPrediction_property_stats>`                                       |
+   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+
+   | :godot:`float`                                            | :ref:`teleport_threshold<class_NetwPrediction_property_teleport_threshold>`             |
+   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+
+   | :godot:`Callable`                                         | :ref:`witness_contacts<class_NetwPrediction_property_witness_contacts>`                 |
+   +-----------------------------------------------------------+-----------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -1041,7 +1041,7 @@ Property Descriptions
 
 .. rst-class:: classref-property
 
-:godot:`int` **ack_age_ticks** = ``0`` :ref:`🔗<class_NetwPrediction_property_ack_age_ticks>`
+:godot:`int` **ack_age_ticks** :ref:`🔗<class_NetwPrediction_property_ack_age_ticks>`
 
 .. rst-class:: classref-property-setget
 
@@ -1058,7 +1058,7 @@ How many ticks the last input the server acknowledged is behind the newest input
 
 .. rst-class:: classref-property
 
-:ref:`Archetype<enum_NetwPrediction_Archetype>` **archetype** = ``0`` :ref:`🔗<class_NetwPrediction_property_archetype>`
+:ref:`Archetype<enum_NetwPrediction_Archetype>` **archetype** :ref:`🔗<class_NetwPrediction_property_archetype>`
 
 .. rst-class:: classref-property-setget
 
@@ -1075,7 +1075,7 @@ A preset for this entity's prediction settings and :ref:`NetwSimulation.schedule
 
 .. rst-class:: classref-property
 
-:ref:`BreachResponse<enum_NetwPrediction_BreachResponse>` **breach_response** = ``0`` :ref:`🔗<class_NetwPrediction_property_breach_response>`
+:ref:`BreachResponse<enum_NetwPrediction_BreachResponse>` **breach_response** :ref:`🔗<class_NetwPrediction_property_breach_response>`
 
 .. rst-class:: classref-property-setget
 
@@ -1092,7 +1092,7 @@ What this entity does when it touches a moving body this peer does not simulate.
 
 .. rst-class:: classref-property
 
-:godot:`int` **collision_cooldown_ticks** = ``6`` :ref:`🔗<class_NetwPrediction_property_collision_cooldown_ticks>`
+:godot:`int` **collision_cooldown_ticks** :ref:`🔗<class_NetwPrediction_property_collision_cooldown_ticks>`
 
 .. rst-class:: classref-property-setget
 
@@ -1109,7 +1109,7 @@ How many ticks :ref:`notify_contact()<class_NetwPrediction_method_notify_contact
 
 .. rst-class:: classref-property
 
-:godot:`int` **consume_buffer_ticks** = ``0`` :ref:`🔗<class_NetwPrediction_property_consume_buffer_ticks>`
+:godot:`int` **consume_buffer_ticks** :ref:`🔗<class_NetwPrediction_property_consume_buffer_ticks>`
 
 .. rst-class:: classref-property-setget
 
@@ -1126,7 +1126,7 @@ How many ticks of input the server waits for before it starts running them. It t
 
 .. rst-class:: classref-property
 
-:godot:`Callable` **correction_path_clear** = ``Callable()`` :ref:`🔗<class_NetwPrediction_property_correction_path_clear>`
+:godot:`Callable` **correction_path_clear** :ref:`🔗<class_NetwPrediction_property_correction_path_clear>`
 
 .. rst-class:: classref-property-setget
 
@@ -1211,7 +1211,7 @@ Both :godot:`Dictionary` arguments contain state declared with :ref:`NetwPropert
 
 .. rst-class:: classref-property
 
-:godot:`float` **divergence_epsilon** = ``0.01`` :ref:`🔗<class_NetwPrediction_property_divergence_epsilon>`
+:godot:`float` **divergence_epsilon** :ref:`🔗<class_NetwPrediction_property_divergence_epsilon>`
 
 .. rst-class:: classref-property-setget
 
@@ -1228,7 +1228,7 @@ How far the predicted state may drift from the server's before it is corrected. 
 
 .. rst-class:: classref-property
 
-:godot:`int` **epoch** = ``-1`` :ref:`🔗<class_NetwPrediction_property_epoch>`
+:godot:`int` **epoch** :ref:`🔗<class_NetwPrediction_property_epoch>`
 
 .. rst-class:: classref-property-setget
 
@@ -1245,7 +1245,7 @@ The version of the static world this entity simulates against, or ``-1`` when un
 
 .. rst-class:: classref-property
 
-:godot:`int` **max_consume_lag_ticks** = ``60`` :ref:`🔗<class_NetwPrediction_property_max_consume_lag_ticks>`
+:godot:`int` **max_consume_lag_ticks** :ref:`🔗<class_NetwPrediction_property_max_consume_lag_ticks>`
 
 .. rst-class:: classref-property-setget
 
@@ -1262,7 +1262,7 @@ How far the server may fall behind the newest input before it skips ahead to it.
 
 .. rst-class:: classref-property
 
-:godot:`int` **max_consume_per_tick** = ``2`` :ref:`🔗<class_NetwPrediction_property_max_consume_per_tick>`
+:godot:`int` **max_consume_per_tick** :ref:`🔗<class_NetwPrediction_property_max_consume_per_tick>`
 
 .. rst-class:: classref-property-setget
 
@@ -1279,7 +1279,7 @@ How many queued inputs the server may run in one tick to catch up to :ref:`consu
 
 .. rst-class:: classref-property
 
-:ref:`MissingInput<enum_NetwPrediction_MissingInput>` **missing_policy** = ``0`` :ref:`🔗<class_NetwPrediction_property_missing_policy>`
+:ref:`MissingInput<enum_NetwPrediction_MissingInput>` **missing_policy** :ref:`🔗<class_NetwPrediction_property_missing_policy>`
 
 .. rst-class:: classref-property-setget
 
@@ -1296,7 +1296,7 @@ What the server does when an input never arrives.
 
 .. rst-class:: classref-property
 
-:godot:`Callable` **predict_input** = ``Callable()`` :ref:`🔗<class_NetwPrediction_property_predict_input>`
+:godot:`Callable` **predict_input** :ref:`🔗<class_NetwPrediction_property_predict_input>`
 
 .. rst-class:: classref-property-setget
 
@@ -1353,7 +1353,7 @@ The returned :godot:`Dictionary` uses names declared with :ref:`NetwPropertyConf
 
 .. rst-class:: classref-property
 
-:ref:`Reconcile<enum_NetwPrediction_Reconcile>` **reconcile_mode** = ``0`` :ref:`🔗<class_NetwPrediction_property_reconcile_mode>`
+:ref:`Reconcile<enum_NetwPrediction_Reconcile>` **reconcile_mode** :ref:`🔗<class_NetwPrediction_property_reconcile_mode>`
 
 .. rst-class:: classref-property-setget
 
@@ -1370,7 +1370,7 @@ Whether this entity is corrected alone or together with the entities its :ref:`N
 
 .. rst-class:: classref-property
 
-:ref:`RecoveryPolicy<enum_NetwPrediction_RecoveryPolicy>` **recovery_policy** = ``4`` :ref:`🔗<class_NetwPrediction_property_recovery_policy>`
+:ref:`RecoveryPolicy<enum_NetwPrediction_RecoveryPolicy>` **recovery_policy** :ref:`🔗<class_NetwPrediction_property_recovery_policy>`
 
 .. rst-class:: classref-property-setget
 
@@ -1387,7 +1387,7 @@ How this entity is corrected. :ref:`resolved_recovery_policy()<class_NetwPredict
 
 .. rst-class:: classref-property
 
-:godot:`int` **replay_buffer_depth** = ``0`` :ref:`🔗<class_NetwPrediction_property_replay_buffer_depth>`
+:godot:`int` **replay_buffer_depth** :ref:`🔗<class_NetwPrediction_property_replay_buffer_depth>`
 
 .. rst-class:: classref-property-setget
 
@@ -1404,7 +1404,7 @@ How many inputs the server keeps queued before running them, for an entity at :r
 
 .. rst-class:: classref-property
 
-:godot:`Dictionary` **sensors** = ``{}`` :ref:`🔗<class_NetwPrediction_property_sensors>`
+:godot:`Dictionary` **sensors** :ref:`🔗<class_NetwPrediction_property_sensors>`
 
 .. rst-class:: classref-property-setget
 
@@ -1421,7 +1421,7 @@ Callables that sample the world this entity reads, by name. Each is called once 
 
 .. rst-class:: classref-property
 
-:godot:`bool` **sleeping** = ``false`` :ref:`🔗<class_NetwPrediction_property_sleeping>`
+:godot:`bool` **sleeping** :ref:`🔗<class_NetwPrediction_property_sleeping>`
 
 .. rst-class:: classref-property-setget
 
@@ -1454,7 +1454,7 @@ This entity's prediction counters.
 
 .. rst-class:: classref-property
 
-:godot:`float` **teleport_threshold** = ``2.0`` :ref:`🔗<class_NetwPrediction_property_teleport_threshold>`
+:godot:`float` **teleport_threshold** :ref:`🔗<class_NetwPrediction_property_teleport_threshold>`
 
 .. rst-class:: classref-property-setget
 
@@ -1471,7 +1471,7 @@ How large an error may be before a correction teleports the body, restoring ever
 
 .. rst-class:: classref-property
 
-:godot:`Callable` **witness_contacts** = ``Callable()`` :ref:`🔗<class_NetwPrediction_property_witness_contacts>`
+:godot:`Callable` **witness_contacts** :ref:`🔗<class_NetwPrediction_property_witness_contacts>`
 
 .. rst-class:: classref-property-setget
 

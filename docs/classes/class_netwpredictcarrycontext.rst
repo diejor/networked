@@ -35,15 +35,15 @@ Properties
 .. table::
    :widths: auto
 
-   +---------------------+------------------------------------------------------------+---------+
-   | :godot:`float`      | :ref:`delta<class_NetwPredictCarryContext_property_delta>` | ``0.0`` |
-   +---------------------+------------------------------------------------------------+---------+
-   | :godot:`Dictionary` | :ref:`input<class_NetwPredictCarryContext_property_input>` | ``{}``  |
-   +---------------------+------------------------------------------------------------+---------+
-   | :godot:`int`        | :ref:`label<class_NetwPredictCarryContext_property_label>` | ``-1``  |
-   +---------------------+------------------------------------------------------------+---------+
-   | :godot:`Dictionary` | :ref:`state<class_NetwPredictCarryContext_property_state>` | ``{}``  |
-   +---------------------+------------------------------------------------------------+---------+
+   +---------------------+------------------------------------------------------------+
+   | :godot:`float`      | :ref:`delta<class_NetwPredictCarryContext_property_delta>` |
+   +---------------------+------------------------------------------------------------+
+   | :godot:`Dictionary` | :ref:`input<class_NetwPredictCarryContext_property_input>` |
+   +---------------------+------------------------------------------------------------+
+   | :godot:`int`        | :ref:`label<class_NetwPredictCarryContext_property_label>` |
+   +---------------------+------------------------------------------------------------+
+   | :godot:`Dictionary` | :ref:`state<class_NetwPredictCarryContext_property_state>` |
+   +---------------------+------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -58,7 +58,7 @@ Property Descriptions
 
 .. rst-class:: classref-property
 
-:godot:`float` **delta** = ``0.0`` :ref:`🔗<class_NetwPredictCarryContext_property_delta>`
+:godot:`float` **delta** :ref:`🔗<class_NetwPredictCarryContext_property_delta>`
 
 .. rst-class:: classref-property-setget
 
@@ -74,7 +74,7 @@ The length of the tick, in seconds.
 
 .. rst-class:: classref-property
 
-:godot:`Dictionary` **input** = ``{}`` :ref:`🔗<class_NetwPredictCarryContext_property_input>`
+:godot:`Dictionary` **input** :ref:`🔗<class_NetwPredictCarryContext_property_input>`
 
 .. rst-class:: classref-property-setget
 
@@ -90,7 +90,7 @@ The :ref:`NetwPropertyConfig.input()<class_NetwPropertyConfig_method_input>` val
 
 .. rst-class:: classref-property
 
-:godot:`int` **label** = ``-1`` :ref:`🔗<class_NetwPredictCarryContext_property_label>`
+:godot:`int` **label** :ref:`🔗<class_NetwPredictCarryContext_property_label>`
 
 .. rst-class:: classref-property-setget
 
@@ -106,7 +106,7 @@ The tick of the input.
 
 .. rst-class:: classref-property
 
-:godot:`Dictionary` **state** = ``{}`` :ref:`🔗<class_NetwPredictCarryContext_property_state>`
+:godot:`Dictionary` **state** :ref:`🔗<class_NetwPredictCarryContext_property_state>`
 
 .. rst-class:: classref-property-setget
 

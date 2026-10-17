@@ -40,10 +40,10 @@
 		</method>
 	</methods>
 	<members>
-		<member name="isolation" type="int" setter="" getter="get_isolation" enum="NetwScene.SceneIsolation" default="0">
+		<member name="isolation" type="int" setter="" getter="get_isolation" enum="NetwScene.SceneIsolation">
 			[constant NetwScene.SCENE_ISOLATION_OWN_WORLD] after [method isolated], [constant NetwScene.SCENE_ISOLATION_NONE] otherwise.
 		</member>
-		<member name="label" type="StringName" setter="" getter="get_label" default="&amp;&quot;&quot;">
+		<member name="label" type="StringName" setter="" getter="get_label">
 			The name given to [method labeled], or the root node's name.
 		</member>
 	</members>

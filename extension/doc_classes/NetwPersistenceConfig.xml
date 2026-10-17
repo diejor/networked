@@ -70,7 +70,7 @@
 			<description>
 				Upgrades saved data from [param from_version] to the next version. A load calls [param step] for each version up to [method storage_version]. Return all properties needed by the next version.
 				[codeblock lang=text]
-				step(values: Dictionary) -> Dictionary
+				step(values: Dictionary) -&gt; Dictionary
 
 				Dictionary
 				┖╴saved property name  Variant  the value stored under that name

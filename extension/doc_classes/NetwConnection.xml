@@ -202,19 +202,19 @@
 		</method>
 	</methods>
 	<members>
-		<member name="browsing" type="bool" setter="set_browsing" getter="is_browsing" default="false">
+		<member name="browsing" type="bool" setter="set_browsing" getter="is_browsing">
 			While [code]true[/code], every [LobbyDirectory] keeps listing and every row from [method add] is probed every [member probe_interval], which costs network traffic.
 		</member>
-		<member name="endpoints" type="NetwEndpoint[]" setter="" getter="get_endpoints" default="[]">
+		<member name="endpoints" type="NetwEndpoint[]" setter="" getter="get_endpoints">
 			The rows from [method add] come first.
 		</member>
-		<member name="join_address" type="String" setter="" getter="get_join_address" default="&quot;&quot;">
+		<member name="join_address" type="String" setter="" getter="get_join_address">
 			Empty while the session is not hosting.
 		</member>
-		<member name="probe_interval" type="float" setter="set_probe_interval" getter="get_probe_interval" default="10.0">
+		<member name="probe_interval" type="float" setter="set_probe_interval" getter="get_probe_interval">
 			Seconds between probes of a row from [method add] while [member browsing]. [code]0[/code] probes it once each time browsing starts.
 		</member>
-		<member name="state" type="int" setter="" getter="get_state" enum="NetwConnection.State" default="0">
+		<member name="state" type="int" setter="" getter="get_state" enum="NetwConnection.State">
 			The connection attempt's [enum State], reported by [signal state_changed].
 		</member>
 	</members>

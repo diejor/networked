@@ -41,27 +41,27 @@ Properties
 .. table::
    :widths: auto
 
-   +-------------------------------------------------------+------------------------------------------------------------------------------+-----------+
-   | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] | :ref:`entities<class_NetwScene_property_entities>`                           | ``[]``    |
-   +-------------------------------------------------------+------------------------------------------------------------------------------+-----------+
-   | :ref:`NetwEntity<class_NetwEntity>`                   | :ref:`entity<class_NetwScene_property_entity>`                               |           |
-   +-------------------------------------------------------+------------------------------------------------------------------------------+-----------+
-   | :godot:`bool`                                         | :ref:`is_declared<class_NetwScene_property_is_declared>`                     | ``false`` |
-   +-------------------------------------------------------+------------------------------------------------------------------------------+-----------+
-   | :godot:`StringName`                                   | :ref:`label<class_NetwScene_property_label>`                                 | ``&""``   |
-   +-------------------------------------------------------+------------------------------------------------------------------------------+-----------+
-   | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] | :ref:`local_player_entities<class_NetwScene_property_local_player_entities>` | ``[]``    |
-   +-------------------------------------------------------+------------------------------------------------------------------------------+-----------+
-   | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] | :ref:`player_entities<class_NetwScene_property_player_entities>`             | ``[]``    |
-   +-------------------------------------------------------+------------------------------------------------------------------------------+-----------+
-   | :godot:`RID`                                          | :ref:`rid<class_NetwScene_property_rid>`                                     | ``RID()`` |
-   +-------------------------------------------------------+------------------------------------------------------------------------------+-----------+
-   | :godot:`Node`                                         | :ref:`root<class_NetwScene_property_root>`                                   |           |
-   +-------------------------------------------------------+------------------------------------------------------------------------------+-----------+
-   | :godot:`Array`\[:ref:`NetwPlayer<class_NetwPlayer>`\] | :ref:`viewers<class_NetwScene_property_viewers>`                             | ``[]``    |
-   +-------------------------------------------------------+------------------------------------------------------------------------------+-----------+
-   | :godot:`Node`                                         | :ref:`world<class_NetwScene_property_world>`                                 |           |
-   +-------------------------------------------------------+------------------------------------------------------------------------------+-----------+
+   +-------------------------------------------------------+------------------------------------------------------------------------------+
+   | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] | :ref:`entities<class_NetwScene_property_entities>`                           |
+   +-------------------------------------------------------+------------------------------------------------------------------------------+
+   | :ref:`NetwEntity<class_NetwEntity>`                   | :ref:`entity<class_NetwScene_property_entity>`                               |
+   +-------------------------------------------------------+------------------------------------------------------------------------------+
+   | :godot:`bool`                                         | :ref:`is_declared<class_NetwScene_property_is_declared>`                     |
+   +-------------------------------------------------------+------------------------------------------------------------------------------+
+   | :godot:`StringName`                                   | :ref:`label<class_NetwScene_property_label>`                                 |
+   +-------------------------------------------------------+------------------------------------------------------------------------------+
+   | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] | :ref:`local_player_entities<class_NetwScene_property_local_player_entities>` |
+   +-------------------------------------------------------+------------------------------------------------------------------------------+
+   | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] | :ref:`player_entities<class_NetwScene_property_player_entities>`             |
+   +-------------------------------------------------------+------------------------------------------------------------------------------+
+   | :godot:`RID`                                          | :ref:`rid<class_NetwScene_property_rid>`                                     |
+   +-------------------------------------------------------+------------------------------------------------------------------------------+
+   | :godot:`Node`                                         | :ref:`root<class_NetwScene_property_root>`                                   |
+   +-------------------------------------------------------+------------------------------------------------------------------------------+
+   | :godot:`Array`\[:ref:`NetwPlayer<class_NetwPlayer>`\] | :ref:`viewers<class_NetwScene_property_viewers>`                             |
+   +-------------------------------------------------------+------------------------------------------------------------------------------+
+   | :godot:`Node`                                         | :ref:`world<class_NetwScene_property_world>`                                 |
+   +-------------------------------------------------------+------------------------------------------------------------------------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -254,7 +254,7 @@ Property Descriptions
 
 .. rst-class:: classref-property
 
-:godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **entities** = ``[]`` :ref:`🔗<class_NetwScene_property_entities>`
+:godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **entities** :ref:`🔗<class_NetwScene_property_entities>`
 
 .. rst-class:: classref-property-setget
 
@@ -286,7 +286,7 @@ The :ref:`NetwEntity<class_NetwEntity>` on :ref:`root<class_NetwScene_property_r
 
 .. rst-class:: classref-property
 
-:godot:`bool` **is_declared** = ``false`` :ref:`🔗<class_NetwScene_property_is_declared>`
+:godot:`bool` **is_declared** :ref:`🔗<class_NetwScene_property_is_declared>`
 
 .. rst-class:: classref-property-setget
 
@@ -302,7 +302,7 @@ Whether a scene was found. ``false`` for an entity outside every scene or not in
 
 .. rst-class:: classref-property
 
-:godot:`StringName` **label** = ``&""`` :ref:`🔗<class_NetwScene_property_label>`
+:godot:`StringName` **label** :ref:`🔗<class_NetwScene_property_label>`
 
 .. rst-class:: classref-property-setget
 
@@ -318,7 +318,7 @@ The name :ref:`Netw.scene()<class_Netw_method_scene>` finds this scene by. See :
 
 .. rst-class:: classref-property
 
-:godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **local_player_entities** = ``[]`` :ref:`🔗<class_NetwScene_property_local_player_entities>`
+:godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **local_player_entities** :ref:`🔗<class_NetwScene_property_local_player_entities>`
 
 .. rst-class:: classref-property-setget
 
@@ -334,7 +334,7 @@ Every entity in :ref:`player_entities<class_NetwScene_property_player_entities>`
 
 .. rst-class:: classref-property
 
-:godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **player_entities** = ``[]`` :ref:`🔗<class_NetwScene_property_player_entities>`
+:godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **player_entities** :ref:`🔗<class_NetwScene_property_player_entities>`
 
 .. rst-class:: classref-property-setget
 
@@ -350,7 +350,7 @@ Every entity spawned for a player with :ref:`Netw.spawn_player()<class_Netw_meth
 
 .. rst-class:: classref-property
 
-:godot:`RID` **rid** = ``RID()`` :ref:`🔗<class_NetwScene_property_rid>`
+:godot:`RID` **rid** :ref:`🔗<class_NetwScene_property_rid>`
 
 .. rst-class:: classref-property-setget
 
@@ -382,7 +382,7 @@ The node the scene was declared on, ``null`` outside a session. When the scene i
 
 .. rst-class:: classref-property
 
-:godot:`Array`\[:ref:`NetwPlayer<class_NetwPlayer>`\] **viewers** = ``[]`` :ref:`🔗<class_NetwScene_property_viewers>`
+:godot:`Array`\[:ref:`NetwPlayer<class_NetwPlayer>`\] **viewers** :ref:`🔗<class_NetwScene_property_viewers>`
 
 .. rst-class:: classref-property-setget
 

@@ -135,22 +135,22 @@
 		</method>
 	</methods>
 	<members>
-		<member name="ack_age_ticks" type="int" setter="set_ack_age_ticks" getter="get_ack_age_ticks" default="0">
+		<member name="ack_age_ticks" type="int" setter="set_ack_age_ticks" getter="get_ack_age_ticks">
 			How many ticks the last input the server acknowledged is behind the newest input. On a healthy connection it stays near zero, and a growing value means the server is falling behind. [member NetwSimulation.max_restore_ticks] caps it on the client.
 		</member>
-		<member name="archetype" type="int" setter="set_archetype" getter="get_archetype" enum="NetwPrediction.Archetype" default="0">
+		<member name="archetype" type="int" setter="set_archetype" getter="get_archetype" enum="NetwPrediction.Archetype">
 			A preset for this entity's prediction settings and [member NetwSimulation.schedule]. Settings written afterwards override the preset. No preset sets [member breach_response].
 		</member>
-		<member name="breach_response" type="int" setter="set_breach_response" getter="get_breach_response" enum="NetwPrediction.BreachResponse" default="0">
+		<member name="breach_response" type="int" setter="set_breach_response" getter="get_breach_response" enum="NetwPrediction.BreachResponse">
 			What this entity does when it touches a moving body this peer does not simulate. It only takes effect once [member witness_contacts] is set.
 		</member>
-		<member name="collision_cooldown_ticks" type="int" setter="set_collision_cooldown_ticks" getter="get_collision_cooldown_ticks" default="6">
+		<member name="collision_cooldown_ticks" type="int" setter="set_collision_cooldown_ticks" getter="get_collision_cooldown_ticks">
 			How many ticks [method notify_contact] holds off corrections. An error past [member teleport_threshold] still corrects.
 		</member>
-		<member name="consume_buffer_ticks" type="int" setter="set_consume_buffer_ticks" getter="get_consume_buffer_ticks" default="0">
+		<member name="consume_buffer_ticks" type="int" setter="set_consume_buffer_ticks" getter="get_consume_buffer_ticks">
 			How many ticks of input the server waits for before it starts running them. It then runs one every tick, so late inputs do not stall the entity. Each tick adds a tick of input latency.
 		</member>
-		<member name="correction_path_clear" type="Callable" setter="set_correction_path_clear" getter="get_correction_path_clear" default="Callable()">
+		<member name="correction_path_clear" type="Callable" setter="set_correction_path_clear" getter="get_correction_path_clear">
 			Checks whether an eligible correction can carry the body to its proposed present pose. Return [code]true[/code] only when the swept path is clear. The engine moves the body. An unset callback disables this correction.
 			Both [Dictionary] arguments contain state declared with [method NetwPropertyConfig.state]. This example sweeps an unscaled [RigidBody3D] with [member Node3D.position] and [member Node3D.quaternion] state. It refuses rotation changes because [method PhysicsServer3D.body_test_motion] sweeps translation only.
 			[codeblock lang=text]
@@ -214,22 +214,22 @@
 			[/csharp]
 			[/codeblocks]
 		</member>
-		<member name="divergence_epsilon" type="float" setter="set_divergence_epsilon" getter="get_divergence_epsilon" default="0.01">
+		<member name="divergence_epsilon" type="float" setter="set_divergence_epsilon" getter="get_divergence_epsilon">
 			How far the predicted state may drift from the server's before it is corrected. [method NetwPropertyConfig.epsilon] overrides it for one property. A [constant ARCHETYPE_SOLVER_BODY] tolerates one and a half quantizer steps on each quantized property.
 		</member>
-		<member name="epoch" type="int" setter="set_epoch" getter="get_epoch" default="-1">
+		<member name="epoch" type="int" setter="set_epoch" getter="get_epoch">
 			The version of the static world this entity simulates against, or [code]-1[/code] when unset. Raise it when the level changes, so the next mispredictions are tolerated while peers catch up.
 		</member>
-		<member name="max_consume_lag_ticks" type="int" setter="set_max_consume_lag_ticks" getter="get_max_consume_lag_ticks" default="60">
+		<member name="max_consume_lag_ticks" type="int" setter="set_max_consume_lag_ticks" getter="get_max_consume_lag_ticks">
 			How far the server may fall behind the newest input before it skips ahead to it. Without this, a client that joins a running session can leave the server behind for good. [code]0[/code] disables skipping.
 		</member>
-		<member name="max_consume_per_tick" type="int" setter="set_max_consume_per_tick" getter="get_max_consume_per_tick" default="2">
+		<member name="max_consume_per_tick" type="int" setter="set_max_consume_per_tick" getter="get_max_consume_per_tick">
 			How many queued inputs the server may run in one tick to catch up to [member consume_buffer_ticks] behind the newest input. Extra inputs run as extra steps and are never skipped. It applies to [constant NetwSimulation.SCHEDULE_TICK], and an entity at [constant NetwSimulation.SCHEDULE_FRAME] catches up by running one input per physics frame.
 		</member>
-		<member name="missing_policy" type="int" setter="set_missing_policy" getter="get_missing_policy" enum="NetwPrediction.MissingInput" default="0">
+		<member name="missing_policy" type="int" setter="set_missing_policy" getter="get_missing_policy" enum="NetwPrediction.MissingInput">
 			What the server does when an input never arrives.
 		</member>
-		<member name="predict_input" type="Callable" setter="set_predict_input" getter="get_predict_input" default="Callable()">
+		<member name="predict_input" type="Callable" setter="set_predict_input" getter="get_predict_input">
 			Guesses input for an entity selected by [member NetwEntity.simulation] that this peer does not control. Relayed input replaces the guess. Unset callbacks and omitted properties repeat the newest relayed input, and zero before any arrives.
 			The returned [Dictionary] uses names declared with [method NetwPropertyConfig.input].
 			[codeblock lang=text]
@@ -265,28 +265,28 @@
 			[/csharp]
 			[/codeblocks]
 		</member>
-		<member name="reconcile_mode" type="int" setter="set_reconcile_mode" getter="get_reconcile_mode" enum="NetwPrediction.Reconcile" default="0">
+		<member name="reconcile_mode" type="int" setter="set_reconcile_mode" getter="get_reconcile_mode" enum="NetwPrediction.Reconcile">
 			Whether this entity is corrected alone or together with the entities its [member NetwEntity.simulation] selects.
 		</member>
-		<member name="recovery_policy" type="int" setter="set_recovery_policy" getter="get_recovery_policy" enum="NetwPrediction.RecoveryPolicy" default="4">
+		<member name="recovery_policy" type="int" setter="set_recovery_policy" getter="get_recovery_policy" enum="NetwPrediction.RecoveryPolicy">
 			How this entity is corrected. [method resolved_recovery_policy] returns the policy in use.
 		</member>
-		<member name="replay_buffer_depth" type="int" setter="set_replay_buffer_depth" getter="get_replay_buffer_depth" default="0">
+		<member name="replay_buffer_depth" type="int" setter="set_replay_buffer_depth" getter="get_replay_buffer_depth">
 			How many inputs the server keeps queued before running them, for an entity at [constant NetwSimulation.SCHEDULE_FRAME]. Each one adds a tick of latency, so leave it at [code]0[/code] unless you need it.
 		</member>
-		<member name="sensors" type="Dictionary" setter="set_sensors" getter="get_sensors" default="{}">
+		<member name="sensors" type="Dictionary" setter="set_sensors" getter="get_sensors">
 			Callables that sample the world this entity reads, by name. Each is called once before each step, and [method sensor] reads the sample back. A misprediction can then be blamed on the world.
 		</member>
-		<member name="sleeping" type="bool" setter="set_sleeping" getter="get_sleeping" default="false">
+		<member name="sleeping" type="bool" setter="set_sleeping" getter="get_sleeping">
 			Set it while the server's body is asleep. Corrections pause, so they do not wake it.
 		</member>
 		<member name="stats" type="NetwPredictStats" setter="" getter="get_stats">
 			This entity's prediction counters.
 		</member>
-		<member name="teleport_threshold" type="float" setter="set_teleport_threshold" getter="get_teleport_threshold" default="2.0">
+		<member name="teleport_threshold" type="float" setter="set_teleport_threshold" getter="get_teleport_threshold">
 			How large an error may be before a correction teleports the body, restoring every property including [method NetwPropertyConfig.teleport_only] ones. It applies to properties declared with [method NetwPropertyConfig.carry_along], and [method NetwPropertyConfig.teleport_at] overrides it per property. An entity with no such property teleports on every correction.
 		</member>
-		<member name="witness_contacts" type="Callable" setter="set_witness_contacts" getter="get_witness_contacts" default="Callable()">
+		<member name="witness_contacts" type="Callable" setter="set_witness_contacts" getter="get_witness_contacts">
 			Returns the colliders this peer's body touched in the step just solved. Set it so a misprediction can be blamed on a contact and [member breach_response] can take effect.
 		</member>
 	</members>

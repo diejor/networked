@@ -38,17 +38,17 @@ Properties
 .. table::
    :widths: auto
 
-   +-------------------------------------------------------+-------------------------------------------------------+-----------+
-   | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] | :ref:`entities<class_NetwPlayer_property_entities>`   | ``[]``    |
-   +-------------------------------------------------------+-------------------------------------------------------+-----------+
-   | :godot:`bool`                                         | :ref:`is_active<class_NetwPlayer_property_is_active>` | ``false`` |
-   +-------------------------------------------------------+-------------------------------------------------------+-----------+
-   | :godot:`int`                                          | :ref:`peer_id<class_NetwPlayer_property_peer_id>`     | ``0``     |
-   +-------------------------------------------------------+-------------------------------------------------------+-----------+
-   | :ref:`NetwScene<class_NetwScene>`                     | :ref:`scene<class_NetwPlayer_property_scene>`         |           |
-   +-------------------------------------------------------+-------------------------------------------------------+-----------+
-   | :godot:`StringName`                                   | :ref:`username<class_NetwPlayer_property_username>`   | ``&""``   |
-   +-------------------------------------------------------+-------------------------------------------------------+-----------+
+   +-------------------------------------------------------+-------------------------------------------------------+
+   | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] | :ref:`entities<class_NetwPlayer_property_entities>`   |
+   +-------------------------------------------------------+-------------------------------------------------------+
+   | :godot:`bool`                                         | :ref:`is_active<class_NetwPlayer_property_is_active>` |
+   +-------------------------------------------------------+-------------------------------------------------------+
+   | :godot:`int`                                          | :ref:`peer_id<class_NetwPlayer_property_peer_id>`     |
+   +-------------------------------------------------------+-------------------------------------------------------+
+   | :ref:`NetwScene<class_NetwScene>`                     | :ref:`scene<class_NetwPlayer_property_scene>`         |
+   +-------------------------------------------------------+-------------------------------------------------------+
+   | :godot:`StringName`                                   | :ref:`username<class_NetwPlayer_property_username>`   |
+   +-------------------------------------------------------+-------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -91,7 +91,7 @@ Property Descriptions
 
 .. rst-class:: classref-property
 
-:godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **entities** = ``[]`` :ref:`🔗<class_NetwPlayer_property_entities>`
+:godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **entities** :ref:`🔗<class_NetwPlayer_property_entities>`
 
 .. rst-class:: classref-property-setget
 
@@ -107,7 +107,7 @@ The entities spawned for this player with :ref:`Netw.spawn_player()<class_Netw_m
 
 .. rst-class:: classref-property
 
-:godot:`bool` **is_active** = ``false`` :ref:`🔗<class_NetwPlayer_property_is_active>`
+:godot:`bool` **is_active** :ref:`🔗<class_NetwPlayer_property_is_active>`
 
 .. rst-class:: classref-property-setget
 
@@ -123,7 +123,7 @@ The entities spawned for this player with :ref:`Netw.spawn_player()<class_Netw_m
 
 .. rst-class:: classref-property
 
-:godot:`int` **peer_id** = ``0`` :ref:`🔗<class_NetwPlayer_property_peer_id>`
+:godot:`int` **peer_id** :ref:`🔗<class_NetwPlayer_property_peer_id>`
 
 .. rst-class:: classref-property-setget
 
@@ -157,7 +157,7 @@ A client only knows about the scenes it receives.
 
 .. rst-class:: classref-property
 
-:godot:`StringName` **username** = ``&""`` :ref:`🔗<class_NetwPlayer_property_username>`
+:godot:`StringName` **username** :ref:`🔗<class_NetwPlayer_property_username>`
 
 .. rst-class:: classref-property-setget
 
