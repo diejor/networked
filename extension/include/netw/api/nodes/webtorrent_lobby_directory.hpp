@@ -17,23 +17,19 @@ protected:
     void _notification(int p_what);
 
 public:
+    WebTorrentLobbyDirectory();
+
     void set_trackers(const godot::PackedStringArray &p_trackers);
     godot::PackedStringArray get_trackers() const;
-    void set_list_interval(double p_seconds);
-    double get_list_interval() const;
 
     godot::StringName peer_class() override;
-    godot::String display_name() override;
-    Capability capabilities() override;
     void list_lobbies() override;
-    double list_interval() override;
     void stop_listing() override;
     void service_entered(NetwMultiplayer *p_api) override;
     void service_exiting(NetwMultiplayer *p_api) override;
 
 private:
     godot::PackedStringArray trackers;
-    double listing_interval = 10.0;
     connect::RoomBoard board;
     NetwMultiplayer *session = nullptr;
     double listed_check = 0.0;

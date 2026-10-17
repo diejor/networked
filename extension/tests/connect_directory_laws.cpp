@@ -374,6 +374,39 @@ TEST_CASE(
     invites() = InviteLog();
 }
 
+TEST_CASE(
+    "[Networked][Connect][Directory] invites from a social service need no "
+    "directory and reuse the endpoint at the same address"
+) {
+    Ref<NetwMultiplayer> core;
+    core.instantiate();
+    const Ref<netw::NetwConnection> connection = core->get_connection();
+    invites() = InviteLog();
+    connection->connect(StringName("invited"), callable_mp_static(&on_invited));
+    const StringName transport("ENetMultiplayerPeer");
+    const Ref<netw::NetwEndpoint> first = connection->invite(
+        transport, String("127.0.0.1:7000"), String("Ada")
+    );
+    REQUIRE(first.is_valid());
+    NETW_CHECK_EQ(invites().calls, 1);
+    CHECK(bool(invites().endpoint == first));
+    CHECK(bool(invites().from_name == String("Ada")));
+    CHECK(bool(first->get_address() == String("127.0.0.1:7000")));
+    CHECK(first->get_is_listed());
+    CHECK(bool(connection->invite(transport, first->get_address(), String())
+        == first));
+    NETW_CHECK_EQ(invites().calls, 2);
+    NETW_CHECK_EQ(int(connection->endpoints().size()), 1);
+    CHECK(connection->invite(transport, String(), String()).is_null());
+    CHECK(connection->invite(StringName("Missing"), String("1"), String())
+        .is_null());
+    NETW_CHECK_EQ(invites().calls, 2);
+    invites() = InviteLog();
+    core->embed_dispose();
+    core.unref();
+    CHECK(connection->invite(transport, String("1"), String()).is_null());
+}
+
 } // namespace TestNetwConnectDirectory
 
 #endif

@@ -110,6 +110,11 @@ public:
         const godot::Array &p_infos,
         int64_t p_directory
     );
+    godot::RID invite(
+        const godot::RID &p_transport,
+        const godot::String &p_address,
+        const godot::String &p_from_name
+    );
     void on_directory_invited(
         godot::Object *p_directory,
         const godot::String &p_address,

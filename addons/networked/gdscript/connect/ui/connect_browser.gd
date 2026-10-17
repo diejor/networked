@@ -1,7 +1,4 @@
 ## A server browser that lists, joins and hosts games for its session.
-##
-## [method _ready] is the whole wiring, and a game's own connect screen starts
-## by copying it.
 class_name ConnectBrowser
 extends Control
 
@@ -53,6 +50,7 @@ func _ready() -> void:
 	connection.progressed.connect(on_progressed)
 	connection.failed.connect(on_failed, CONNECT_DEFERRED)
 	connection.join_address_changed.connect(on_join_address_changed)
+	connection.invited.connect(_on_invited)
 	server_list.visibility_changed.connect(on_server_list_visibility_changed)
 	for endpoint in connection.endpoints:
 		on_endpoint_added(endpoint)
@@ -141,6 +139,14 @@ func on_server_list_visibility_changed() -> void:
 	connection.browsing = server_list.is_visible_in_tree()
 
 
+func _on_invited(endpoint: NetwEndpoint, _from_name: String) -> void:
+	on_row_selected(endpoint)
+	if session.is_online or not connection.join_schema().is_empty():
+		on_join_pressed()
+		return
+	join(endpoint, { }, [])
+
+
 func join(
 		endpoint: NetwEndpoint,
 		settings: Dictionary,
@@ -207,8 +213,12 @@ func on_join_popup_submitted(
 		player_name: String,
 		join_args: Array,
 ) -> void:
+	var endpoint := selected
+	if session.is_online:
+		await session.leave().wait()
+
 	username = player_name
-	join(selected, settings, join_args)
+	join(endpoint, settings, join_args)
 
 
 func on_join_direct_popup_submitted(

@@ -12,6 +12,8 @@ var join_args := ConnectFieldList.new()
 @onready var args_container: VBoxContainer = %ArgsContainer
 @onready var confirm_button: Button = %ConfirmButton
 @onready var cancel_button: Button = %CancelButton
+## Warns that joining leaves the current lobby.
+@onready var leave_warning: Label = %LeaveWarning
 
 
 func _ready() -> void:
@@ -25,6 +27,7 @@ func open(
 		endpoint: NetwEndpoint,
 		username: String,
 ) -> void:
+	leave_warning.visible = connection.state == NetwConnection.STATE_ONLINE
 	username_edit.text = username
 	settings.render_settings(
 		settings_container,

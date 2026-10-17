@@ -1,0 +1,21 @@
+{
+  "godotsteam": {
+    "version": "4.18.1",
+    "url": "https://codeberg.org/godotsteam/godotsteam/releases/download/v4.18.1-gde/godotsteam-4.18.1-gdextension-plugin-4.4.zip",
+    "sha256": "810b6125c3a835d466d13631da554cdda50761c5645b5a2f96a529b18d757df0",
+    "prefix": "addons/godotsteam/",
+    "destination": "addons/godotsteam",
+    "manifest": "godotsteam.gdextension",
+    "source": "https://codeberg.org/godotsteam/godotsteam/src/tag/v4.18.1-gde"
+  },
+  "webrtc": {
+    "version": "1.2.2-stable",
+    "url": "https://github.com/godotengine/webrtc-native/releases/download/1.2.2-stable/godot-extension-webrtc_native.zip",
+    "sha256": "98e9446921740d995bd9ca1be48798dc3c2ceed51e044a25ce18b3cff11f56e5",
+    "prefix": "addons/webrtc_native/",
+    "destination": "addons/webrtc",
+    "manifest": "webrtc.gdextension",
+    "archive_manifest": "webrtc_native.gdextension",
+    "source": "https://github.com/godotengine/webrtc-native/tree/1.2.2-stable"
+  }
+}

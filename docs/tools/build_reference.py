@@ -14,7 +14,6 @@ from pathlib import Path
 DOCS = Path(__file__).resolve().parent.parent
 ROOT = DOCS.parent
 CI = ROOT / "ci"
-MODULE_MOUNT = ROOT / "extension" / "thirdparty" / "godot" / "modules" / "networked"
 DOC_CLASSES = ROOT / "extension" / "doc_classes"
 
 XML_FLOOR = 500
@@ -29,23 +28,26 @@ def run(argv: list[str], *, cwd: Path, check: bool = True) -> int:
 
 
 @contextlib.contextmanager
-def mount_moved_aside():
-    """Take the engine's module mount out of the walk, then put it back."""
-    if not MODULE_MOUNT.exists():
-        yield
-        return
-    parked = MODULE_MOUNT.with_name("networked.doctool-parked")
-    if parked.exists():
-        shutil.rmtree(parked)
-    MODULE_MOUNT.rename(parked)
-    print("parked the module mount at %s" % parked)
+def ignored_inputs_parked():
+    parked = []
     try:
+        for path in ROOT.iterdir():
+            if path == DOCS or path.name.startswith("."):
+                continue
+            if not path.is_dir() or not (path / ".gdignore").is_file():
+                continue
+            hidden = path.with_name(".doctool-" + path.name)
+            if hidden.exists():
+                raise SystemExit("Restore %s before generating docs." % hidden)
+            path.rename(hidden)
+            parked.append((path, hidden))
         yield
     finally:
-        if MODULE_MOUNT.exists():
-            shutil.rmtree(MODULE_MOUNT)
-        parked.rename(MODULE_MOUNT)
-        print("restored the module mount")
+        for path, hidden in reversed(parked):
+            if path.exists():
+                shutil.copytree(path, hidden, dirs_exist_ok=True)
+                shutil.rmtree(path)
+            hidden.rename(path)
 
 
 def generate(godot: str, *, output: Path, keep_going: bool) -> None:
@@ -61,11 +63,15 @@ def generate(godot: str, *, output: Path, keep_going: bool) -> None:
 
     run([godot, "--headless", "--path", str(ROOT), "--import"], cwd=ROOT, check=False)
 
-    with mount_moved_aside():
+    with ignored_inputs_parked():
         run(
-            [godot, "--doctool", str(api), "--gdscript-docs", ".", "--headless", "--quit"],
+            [
+                godot, "--doctool", str(api), "--gdscript-docs", ".",
+                "--headless", "--quit", "--log-file",
+                str(ROOT / ".godot" / "doctool.log"),
+            ],
             cwd=ROOT,
-            check=False,
+            check=True,
         )
 
     written = sorted(api.glob("*.xml"))

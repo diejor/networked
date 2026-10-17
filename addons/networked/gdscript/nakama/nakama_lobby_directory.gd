@@ -118,6 +118,17 @@ var _hosted_match_id: String = ""
 var _session_bound: bool = false
 
 
+func _init() -> void:
+	display_name = "Nakama"
+	address_label = "Match ID"
+	address_help = "Paste the Nakama match id shared by the host."
+	can_host_here = NakamaWrapper.is_addon_present()
+	capabilities = (
+			LobbyDirectory.CAPABILITY_BROWSE
+			| LobbyDirectory.CAPABILITY_FRIEND_NAMES
+	)
+
+
 func _service_entered(_session: NetwSession) -> void:
 	_wrapper = NakamaWrapper.new()
 	if not NakamaWrapper.is_addon_present():
@@ -232,13 +243,6 @@ func _list_lobbies() -> void:
 	publish_lobbies(addresses, names, infos)
 
 
-func _capabilities() -> LobbyDirectory.Capability:
-	return (
-			LobbyDirectory.CAPABILITY_BROWSE
-			| LobbyDirectory.CAPABILITY_FRIEND_NAMES
-	)
-
-
 func _leave_lobby() -> void:
 	if _wrapper != null:
 		if not _hosted_match_id.is_empty():
@@ -252,24 +256,8 @@ func _peer_class() -> StringName:
 	return &"NakamaRelayPeer"
 
 
-func _display_name() -> String:
-	return "Nakama"
-
-
 func _is_available() -> bool:
 	return NakamaWrapper.is_addon_present()
-
-
-func _can_host_here() -> bool:
-	return NakamaWrapper.is_addon_present()
-
-
-func _address_label() -> String:
-	return "Match ID"
-
-
-func _address_help() -> String:
-	return "Paste the Nakama match id shared by the host."
 
 
 func _join_address() -> String:

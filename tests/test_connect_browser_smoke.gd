@@ -38,6 +38,20 @@ class SmallServer:
 		return info
 
 
+class TeamGame:
+	extends Node
+
+	var joined_team := 0
+
+
+	func _init() -> void:
+		Netw.configure_join(enter)
+
+
+	func enter(_player: NetwPlayer, team: int) -> void:
+		joined_team = team
+
+
 func before_test() -> void:
 	tree = MultiplayerViewport.new()
 	add_child(tree)
@@ -215,4 +229,91 @@ func test_a_join_through_the_browser_goes_online_and_hides_the_list() -> void:
 	assert_int(connection.state).is_equal(NetwConnection.STATE_ONLINE)
 	assert_bool(browser.server_list.visible).is_false()
 	assert_bool(browser.connecting_popup.visible).is_false()
+	await EnetTestSupport.stop_tree(host.tree)
+
+
+func test_an_invite_joins_with_the_browser_player_name_and_defaults() -> void:
+	var host := await EnetTestSupport.start_host(self)
+	browser.username = "InvitedPlayer"
+	connection.set_defaults(&"ENetMultiplayerPeer", { port = host.port })
+
+	connection.invite(&"ENetMultiplayerPeer", "127.0.0.1", "Host")
+
+	assert_int(
+		await EnetTestSupport.await_until(
+			tree,
+			func() -> bool: return browser.session.local_player != null,
+		),
+	).is_equal(OK)
+	assert_str(String(browser.session.local_player.username)) \
+			.is_equal("InvitedPlayer")
+	assert_bool(browser.server_list.visible).is_false()
+	await EnetTestSupport.stop_tree(host.tree)
+
+
+func test_an_invite_requests_declared_join_inputs() -> void:
+	var server := TeamGame.new()
+	var host := await EnetTestSupport.start_host(self, server)
+	tree.add_child(TeamGame.new())
+	await get_tree().process_frame
+
+	var endpoint := connection.invite(
+		&"ENetMultiplayerPeer",
+		"127.0.0.1:%d" % host.port,
+		"Host",
+	)
+
+	assert_object(browser.selected).is_same(endpoint)
+	assert_bool(browser.join_popup.visible).is_true()
+	assert_int(connection.state).is_equal(NetwConnection.STATE_OFFLINE)
+	assert_int(browser.join_popup.join_args.controls.size()).is_equal(1)
+	(browser.join_popup.join_args.controls[0] as SpinBox).value = 2
+	browser.join_popup.confirm_button.pressed.emit()
+
+	assert_int(
+		await EnetTestSupport.await_until(
+			tree,
+			func() -> bool: return browser.session.local_player != null,
+		),
+	).is_equal(OK)
+	assert_int(server.joined_team).is_equal(2)
+	await EnetTestSupport.stop_tree(host.tree)
+
+
+func test_an_invite_leaves_the_current_lobby_only_after_confirmation() -> void:
+	browser.host(&"LocalMultiplayerPeer", { }, NetwServerInfo.new(), [])
+	assert_int(await EnetTestSupport.await_online(tree)).is_equal(OK)
+	var original := tree.api.multiplayer_peer
+	var host := await EnetTestSupport.start_host(self)
+
+	connection.invite(
+		&"ENetMultiplayerPeer",
+		"127.0.0.1:%d" % host.port,
+		"Host",
+	)
+
+	assert_bool(browser.join_popup.visible).is_true()
+	assert_bool(browser.join_popup.leave_warning.visible).is_true()
+	assert_object(tree.api.multiplayer_peer).is_same(original)
+	browser.join_popup.cancel_button.pressed.emit()
+	assert_bool(browser.join_popup.visible).is_false()
+	assert_object(tree.api.multiplayer_peer).is_same(original)
+
+	connection.invite(
+		&"ENetMultiplayerPeer",
+		"127.0.0.1:%d" % host.port,
+		"Host",
+	)
+	browser.join_popup.confirm_button.pressed.emit()
+
+	assert_int(
+		await EnetTestSupport.await_until(
+			tree,
+			func() -> bool:
+				return tree.api.multiplayer_peer is ENetMultiplayerPeer \
+						and browser.session.local_player != null,
+		),
+	).is_equal(OK)
+	assert_int(connection.state).is_equal(NetwConnection.STATE_ONLINE)
+	assert_bool(browser.server_list.visible).is_false()
 	await EnetTestSupport.stop_tree(host.tree)

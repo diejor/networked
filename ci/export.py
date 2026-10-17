@@ -403,12 +403,16 @@ def smoke_web(directory: Path, *, seconds: float) -> dict:
             thread.start()
 
             deadline = time.time() + seconds
+            ready_at: float | None = None
             while time.time() < deadline:
                 console = [line for line in log_lines if "INFO:CONSOLE" in line and "chrome-extension://" not in line]
                 has_banner = any("Godot Engine v" in line for line in console)
                 has_config = any("Build configuration:" in line for line in console)
                 if has_banner and has_config:
-                    break
+                    if ready_at is None:
+                        ready_at = time.time()
+                    if time.time() - ready_at >= 3.0:
+                        break
                 if proc.poll() is not None and not thread.is_alive():
                     break
                 time.sleep(0.1)

@@ -1305,29 +1305,47 @@ void ConnectCore::on_directory_listed(
     }
 }
 
-void ConnectCore::on_directory_invited(
-    Object *p_directory,
+RID ConnectCore::invite(
+    const RID &p_transport,
     const String &p_address,
     const String &p_from_name
 ) {
-    const StringName named
-        = DirectoryTransport::peer_class_of_directory(p_directory);
-    const RID transport = session->transport_find(named);
-    if (!transport.is_valid()) {
-        return;
+    const StringName named = session->transport_class_of(p_transport);
+    if (named.is_empty() || p_address.is_empty()) {
+        return RID();
+    }
+    ObjectID source;
+    for (const ObjectID &directory : session->discovery_directories()) {
+        if (DirectoryTransport::peer_class_of_directory(
+                gd::object_of(directory)
+            ) == named) {
+            source = directory;
+            break;
+        }
     }
     bool minted = false;
     const RID target = rows.invite(
-        named,
-        gd::instance_id(p_directory),
-        transport,
-        p_address,
-        minted
+        named, source, p_transport, p_address, minted
     );
     if (minted) {
         session->endpoint_emit_added(target);
     }
     session->connection_emit_invited(target, p_from_name);
+    return target;
+}
+
+void ConnectCore::on_directory_invited(
+    Object *p_directory,
+    const String &p_address,
+    const String &p_from_name
+) {
+    invite(
+        session->transport_find(
+            DirectoryTransport::peer_class_of_directory(p_directory)
+        ),
+        p_address,
+        p_from_name
+    );
 }
 
 void ConnectCore::forget_directory(ObjectID p_directory) {

@@ -4,6 +4,7 @@
 #include "godot/class_db.hpp"
 #include "netw/api/context.hpp"
 #include "netw/api/netw_multiplayer.hpp"
+#include "netw/connect/core.hpp"
 #include "netw/connect/transport.hpp"
 
 using namespace godot;
@@ -369,6 +370,20 @@ Ref<NetwEndpoint> NetwConnection::add(
     );
 }
 
+Ref<NetwEndpoint> NetwConnection::invite(
+    const Variant &p_transport,
+    const String &p_address,
+    const String &p_from_name
+) {
+    NetwMultiplayer *api = session();
+    if (api == nullptr) {
+        return Ref<NetwEndpoint>();
+    }
+    return remember_endpoint(api->connect_plane().invite(
+        resolve_transport(p_transport), p_address, p_from_name
+    ));
+}
+
 Ref<NetwEndpoint> NetwConnection::find(
     const Variant &p_transport,
     const String &p_address
@@ -501,6 +516,11 @@ void NetwConnection::_bind_methods() {
     ClassDB::bind_method(
         D_METHOD("add", "transport", "address", "display_name"),
         &NetwConnection::add,
+        DEFVAL(String())
+    );
+    ClassDB::bind_method(
+        D_METHOD("invite", "transport", "address", "from_name"),
+        &NetwConnection::invite,
         DEFVAL(String())
     );
     ClassDB::bind_method(

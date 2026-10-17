@@ -75,6 +75,10 @@ def scan_addon_for_class_names(addon_dir: str) -> tuple[set[str], set[str]]:
             except Exception:
                 continue
 
+            if re.search(
+                r"^extends Editor(?:Export)?Plugin\b", content, re.MULTILINE
+            ):
+                continue
             matches = CLASS_NAME_RE.findall(content)
             if matches:
                 for name in matches:
@@ -115,7 +119,7 @@ def _method_has_doc(elem: ET.Element) -> bool:
 
 
 def filter_private_elements(root: ET.Element) -> None:
-    """Remove private _-prefixed members, except documented _-methods."""
+    """Keep published members and documented overrides."""
     parent_tags = [
         "members", "constructors", "methods", "operators",
         "signals", "constants", "annotations",
@@ -139,7 +143,7 @@ def filter_private_elements(root: ET.Element) -> None:
                 parent.remove(elem)
 
 
-DEFAULT_ADDONS = ("networked", "networked_test")
+DEFAULT_ADDONS = ("networked", "networked_steam", "networked_test")
 
 
 def main() -> None:

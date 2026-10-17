@@ -3147,7 +3147,7 @@ String NetwMultiplayer::endpoint_source(const RID &p_endpoint) const {
     }
     LobbyDirectory *found
         = Object::cast_to<LobbyDirectory>(gd::object_of(held->source));
-    return found == nullptr ? String() : found->display_name();
+    return found == nullptr ? String() : found->get_display_name();
 }
 
 Error NetwMultiplayer::endpoint_set_param(

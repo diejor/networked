@@ -37,6 +37,8 @@ Properties
    +-------------------------------------------------+------------------------------------------------------------------------+---------------+
    | :godot:`Button`                                 | :ref:`cancel_button<class_JoinPopup_property_cancel_button>`           | ``<unknown>`` |
    +-------------------------------------------------+------------------------------------------------------------------------+---------------+
+   | :godot:`Label`                                  | :ref:`leave_warning<class_JoinPopup_property_leave_warning>`           | ``<unknown>`` |
+   +-------------------------------------------------+------------------------------------------------------------------------+---------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -173,6 +175,18 @@ Property Descriptions
 .. container:: contribute
 
 	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_JoinPopup_property_leave_warning:
+
+.. rst-class:: classref-property
+
+:godot:`Label` **leave_warning** = ``<unknown>`` :ref:`🔗<class_JoinPopup_property_leave_warning>`
+
+Warns that joining leaves the current lobby.
 
 .. rst-class:: classref-section-separator
 

@@ -35,6 +35,12 @@ int64_t now_usec() {
 
 } // namespace
 
+LANLobbyDirectory::LANLobbyDirectory() {
+    set_display_name(String("LAN"));
+    set_capabilities(CAPABILITY_BROWSE);
+    set_list_interval(3.0);
+}
+
 void LANLobbyDirectory::set_port(int64_t p_port) {
     if (p_port < 1 || p_port > 65535) {
         NETW_WARN(
@@ -69,32 +75,12 @@ int64_t LANLobbyDirectory::get_port_count() const {
     return port_count;
 }
 
-void LANLobbyDirectory::set_list_interval(double p_seconds) {
-    listing_interval = p_seconds;
-}
-
-double LANLobbyDirectory::get_list_interval() const {
-    return listing_interval;
-}
-
-double LANLobbyDirectory::list_interval() {
-    return listing_interval;
-}
-
 void LANLobbyDirectory::stop_listing() {
     close_browse();
 }
 
 StringName LANLobbyDirectory::peer_class() {
     return StringName("ENetMultiplayerPeer");
-}
-
-String LANLobbyDirectory::display_name() {
-    return String("LAN");
-}
-
-LobbyDirectory::Capability LANLobbyDirectory::capabilities() {
-    return CAPABILITY_BROWSE;
 }
 
 bool LANLobbyDirectory::is_available() {
@@ -282,24 +268,6 @@ void LANLobbyDirectory::_bind_methods() {
         PropertyInfo(Variant::INT, "port_count", PROPERTY_HINT_RANGE, "1,64"),
         "set_port_count",
         "get_port_count"
-    );
-    ClassDB::bind_method(
-        D_METHOD("set_list_interval", "seconds"),
-        &LANLobbyDirectory::set_list_interval
-    );
-    ClassDB::bind_method(
-        D_METHOD("get_list_interval"),
-        &LANLobbyDirectory::get_list_interval
-    );
-    ADD_PROPERTY(
-        PropertyInfo(
-            Variant::FLOAT,
-            "list_interval",
-            PROPERTY_HINT_RANGE,
-            "0,60,0.1,or_greater,suffix:s"
-        ),
-        "set_list_interval",
-        "get_list_interval"
     );
 }
 

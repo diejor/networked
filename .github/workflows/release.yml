@@ -207,6 +207,7 @@ jobs:
                 name: tag,
                 draft: true,
                 generate_release_notes: true,
+                body: "Includes GodotSteam and native WebRTC for desktop. Their licenses and source links are in each addon's SOURCES.txt and license files.",
               })).data;
             }
             const present = new Set(

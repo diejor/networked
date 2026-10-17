@@ -8,6 +8,11 @@
 		[codeblock]
 		extends LobbyDirectory
 
+		func _init() -&gt; void:
+		    display_name = "Rooms"
+		    address_label = "Room ID"
+		    capabilities = CAPABILITY_BROWSE
+
 		func _peer_class() -&gt; StringName:
 		    return &amp;"RoomMultiplayerPeer"
 
@@ -35,70 +40,22 @@
 		func _leave_lobby() -&gt; void:
 		    Rooms.leave()
 		[/codeblock]
-		A directory whose peer class already has a transport only lists lobbies, and joining one goes through that transport. [WebTorrentLobbyDirectory] and [LANLobbyDirectory] work this way.
+		A directory whose peer class already has a transport only lists lobbies, and joining one goes through that transport. [WebTorrentLobbyDirectory] and [LANLobbyDirectory] work this way. Use [SteamLobbyDirectory] for Steam lobbies.
 	</description>
 	<tutorials>
 	</tutorials>
 	<methods>
-		<method name="_accepts_empty_address" qualifiers="virtual">
-			<return type="bool" />
-			<description>
-				Return [code]true[/code] when an empty address is valid. [code]false[/code] by default.
-			</description>
-		</method>
-		<method name="_address_help" qualifiers="virtual">
-			<return type="String" />
-			<description>
-				Return a sentence to show under the address input, such as where to find a lobby id. Empty by default.
-			</description>
-		</method>
-		<method name="_address_label" qualifiers="virtual">
-			<return type="String" />
-			<description>
-				Return the title of the address input, such as [code]"Lobby ID"[/code]. [code]"Lobby"[/code] by default.
-			</description>
-		</method>
-		<method name="_address_placeholder" qualifiers="virtual">
-			<return type="String" />
-			<description>
-				Return the placeholder text of the address input. Empty by default.
-			</description>
-		</method>
-		<method name="_can_host_here" qualifiers="virtual">
-			<return type="bool" />
-			<description>
-				Return [code]false[/code] when this build can only join lobbies. [code]true[/code] by default.
-			</description>
-		</method>
-		<method name="_can_probe" qualifiers="virtual">
-			<return type="bool" />
-			<description>
-				Return [code]true[/code] when a lobby can be checked without joining it. [code]false[/code] by default.
-			</description>
-		</method>
-		<method name="_capabilities" qualifiers="virtual">
-			<return type="int" enum="LobbyDirectory.Capability" />
-			<description>
-				Return the [enum Capability] flags this directory supports. None by default.
-			</description>
-		</method>
 		<method name="_client_settings" qualifiers="virtual">
 			<return type="Dictionary" />
 			<description>
 				Return the settings a join form asks for, with their default values. They are passed to [method _join_lobby]. Empty by default.
 			</description>
 		</method>
-		<method name="_display_name" qualifiers="virtual">
-			<return type="String" />
-			<description>
-				Return the name shown in a server browser. [method _peer_class] by default.
-			</description>
-		</method>
 		<method name="_host_lobby" qualifiers="virtual">
 			<return type="void" />
 			<param index="0" name="settings" type="Dictionary" />
 			<description>
-				Create a lobby, then call [method deliver] with the host [MultiplayerPeer], or [method fail]. [param settings] holds the settings from [method _host_settings]. [code]name[/code], [code]max_players[/code] and [code]visibility[/code], a [enum NetwServerInfo.Visibility], are common.
+				Create a lobby, then call [method deliver] with the host [MultiplayerPeer], or [method fail]. [param settings] holds the defaults from [method _host_settings] and the values supplied to [method NetwConnection.host].
 			</description>
 		</method>
 		<method name="_host_settings" qualifiers="virtual">
@@ -132,12 +89,6 @@
 				Leave the current lobby, if any. Called when the match ends.
 			</description>
 		</method>
-		<method name="_list_interval" qualifiers="virtual">
-			<return type="float" />
-			<description>
-				Return the seconds between [method _list_lobbies] calls while [member NetwConnection.browsing] is [code]true[/code]. [code]0[/code], the default, lists once each time browsing starts.
-			</description>
-		</method>
 		<method name="_list_lobbies" qualifiers="virtual">
 			<return type="void" />
 			<description>
@@ -169,12 +120,6 @@
 				Close whatever a listing keeps open. Called when [member NetwConnection.browsing] turns [code]false[/code]. Does nothing by default.
 			</description>
 		</method>
-		<method name="_timeout_hint" qualifiers="virtual">
-			<return type="float" />
-			<description>
-				Return how many seconds a request may take before it fails with [constant @GlobalScope.ERR_TIMEOUT].
-			</description>
-		</method>
 		<method name="deliver">
 			<return type="void" />
 			<param index="0" name="peer" type="MultiplayerPeer" />
@@ -195,7 +140,7 @@
 			<param index="0" name="address" type="String" />
 			<param index="1" name="from_name" type="String" />
 			<description>
-				Reports that [param from_name] invited the player to the lobby at [param address], which arrives as [signal NetwConnection.invited].
+				Calls [method NetwConnection.invite] for this directory's [MultiplayerPeer] class and emits [signal NetwConnection.invited].
 			</description>
 		</method>
 		<method name="local_member_name_default" qualifiers="static">
@@ -224,10 +169,42 @@
 			<return type="bool" />
 			<param index="0" name="capability" type="int" enum="LobbyDirectory.Capability" />
 			<description>
-				Returns [code]true[/code] when [method _capabilities] includes [param capability].
+				Returns [code]true[/code] when [member capabilities] includes [param capability].
 			</description>
 		</method>
 	</methods>
+	<members>
+		<member name="display_name" type="String" setter="set_display_name" getter="get_display_name">
+			The name shown in the server browser. An empty value uses [method _peer_class].
+		</member>
+		<member name="address_label" type="String" setter="set_address_label" getter="get_address_label">
+			The label of the address input.
+		</member>
+		<member name="address_placeholder" type="String" setter="set_address_placeholder" getter="get_address_placeholder">
+			The placeholder of the address input.
+		</member>
+		<member name="address_help" type="String" setter="set_address_help" getter="get_address_help">
+			Help shown under the address input.
+		</member>
+		<member name="accepts_empty_address" type="bool" setter="set_accepts_empty_address" getter="get_accepts_empty_address">
+			Whether joining accepts an empty address.
+		</member>
+		<member name="can_host_here" type="bool" setter="set_can_host_here" getter="get_can_host_here">
+			Whether this build can host lobbies.
+		</member>
+		<member name="can_probe" type="bool" setter="set_can_probe" getter="get_can_probe">
+			Whether a lobby can be checked without joining it.
+		</member>
+		<member name="timeout_hint" type="float" setter="set_timeout_hint" getter="get_timeout_hint">
+			Seconds before a host or join request fails with [constant @GlobalScope.ERR_TIMEOUT].
+		</member>
+		<member name="list_interval" type="float" setter="set_list_interval" getter="get_list_interval">
+			Seconds between [method _list_lobbies] calls while [member NetwConnection.browsing] is enabled. Zero lists once when browsing starts.
+		</member>
+		<member name="capabilities" type="int" setter="set_capabilities" getter="get_capabilities">
+			The [enum Capability] flags this directory supports.
+		</member>
+	</members>
 	<signals>
 		<signal name="lobby_failed">
 			<param index="0" name="error" type="int" enum="Error" />
@@ -253,7 +230,7 @@
 		<signal name="provider_unavailable">
 			<param index="0" name="reason" type="String" />
 			<description>
-				Emitted when the service cannot be used at all.
+				Emitted when the service cannot start. [param reason] tells the player how to make it available.
 			</description>
 		</signal>
 	</signals>

@@ -14,13 +14,6 @@ ConnectBrowser
 
 A server browser that lists, joins and hosts games for its session.
 
-.. rst-class:: classref-introduction-group
-
-Description
------------
-
-:godot:`Control._ready() <Control#class_Control_private_method__ready>` is the whole wiring, and a game's own connect screen starts by copying it.
-
 .. rst-class:: classref-reftable-group
 
 Properties

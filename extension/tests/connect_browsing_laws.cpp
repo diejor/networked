@@ -145,7 +145,7 @@ TEST_CASE(
     "never while browsing is off"
 ) {
     Bench bench;
-    bench.directory->interval = 1.0;
+    bench.directory->set_list_interval(1.0);
     const Ref<NetwConnection> connection = bench.connection();
 
     bench.poll(5.0);
@@ -167,7 +167,7 @@ TEST_CASE(
     bench.poll(5.0);
     NETW_CHECK_EQ(bench.directory->browse_calls, 3);
 
-    bench.directory->interval = 0.0;
+    bench.directory->set_list_interval(0.0);
     connection->set_browsing(true);
     bench.poll(5.0);
     NETW_CHECK_EQ(bench.directory->browse_calls, 4);

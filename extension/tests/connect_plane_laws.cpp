@@ -72,11 +72,12 @@ netw::connect::Transport *make_sourced() {
 
 class SourcedDirectory : public netw::LobbyDirectory {
 public:
+    SourcedDirectory() {
+        set_display_name(godot::String("the directory"));
+    }
+
     StringName peer_class() override {
         return StringName("SourcedDirectoryPeer");
-    }
-    String display_name() override {
-        return String("the directory");
     }
     void join_lobby(const String &) override {
     }

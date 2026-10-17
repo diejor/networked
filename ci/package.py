@@ -27,6 +27,7 @@ from common import (
     write_json,
 )
 from matrix import Cell, load_catalog, resolve
+import vendor_extensions
 
 ADDON = Path("addons") / "networked"
 BIN = ADDON / "bin"
@@ -36,7 +37,7 @@ MANIFEST_NAME = "networked.gdextension"
 def tracked_payload() -> list[Path]:
     """Every addon file the repository actually carries, as a closed list."""
     completed = run(
-        ["git", "ls-files", "-z", "--", str(ADDON)],
+        ["git", "ls-files", "-z", "--", str(ADDON), "addons/networked_steam"],
         capture=True,
         timeout=120,
     )
@@ -267,7 +268,20 @@ def assemble(
         "bytes": shipped.stat().st_size,
     }
 
-    return {"records": records, "payload": payload, "libraries": sorted(libraries)}
+    vendors = vendor_extensions.place(stage_root, stage_root.parent / "vendor-cache")
+    for directory in ("addons/godotsteam", "addons/webrtc"):
+        for entry in sorted((stage_root / directory).rglob("*")):
+            if entry.is_file():
+                payload[entry.relative_to(stage_root).as_posix()] = {
+                    "sha256": digest_of(entry),
+                    "bytes": entry.stat().st_size,
+                }
+    return {
+        "records": records,
+        "payload": payload,
+        "libraries": sorted(libraries),
+        "vendors": vendors,
+    }
 
 
 def deploy(cells: list[Cell], staging: Path, bin_dir: Path, *, expect_sha: str | None) -> list[str]:
@@ -317,6 +331,7 @@ def release_manifest(
             for cell in cells
         ],
         "libraries": assembled["libraries"],
+        "vendors": assembled["vendors"],
         "payload": assembled["payload"],
         "unqualified": unqualified,
     }

@@ -32,6 +32,7 @@
 		[/codeblock]
 		[b]Rows[/b]
 		Each row of [member endpoints] is a [NetwEndpoint]. A [LobbyDirectory] lists its rows while [member browsing] is [code]true[/code], and [method add] lists a server the game already knows.
+		[method invite] records an invitation from any service. [signal invited] carries the [NetwEndpoint] a player can join.
 		[b]Connecting[/b]
 		[method join] and [method host] create the peer, assign it, and settle their [NetwPromise] once the session is online. A failure arrives once through [signal failed], and a player the server refuses arrives through [signal NetwSession.join_failed] instead.
 		[b]Hosting[/b]
@@ -128,6 +129,15 @@
 			<description>
 				Settles with [constant @GlobalScope.ERR_ALREADY_IN_USE] while the session is online.
 				Invalid [NetwSessionConfig], [NetwClockConfig] or [NetwLagCompensationConfig] settings reject the promise before a peer is created.
+			</description>
+		</method>
+		<method name="invite">
+			<return type="NetwEndpoint" />
+			<param index="0" name="transport" type="Variant" />
+			<param index="1" name="address" type="String" />
+			<param index="2" name="from_name" type="String" default="&quot;&quot;" />
+			<description>
+				Keeps a joinable [NetwEndpoint] at [param address] and emits [signal invited] with [param from_name]. Returns [code]null[/code] if [param transport] is unavailable or the address is empty.
 			</description>
 		</method>
 		<method name="join">

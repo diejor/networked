@@ -28,6 +28,13 @@ theme_override_constants/separation = 8
 layout_mode = 2
 text = "Join server"
 
+[node name="LeaveWarning" type="Label" parent="Margin/VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+text = "Joining will leave your current lobby."
+autowrap_mode = 2
+
 [node name="UsernameRow" type="HBoxContainer" parent="Margin/VBox"]
 layout_mode = 2
 

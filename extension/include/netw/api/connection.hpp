@@ -93,6 +93,11 @@ public:
         const godot::String &p_address,
         const godot::String &p_display_name
     );
+    godot::Ref<NetwEndpoint> invite(
+        const godot::Variant &p_transport,
+        const godot::String &p_address,
+        const godot::String &p_from_name
+    );
     godot::Ref<NetwEndpoint> find(
         const godot::Variant &p_transport,
         const godot::String &p_address

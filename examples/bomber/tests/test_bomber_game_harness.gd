@@ -11,6 +11,29 @@ func before_test() -> void:
 	await game.setup()
 
 
+func test_an_accepted_invite_joins_the_host() -> void:
+	var host := await game.add_host("host", false)
+	var guest := MultiplayerViewport.new()
+	guest.add_child(MAIN.instantiate())
+	add_child(guest)
+	var session: NetwSession = Netw.session(guest)
+	await get_tree().process_frame
+
+	session.connection.invite(&"LocalMultiplayerPeer", "local", "host")
+	for i in 120:
+		if session.local_player != null:
+			break
+		await game.sync_ticks(1)
+
+	assert_bool(session.is_online).is_true()
+	assert_object(session.local_player).is_not_null()
+	assert_int(host.session.players.size()).is_equal(2)
+
+	await session.leave().wait()
+	guest.queue_free()
+	await get_tree().process_frame
+
+
 func test_client_moves_and_drops_a_bomb_every_peer_sees() -> void:
 	var host := await game.add_host("host", false)
 	var client := await game.add_client("client", false)

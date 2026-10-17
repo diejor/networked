@@ -36,7 +36,7 @@ StringName DirectoryTransport::peer_class() const {
 
 String DirectoryTransport::display_name() const {
     netw::LobbyDirectory *found = reached();
-    return found == nullptr ? String() : found->display_name();
+    return found == nullptr ? String() : found->get_display_name();
 }
 
 bool DirectoryTransport::is_available() const {
@@ -46,12 +46,12 @@ bool DirectoryTransport::is_available() const {
 
 bool DirectoryTransport::can_host_here() const {
     netw::LobbyDirectory *found = reached();
-    return found == nullptr || found->can_host_here();
+    return found == nullptr || found->get_can_host_here();
 }
 
 bool DirectoryTransport::can_probe() const {
     netw::LobbyDirectory *found = reached();
-    return found != nullptr && found->can_probe();
+    return found != nullptr && found->get_can_probe();
 }
 
 bool DirectoryTransport::can_browse() const {
@@ -60,22 +60,22 @@ bool DirectoryTransport::can_browse() const {
 
 String DirectoryTransport::address_label() const {
     netw::LobbyDirectory *found = reached();
-    return found == nullptr ? String("Lobby") : found->address_label();
+    return found == nullptr ? String("Lobby") : found->get_address_label();
 }
 
 String DirectoryTransport::address_placeholder() const {
     netw::LobbyDirectory *found = reached();
-    return found == nullptr ? String() : found->address_placeholder();
+    return found == nullptr ? String() : found->get_address_placeholder();
 }
 
 String DirectoryTransport::address_help() const {
     netw::LobbyDirectory *found = reached();
-    return found == nullptr ? String() : found->address_help();
+    return found == nullptr ? String() : found->get_address_help();
 }
 
 bool DirectoryTransport::accepts_empty_address() const {
     netw::LobbyDirectory *found = reached();
-    return found != nullptr && found->accepts_empty_address();
+    return found != nullptr && found->get_accepts_empty_address();
 }
 
 Dictionary DirectoryTransport::host_settings() const {
@@ -114,7 +114,7 @@ void DirectoryTransport::browse() {
 
 double DirectoryTransport::list_interval() const {
     netw::LobbyDirectory *found = reached();
-    return found == nullptr ? 0.0 : found->list_interval();
+    return found == nullptr ? 0.0 : found->get_list_interval();
 }
 
 String DirectoryTransport::join_address() const {
@@ -124,7 +124,7 @@ String DirectoryTransport::join_address() const {
 
 double DirectoryTransport::timeout_hint() const {
     netw::LobbyDirectory *found = reached();
-    return found == nullptr ? 20.0 : found->timeout_hint();
+    return found == nullptr ? 20.0 : found->get_timeout_hint();
 }
 
 void DirectoryTransport::close() {

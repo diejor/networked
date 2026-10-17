@@ -88,7 +88,11 @@ CONSUMER_PROJECT = """config_version=5
 [application]
 
 config/name="netw-clean-consumer"
-config/features=PackedStringArray("4.4")
+config/features=PackedStringArray("4.7")
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/networked/plugin.cfg", "res://addons/networked_steam/plugin.cfg")
 """
 
 CONSUMER_PROBE = """extends SceneTree
@@ -100,9 +104,20 @@ func _init() -> void:
 \tfor name in wanted:
 \t\tif not ClassDB.class_exists(name):
 \t\t\tmissing.append(name)
+\tfor path: String in [
+\t\t"res://addons/godotsteam/godotsteam.gdextension",
+\t\t"res://addons/webrtc/webrtc.gdextension",
+\t]:
+\t\tvar manifest := ConfigFile.new()
+\t\tif manifest.load(path) != OK:
+\t\t\tmissing.append(path)
+\tvar connection := WebRTCPeerConnection.new()
+\tif connection.initialize({"iceServers": []}) != OK:
+\t\tmissing.append("WebRTC initialization")
+\tconnection.close()
 \tvar made: Object = null
 \tif missing.is_empty():
-\t\tmade = ClassDB.instantiate(wanted[0])
+\t\tmade = ClassDB.instantiate("NetwBitStream")
 \tprint("CONSUMER found=%%d missing=%%s instantiated=%%s"
 \t\t%% [wanted.size() - missing.size(), missing, made != null])
 \tquit(0 if missing.is_empty() and made != null else 1)
@@ -211,6 +226,8 @@ def lane_classes(godot: str, *, timeout: float) -> int:
 
 def lane_consumer(godot: str, *, archive: Path, workspace: Path, timeout: float) -> int:
     """Install the release zip into an empty project and load what it published."""
+    archive = archive.resolve()
+    workspace = workspace.resolve()
     if not archive.is_file():
         raise fail("no release archive at %s" % archive)
     if workspace.exists():
@@ -222,7 +239,11 @@ def lane_consumer(godot: str, *, archive: Path, workspace: Path, timeout: float)
         raise fail("%s unpacked no addons/networked" % archive.name)
     (workspace / "project.godot").write_text(CONSUMER_PROJECT, encoding="utf-8")
 
-    names = ", ".join('"%s"' % name for name in PROBE_CLASSES)
+    classes = (
+        *PROBE_CLASSES, "NetwBitStream", "Steam", "SteamMultiplayerPeer",
+        "WebRTCLibPeerConnection",
+    )
+    names = ", ".join('"%s"' % name for name in classes)
     probe = workspace / "probe.gd"
     probe.write_text(CONSUMER_PROBE % names, encoding="utf-8")
 

@@ -27,6 +27,11 @@ A lobby directory is a :ref:`NetwService<class_NetwService>` that implements :re
 
     extends LobbyDirectory
 
+    func _init() -> void:
+        display_name = "Rooms"
+        address_label = "Room ID"
+        capabilities = CAPABILITY_BROWSE
+
     func _peer_class() -> StringName:
         return &"RoomMultiplayerPeer"
 
@@ -54,7 +59,37 @@ A lobby directory is a :ref:`NetwService<class_NetwService>` that implements :re
     func _leave_lobby() -> void:
         Rooms.leave()
 
-\ A directory whose peer class already has a transport only lists lobbies, and joining one goes through that transport. :ref:`WebTorrentLobbyDirectory<class_WebTorrentLobbyDirectory>` and :ref:`LANLobbyDirectory<class_LANLobbyDirectory>` work this way.
+\ A directory whose peer class already has a transport only lists lobbies, and joining one goes through that transport. :ref:`WebTorrentLobbyDirectory<class_WebTorrentLobbyDirectory>` and :ref:`LANLobbyDirectory<class_LANLobbyDirectory>` work this way. Use :ref:`SteamLobbyDirectory<class_SteamLobbyDirectory>` for Steam lobbies.
+
+.. rst-class:: classref-reftable-group
+
+Properties
+----------
+
+.. table::
+   :widths: auto
+
+   +-----------------+-----------------------------------------------------------------------------------+
+   | :godot:`String` | :ref:`display_name<class_LobbyDirectory_property_display_name>`                   |
+   +-----------------+-----------------------------------------------------------------------------------+
+   | :godot:`String` | :ref:`address_label<class_LobbyDirectory_property_address_label>`                 |
+   +-----------------+-----------------------------------------------------------------------------------+
+   | :godot:`String` | :ref:`address_placeholder<class_LobbyDirectory_property_address_placeholder>`     |
+   +-----------------+-----------------------------------------------------------------------------------+
+   | :godot:`String` | :ref:`address_help<class_LobbyDirectory_property_address_help>`                   |
+   +-----------------+-----------------------------------------------------------------------------------+
+   | :godot:`bool`   | :ref:`accepts_empty_address<class_LobbyDirectory_property_accepts_empty_address>` |
+   +-----------------+-----------------------------------------------------------------------------------+
+   | :godot:`bool`   | :ref:`can_host_here<class_LobbyDirectory_property_can_host_here>`                 |
+   +-----------------+-----------------------------------------------------------------------------------+
+   | :godot:`bool`   | :ref:`can_probe<class_LobbyDirectory_property_can_probe>`                         |
+   +-----------------+-----------------------------------------------------------------------------------+
+   | :godot:`float`  | :ref:`timeout_hint<class_LobbyDirectory_property_timeout_hint>`                   |
+   +-----------------+-----------------------------------------------------------------------------------+
+   | :godot:`float`  | :ref:`list_interval<class_LobbyDirectory_property_list_interval>`                 |
+   +-----------------+-----------------------------------------------------------------------------------+
+   | :godot:`int`    | :ref:`capabilities<class_LobbyDirectory_property_capabilities>`                   |
+   +-----------------+-----------------------------------------------------------------------------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -64,65 +99,45 @@ Methods
 .. table::
    :widths: auto
 
-   +---------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`                                     | :ref:`_accepts_empty_address<class_LobbyDirectory_private_method__accepts_empty_address>`\ (\ ) |virtual|                                                                                                                    |
-   +---------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`                                   | :ref:`_address_help<class_LobbyDirectory_private_method__address_help>`\ (\ ) |virtual|                                                                                                                                      |
-   +---------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`                                   | :ref:`_address_label<class_LobbyDirectory_private_method__address_label>`\ (\ ) |virtual|                                                                                                                                    |
-   +---------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`                                   | :ref:`_address_placeholder<class_LobbyDirectory_private_method__address_placeholder>`\ (\ ) |virtual|                                                                                                                        |
-   +---------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`                                     | :ref:`_can_host_here<class_LobbyDirectory_private_method__can_host_here>`\ (\ ) |virtual|                                                                                                                                    |
-   +---------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`                                     | :ref:`_can_probe<class_LobbyDirectory_private_method__can_probe>`\ (\ ) |virtual|                                                                                                                                            |
-   +---------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`Capability<enum_LobbyDirectory_Capability>` | :ref:`_capabilities<class_LobbyDirectory_private_method__capabilities>`\ (\ ) |virtual|                                                                                                                                      |
-   +---------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Dictionary`                               | :ref:`_client_settings<class_LobbyDirectory_private_method__client_settings>`\ (\ ) |virtual|                                                                                                                                |
-   +---------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`                                   | :ref:`_display_name<class_LobbyDirectory_private_method__display_name>`\ (\ ) |virtual|                                                                                                                                      |
-   +---------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                            | :ref:`_host_lobby<class_LobbyDirectory_private_method__host_lobby>`\ (\ settings\: :godot:`Dictionary`\ ) |virtual|                                                                                                          |
-   +---------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Dictionary`                               | :ref:`_host_settings<class_LobbyDirectory_private_method__host_settings>`\ (\ ) |virtual|                                                                                                                                    |
-   +---------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`                                     | :ref:`_is_available<class_LobbyDirectory_private_method__is_available>`\ (\ ) |virtual|                                                                                                                                      |
-   +---------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`                                   | :ref:`_join_address<class_LobbyDirectory_private_method__join_address>`\ (\ ) |virtual|                                                                                                                                      |
-   +---------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                            | :ref:`_join_lobby<class_LobbyDirectory_private_method__join_lobby>`\ (\ address\: :godot:`String`\ ) |virtual|                                                                                                               |
-   +---------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                            | :ref:`_leave_lobby<class_LobbyDirectory_private_method__leave_lobby>`\ (\ ) |virtual|                                                                                                                                        |
-   +---------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`float`                                    | :ref:`_list_interval<class_LobbyDirectory_private_method__list_interval>`\ (\ ) |virtual|                                                                                                                                    |
-   +---------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                            | :ref:`_list_lobbies<class_LobbyDirectory_private_method__list_lobbies>`\ (\ ) |virtual|                                                                                                                                      |
-   +---------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`                                   | :ref:`_local_member_name<class_LobbyDirectory_private_method__local_member_name>`\ (\ ) |virtual|                                                                                                                            |
-   +---------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`                                   | :ref:`_member_name<class_LobbyDirectory_private_method__member_name>`\ (\ peer_id\: :godot:`int`\ ) |virtual|                                                                                                                |
-   +---------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`StringName`                               | :ref:`_peer_class<class_LobbyDirectory_private_method__peer_class>`\ (\ ) |virtual|                                                                                                                                          |
-   +---------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                            | :ref:`_stop_listing<class_LobbyDirectory_private_method__stop_listing>`\ (\ ) |virtual|                                                                                                                                      |
-   +---------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`float`                                    | :ref:`_timeout_hint<class_LobbyDirectory_private_method__timeout_hint>`\ (\ ) |virtual|                                                                                                                                      |
-   +---------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                            | :ref:`deliver<class_LobbyDirectory_method_deliver>`\ (\ peer\: :godot:`MultiplayerPeer`\ )                                                                                                                                   |
-   +---------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                            | :ref:`fail<class_LobbyDirectory_method_fail>`\ (\ error\: :godot:`Error <@GlobalScope#enum_@globalscope_Error>`, message\: :godot:`String`\ )                                                                                |
-   +---------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                            | :ref:`invite<class_LobbyDirectory_method_invite>`\ (\ address\: :godot:`String`, from_name\: :godot:`String`\ )                                                                                                              |
-   +---------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`                                   | :ref:`local_member_name_default<class_LobbyDirectory_method_local_member_name_default>`\ (\ ) |static|                                                                                                                       |
-   +---------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`                                   | :ref:`member_name_default<class_LobbyDirectory_method_member_name_default>`\ (\ peer_id\: :godot:`int`\ ) |static|                                                                                                           |
-   +---------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                            | :ref:`publish_lobbies<class_LobbyDirectory_method_publish_lobbies>`\ (\ addresses\: :godot:`PackedStringArray`, names\: :godot:`PackedStringArray`, infos\: :godot:`Array`\[:ref:`NetwServerInfo<class_NetwServerInfo>`\]\ ) |
-   +---------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`                                     | :ref:`supports<class_LobbyDirectory_method_supports>`\ (\ capability\: :ref:`Capability<enum_LobbyDirectory_Capability>`\ )                                                                                                  |
-   +---------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   +---------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Dictionary` | :ref:`_client_settings<class_LobbyDirectory_private_method__client_settings>`\ (\ ) |virtual|                                                                                                                                |
+   +---------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|              | :ref:`_host_lobby<class_LobbyDirectory_private_method__host_lobby>`\ (\ settings\: :godot:`Dictionary`\ ) |virtual|                                                                                                          |
+   +---------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Dictionary` | :ref:`_host_settings<class_LobbyDirectory_private_method__host_settings>`\ (\ ) |virtual|                                                                                                                                    |
+   +---------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`bool`       | :ref:`_is_available<class_LobbyDirectory_private_method__is_available>`\ (\ ) |virtual|                                                                                                                                      |
+   +---------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`String`     | :ref:`_join_address<class_LobbyDirectory_private_method__join_address>`\ (\ ) |virtual|                                                                                                                                      |
+   +---------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|              | :ref:`_join_lobby<class_LobbyDirectory_private_method__join_lobby>`\ (\ address\: :godot:`String`\ ) |virtual|                                                                                                               |
+   +---------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|              | :ref:`_leave_lobby<class_LobbyDirectory_private_method__leave_lobby>`\ (\ ) |virtual|                                                                                                                                        |
+   +---------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|              | :ref:`_list_lobbies<class_LobbyDirectory_private_method__list_lobbies>`\ (\ ) |virtual|                                                                                                                                      |
+   +---------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`String`     | :ref:`_local_member_name<class_LobbyDirectory_private_method__local_member_name>`\ (\ ) |virtual|                                                                                                                            |
+   +---------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`String`     | :ref:`_member_name<class_LobbyDirectory_private_method__member_name>`\ (\ peer_id\: :godot:`int`\ ) |virtual|                                                                                                                |
+   +---------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`StringName` | :ref:`_peer_class<class_LobbyDirectory_private_method__peer_class>`\ (\ ) |virtual|                                                                                                                                          |
+   +---------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|              | :ref:`_stop_listing<class_LobbyDirectory_private_method__stop_listing>`\ (\ ) |virtual|                                                                                                                                      |
+   +---------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|              | :ref:`deliver<class_LobbyDirectory_method_deliver>`\ (\ peer\: :godot:`MultiplayerPeer`\ )                                                                                                                                   |
+   +---------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|              | :ref:`fail<class_LobbyDirectory_method_fail>`\ (\ error\: :godot:`Error <@GlobalScope#enum_@globalscope_Error>`, message\: :godot:`String`\ )                                                                                |
+   +---------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|              | :ref:`invite<class_LobbyDirectory_method_invite>`\ (\ address\: :godot:`String`, from_name\: :godot:`String`\ )                                                                                                              |
+   +---------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`String`     | :ref:`local_member_name_default<class_LobbyDirectory_method_local_member_name_default>`\ (\ ) |static|                                                                                                                       |
+   +---------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`String`     | :ref:`member_name_default<class_LobbyDirectory_method_member_name_default>`\ (\ peer_id\: :godot:`int`\ ) |static|                                                                                                           |
+   +---------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|              | :ref:`publish_lobbies<class_LobbyDirectory_method_publish_lobbies>`\ (\ addresses\: :godot:`PackedStringArray`, names\: :godot:`PackedStringArray`, infos\: :godot:`Array`\[:ref:`NetwServerInfo<class_NetwServerInfo>`\]\ ) |
+   +---------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`bool`       | :ref:`supports<class_LobbyDirectory_method_supports>`\ (\ capability\: :ref:`Capability<enum_LobbyDirectory_Capability>`\ )                                                                                                  |
+   +---------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -175,7 +190,7 @@ Emitted by :ref:`deliver()<class_LobbyDirectory_method_deliver>`.
 
 **provider_unavailable**\ (\ reason\: :godot:`String`\ ) :ref:`🔗<class_LobbyDirectory_signal_provider_unavailable>`
 
-Emitted when the service cannot be used at all.
+Emitted when the service cannot start. ``reason`` tells the player how to make it available.
 
 .. rst-class:: classref-section-separator
 
@@ -230,92 +245,183 @@ The directory calls :ref:`invite()<class_LobbyDirectory_method_invite>` when the
 
 .. rst-class:: classref-descriptions-group
 
+Property Descriptions
+---------------------
+
+.. _class_LobbyDirectory_property_display_name:
+
+.. rst-class:: classref-property
+
+:godot:`String` **display_name** :ref:`🔗<class_LobbyDirectory_property_display_name>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_display_name**\ (\ value\: :godot:`String`\ )
+- :godot:`String` **get_display_name**\ (\ )
+
+The name shown in the server browser. An empty value uses :ref:`_peer_class()<class_LobbyDirectory_private_method__peer_class>`.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_LobbyDirectory_property_address_label:
+
+.. rst-class:: classref-property
+
+:godot:`String` **address_label** :ref:`🔗<class_LobbyDirectory_property_address_label>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_address_label**\ (\ value\: :godot:`String`\ )
+- :godot:`String` **get_address_label**\ (\ )
+
+The label of the address input.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_LobbyDirectory_property_address_placeholder:
+
+.. rst-class:: classref-property
+
+:godot:`String` **address_placeholder** :ref:`🔗<class_LobbyDirectory_property_address_placeholder>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_address_placeholder**\ (\ value\: :godot:`String`\ )
+- :godot:`String` **get_address_placeholder**\ (\ )
+
+The placeholder of the address input.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_LobbyDirectory_property_address_help:
+
+.. rst-class:: classref-property
+
+:godot:`String` **address_help** :ref:`🔗<class_LobbyDirectory_property_address_help>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_address_help**\ (\ value\: :godot:`String`\ )
+- :godot:`String` **get_address_help**\ (\ )
+
+Help shown under the address input.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_LobbyDirectory_property_accepts_empty_address:
+
+.. rst-class:: classref-property
+
+:godot:`bool` **accepts_empty_address** :ref:`🔗<class_LobbyDirectory_property_accepts_empty_address>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_accepts_empty_address**\ (\ value\: :godot:`bool`\ )
+- :godot:`bool` **get_accepts_empty_address**\ (\ )
+
+Whether joining accepts an empty address.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_LobbyDirectory_property_can_host_here:
+
+.. rst-class:: classref-property
+
+:godot:`bool` **can_host_here** :ref:`🔗<class_LobbyDirectory_property_can_host_here>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_can_host_here**\ (\ value\: :godot:`bool`\ )
+- :godot:`bool` **get_can_host_here**\ (\ )
+
+Whether this build can host lobbies.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_LobbyDirectory_property_can_probe:
+
+.. rst-class:: classref-property
+
+:godot:`bool` **can_probe** :ref:`🔗<class_LobbyDirectory_property_can_probe>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_can_probe**\ (\ value\: :godot:`bool`\ )
+- :godot:`bool` **get_can_probe**\ (\ )
+
+Whether a lobby can be checked without joining it.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_LobbyDirectory_property_timeout_hint:
+
+.. rst-class:: classref-property
+
+:godot:`float` **timeout_hint** :ref:`🔗<class_LobbyDirectory_property_timeout_hint>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_timeout_hint**\ (\ value\: :godot:`float`\ )
+- :godot:`float` **get_timeout_hint**\ (\ )
+
+Seconds before a host or join request fails with :godot:`@GlobalScope.ERR_TIMEOUT <@GlobalScope#class_@GlobalScope_constant_ERR_TIMEOUT>`.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_LobbyDirectory_property_list_interval:
+
+.. rst-class:: classref-property
+
+:godot:`float` **list_interval** :ref:`🔗<class_LobbyDirectory_property_list_interval>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_list_interval**\ (\ value\: :godot:`float`\ )
+- :godot:`float` **get_list_interval**\ (\ )
+
+Seconds between :ref:`_list_lobbies()<class_LobbyDirectory_private_method__list_lobbies>` calls while :ref:`NetwConnection.browsing<class_NetwConnection_property_browsing>` is enabled. Zero lists once when browsing starts.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_LobbyDirectory_property_capabilities:
+
+.. rst-class:: classref-property
+
+:godot:`int` **capabilities** :ref:`🔗<class_LobbyDirectory_property_capabilities>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_capabilities**\ (\ value\: :godot:`int`\ )
+- :godot:`int` **get_capabilities**\ (\ )
+
+The :ref:`Capability<enum_LobbyDirectory_Capability>` flags this directory supports.
+
+.. rst-class:: classref-section-separator
+
+----
+
+.. rst-class:: classref-descriptions-group
+
 Method Descriptions
 -------------------
-
-.. _class_LobbyDirectory_private_method__accepts_empty_address:
-
-.. rst-class:: classref-method
-
-:godot:`bool` **_accepts_empty_address**\ (\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__accepts_empty_address>`
-
-Return ``true`` when an empty address is valid. ``false`` by default.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_LobbyDirectory_private_method__address_help:
-
-.. rst-class:: classref-method
-
-:godot:`String` **_address_help**\ (\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__address_help>`
-
-Return a sentence to show under the address input, such as where to find a lobby id. Empty by default.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_LobbyDirectory_private_method__address_label:
-
-.. rst-class:: classref-method
-
-:godot:`String` **_address_label**\ (\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__address_label>`
-
-Return the title of the address input, such as ``"Lobby ID"``. ``"Lobby"`` by default.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_LobbyDirectory_private_method__address_placeholder:
-
-.. rst-class:: classref-method
-
-:godot:`String` **_address_placeholder**\ (\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__address_placeholder>`
-
-Return the placeholder text of the address input. Empty by default.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_LobbyDirectory_private_method__can_host_here:
-
-.. rst-class:: classref-method
-
-:godot:`bool` **_can_host_here**\ (\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__can_host_here>`
-
-Return ``false`` when this build can only join lobbies. ``true`` by default.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_LobbyDirectory_private_method__can_probe:
-
-.. rst-class:: classref-method
-
-:godot:`bool` **_can_probe**\ (\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__can_probe>`
-
-Return ``true`` when a lobby can be checked without joining it. ``false`` by default.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_LobbyDirectory_private_method__capabilities:
-
-.. rst-class:: classref-method
-
-:ref:`Capability<enum_LobbyDirectory_Capability>` **_capabilities**\ (\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__capabilities>`
-
-Return the :ref:`Capability<enum_LobbyDirectory_Capability>` flags this directory supports. None by default.
-
-.. rst-class:: classref-item-separator
-
-----
 
 .. _class_LobbyDirectory_private_method__client_settings:
 
@@ -329,25 +435,13 @@ Return the settings a join form asks for, with their default values. They are pa
 
 ----
 
-.. _class_LobbyDirectory_private_method__display_name:
-
-.. rst-class:: classref-method
-
-:godot:`String` **_display_name**\ (\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__display_name>`
-
-Return the name shown in a server browser. :ref:`_peer_class()<class_LobbyDirectory_private_method__peer_class>` by default.
-
-.. rst-class:: classref-item-separator
-
-----
-
 .. _class_LobbyDirectory_private_method__host_lobby:
 
 .. rst-class:: classref-method
 
 |void| **_host_lobby**\ (\ settings\: :godot:`Dictionary`\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__host_lobby>`
 
-Create a lobby, then call :ref:`deliver()<class_LobbyDirectory_method_deliver>` with the host :godot:`MultiplayerPeer`, or :ref:`fail()<class_LobbyDirectory_method_fail>`. ``settings`` holds the settings from :ref:`_host_settings()<class_LobbyDirectory_private_method__host_settings>`. ``name``, ``max_players`` and ``visibility``, a :ref:`Visibility<enum_NetwServerInfo_Visibility>`, are common.
+Create a lobby, then call :ref:`deliver()<class_LobbyDirectory_method_deliver>` with the host :godot:`MultiplayerPeer`, or :ref:`fail()<class_LobbyDirectory_method_fail>`. ``settings`` holds the defaults from :ref:`_host_settings()<class_LobbyDirectory_private_method__host_settings>` and the values supplied to :ref:`NetwConnection.host()<class_NetwConnection_method_host>`.
 
 .. rst-class:: classref-item-separator
 
@@ -413,18 +507,6 @@ Leave the current lobby, if any. Called when the match ends.
 
 ----
 
-.. _class_LobbyDirectory_private_method__list_interval:
-
-.. rst-class:: classref-method
-
-:godot:`float` **_list_interval**\ (\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__list_interval>`
-
-Return the seconds between :ref:`_list_lobbies()<class_LobbyDirectory_private_method__list_lobbies>` calls while :ref:`NetwConnection.browsing<class_NetwConnection_property_browsing>` is ``true``. ``0``, the default, lists once each time browsing starts.
-
-.. rst-class:: classref-item-separator
-
-----
-
 .. _class_LobbyDirectory_private_method__list_lobbies:
 
 .. rst-class:: classref-method
@@ -485,18 +567,6 @@ Close whatever a listing keeps open. Called when :ref:`NetwConnection.browsing<c
 
 ----
 
-.. _class_LobbyDirectory_private_method__timeout_hint:
-
-.. rst-class:: classref-method
-
-:godot:`float` **_timeout_hint**\ (\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__timeout_hint>`
-
-Return how many seconds a request may take before it fails with :godot:`@GlobalScope.ERR_TIMEOUT <@GlobalScope#class_@GlobalScope_constant_ERR_TIMEOUT>`.
-
-.. rst-class:: classref-item-separator
-
-----
-
 .. _class_LobbyDirectory_method_deliver:
 
 .. rst-class:: classref-method
@@ -527,7 +597,7 @@ Reports that the current request failed. ``message`` is shown to the player.
 
 |void| **invite**\ (\ address\: :godot:`String`, from_name\: :godot:`String`\ ) :ref:`🔗<class_LobbyDirectory_method_invite>`
 
-Reports that ``from_name`` invited the player to the lobby at ``address``, which arrives as :ref:`NetwConnection.invited<class_NetwConnection_signal_invited>`.
+Calls :ref:`NetwConnection.invite()<class_NetwConnection_method_invite>` for this directory's :godot:`MultiplayerPeer` class and emits :ref:`NetwConnection.invited<class_NetwConnection_signal_invited>`.
 
 .. rst-class:: classref-item-separator
 
@@ -575,7 +645,7 @@ Reports the lobbies :ref:`_list_lobbies()<class_LobbyDirectory_private_method__l
 
 :godot:`bool` **supports**\ (\ capability\: :ref:`Capability<enum_LobbyDirectory_Capability>`\ ) :ref:`🔗<class_LobbyDirectory_method_supports>`
 
-Returns ``true`` when :ref:`_capabilities()<class_LobbyDirectory_private_method__capabilities>` includes ``capability``.
+Returns ``true`` when :ref:`capabilities<class_LobbyDirectory_property_capabilities>` includes ``capability``.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`
