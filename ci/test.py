@@ -102,7 +102,7 @@ func _init() -> void:
 \t\t\tmissing.append(name)
 \tvar made: Object = null
 \tif missing.is_empty():
-\t\tmade = ClassDB.instantiate(wanted[0])
+\t\tmade = ClassDB.instantiate("NetwBitStream")
 \tprint("CONSUMER found=%%d missing=%%s instantiated=%%s"
 \t\t%% [wanted.size() - missing.size(), missing, made != null])
 \tquit(0 if missing.is_empty() and made != null else 1)
