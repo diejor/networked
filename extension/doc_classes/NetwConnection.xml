@@ -4,14 +4,13 @@
 		Finds servers, and joins or hosts one for its session.
 	</brief_description>
 	<description>
-		One attempt runs at a time, and [member state] follows any peer the session is given, including one a game assigns itself.
+		One attempt runs at a time, and [member NetwSession.state] follows any peer the session is given, including one a game assigns itself.
 		[codeblock]
 		@onready var connection: NetwConnection = Netw.session(self).connection
 
 		func _ready() -&gt; void:
 		    connection.endpoint_added.connect(on_endpoint_added)
 		    connection.endpoint_removed.connect(on_endpoint_removed)
-		    connection.state_changed.connect(on_state_changed)
 		    connection.failed.connect(on_failed)
 		    visibility_changed.connect(on_visibility_changed)
 		    connection.browsing = visible
@@ -233,13 +232,13 @@
 			While [code]true[/code], every [LobbyDirectory] keeps listing and every row from [method add] is probed every [member probe_interval], which costs network traffic.
 		</member>
 		<member name="current_endpoint" type="NetwEndpoint" setter="" getter="get_current_endpoint">
-			The connected server, including while hosting, at the address this peer connected through. [code]null[/code] before [constant STATE_ONLINE] or when an assigned peer supplies no address. It can be absent from [member endpoints].
+			The connected server, including while hosting, at the address this peer connected through. [code]null[/code] before [constant NetwSession.STATE_ONLINE] or when an assigned peer supplies no address. It can be absent from [member endpoints].
 		</member>
 		<member name="endpoints" type="NetwEndpoint[]" setter="" getter="get_endpoints">
 			The rows from [method add] come first.
 		</member>
 		<member name="join_address" type="String" setter="set_join_address" getter="get_join_address">
-			The address other players use to join this server. A server reads its own transport's address, such as its LAN address for ENet, until it sets another. A client reads the address passed to [method join] until its join is accepted, then the server's value. Empty before [constant STATE_ONLINE] or when an assigned peer supplies no address.
+			The address other players use to join this server. A server reads its own transport's address, such as its LAN address for ENet, until it sets another. A client reads the address passed to [method join] until its join is accepted, then the server's value. Empty before [constant NetwSession.STATE_ONLINE] or when an assigned peer supplies no address.
 			Only an online server sets it. A server behind a router sets its internet address after [method host] settles, and every client follows.
 		</member>
 		<member name="max_players" type="int" setter="" getter="get_max_players">
@@ -247,9 +246,6 @@
 		</member>
 		<member name="probe_interval" type="float" setter="set_probe_interval" getter="get_probe_interval">
 			Seconds between probes of a row from [method add] while [member browsing]. [code]0[/code] probes it once each time browsing starts.
-		</member>
-		<member name="state" type="int" setter="" getter="get_state" enum="NetwConnection.State">
-			The connection attempt's [enum State], reported by [signal state_changed].
 		</member>
 	</members>
 	<signals>
@@ -292,26 +288,8 @@
 				[param ratio] runs from 0 to 1, and is negative when the transport only has a [param message].
 			</description>
 		</signal>
-		<signal name="state_changed">
-			<param index="0" name="state" type="int" enum="NetwConnection.State" />
-			<description>
-				Emitted when [member state] moves between [constant STATE_OFFLINE], [constant STATE_CREATING], [constant STATE_CONNECTING] and [constant STATE_ONLINE].
-			</description>
-		</signal>
 	</signals>
 	<constants>
-		<constant name="STATE_OFFLINE" value="0" enum="State">
-			No connection attempt or online session.
-		</constant>
-		<constant name="STATE_CREATING" value="1" enum="State">
-			The transport is creating a [MultiplayerPeer].
-		</constant>
-		<constant name="STATE_CONNECTING" value="2" enum="State">
-			The [MultiplayerPeer] is assigned and connecting.
-		</constant>
-		<constant name="STATE_ONLINE" value="3" enum="State">
-			The session is online.
-		</constant>
 		<constant name="TRANSPORT_MODE_HOST" value="0" enum="TransportMode">
 			The address is ignored.
 		</constant>

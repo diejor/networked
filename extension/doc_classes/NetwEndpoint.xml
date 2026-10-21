@@ -43,7 +43,7 @@
 			The sender's display name while [member is_invited], or [code]""[/code] when no name was supplied.
 		</member>
 		<member name="is_invited" type="bool" setter="" getter="get_is_invited">
-			[code]true[/code] after [method NetwConnection.invite]. Cleared when joining this server reaches [constant NetwConnection.STATE_ONLINE] or the row is removed.
+			[code]true[/code] after [method NetwConnection.invite]. Cleared when joining this server reaches [constant NetwSession.STATE_ONLINE] or the row is removed.
 		</member>
 		<member name="is_listed" type="bool" setter="" getter="get_is_listed">
 			[code]false[/code] once the row is removed. Only [member peer_class] and [member address] keep their values after that.

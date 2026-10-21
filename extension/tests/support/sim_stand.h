@@ -33,6 +33,7 @@ class SimStand {
             = netw::NetwMultiplayer::create(godot::Ref<godot::Script>());
         if (api.is_valid()) {
             api->session_get_inner()->set_root_path(godot::NodePath("/"));
+            api->session_default_join_held = true;
             api->set("multiplayer_peer", p_peer);
         }
         return api;

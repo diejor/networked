@@ -627,7 +627,7 @@ SPAWN
 [spawn_tick varuint 5]            tick + 1, so 0 is no tick
 [requester svarint 5]
 [comp_table_hash bits 32]
-[control_hold bits 2]             NONE YIELDABLE EXCLUSIVE
+[control_hold bits 2]             NONE SOFT EXCLUSIVE
 [declares_scene bool1][scene_label string iff]
 [node_name string]
 [recipe int_range 0..4]           ADOPT SCENE SPAWNER FN_REGISTRY FN
@@ -753,7 +753,7 @@ CONTROL_REQUEST
 [source_route varuint 5]          0, or the entity a contact claim came from
 [successor varuint 5]             a release's successor, 0 the session
 [kind bits 1]                     0 request, 1 release
-[hold bits 2]                     NONE YIELDABLE EXCLUSIVE
+[hold bits 2]                     NONE SOFT EXCLUSIVE
 [final_state bytes_capped 1024]   a release's last state, empty otherwise
 [align_verify]
 

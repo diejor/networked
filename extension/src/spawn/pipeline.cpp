@@ -331,8 +331,7 @@ Error Pipeline::declare_stage(const RID &p_handle, const Dictionary &p_facts) {
 
 Ref<NetwEntity> Pipeline::arm_authoritative_spawn(
     Record *p_record,
-    Node *p_node,
-    const Ref<NetwPlayer> &p_owner
+    Node *p_node
 ) {
     NetwMultiplayer *plane = core();
     Object *shell = api();
@@ -342,7 +341,6 @@ Ref<NetwEntity> Pipeline::arm_authoritative_spawn(
     const Ref<NetwEntity> entity = plane->spawn_arm_identity(
         p_record,
         p_node,
-        p_owner,
         callable_mp(plane, &NetwMultiplayer::spawn_declare_stage)
     );
     if (entity.is_null()) {
@@ -354,13 +352,11 @@ Ref<NetwEntity> Pipeline::arm_authoritative_spawn(
         && shell != nullptr) {
         entity->arm(Object::cast_to<NetwMultiplayer>(shell));
     }
+    plane->persist_bind_spawned(p_node);
     if (p_node->is_inside_tree()) {
         entity->_go_live_if_armed();
         schedule_armed_flush(route);
     } else {
-        if (p_owner.is_valid()) {
-            armed_owners.insert(route, p_owner);
-        }
         connect_once(
             p_node,
             SIG_TREE_ENTERED,
@@ -372,43 +368,61 @@ Ref<NetwEntity> Pipeline::arm_authoritative_spawn(
     return entity;
 }
 
-bool Pipeline::armed_owner_survives(int64_t p_route) {
-    const HashMap<int64_t, Ref<NetwPlayer>>::Iterator found
-        = armed_owners.find(p_route);
-    if (found == armed_owners.end()) {
-        return true;
-    }
-    const Ref<NetwPlayer> owner = found->value;
-    armed_owners.remove(found);
+bool Pipeline::armed_player_left(int64_t p_route) {
     NetwMultiplayer *plane = core();
-    if (plane == nullptr || plane->player_holds(owner)) {
-        return true;
+    const Ref<NetwEntity> entity = plane != nullptr
+        ? plane->wrapper_for_route(p_route)
+        : Ref<NetwEntity>();
+    if (entity.is_null() || entity->get_player_id() == 0) {
+        return false;
+    }
+    const Ref<NetwPlayer> seated = plane->player_of(entity->get_peer_id());
+    if (plane->player_holds(seated)
+        && seated->player_id() == entity->get_player_id()) {
+        return false;
     }
     NETW_INFO(
         sys::SPAWN,
-        "Player '%s' left before their spawn was added, so its body was "
-        "discarded.",
-        String(owner->get_username())
+        "The player of '%s' left before it was added, so it was discarded.",
+        String(entity->get_name())
     );
-    return false;
+    return true;
 }
 
-bool Pipeline::spawn_admitted(
-    Node *p_node,
-    const Ref<NetwPlayer> &p_owner,
-    const char *p_verb
-) {
+void Pipeline::write_owner(Node *p_node, const Ref<NetwPlayer> &p_owner) {
+    if (p_owner.is_null() || p_node == nullptr || p_node->is_inside_tree()) {
+        return;
+    }
+    const Ref<NetwEntity> entity = NetwEntity::ensure(p_node);
+    if (entity.is_valid()
+        && entity->get_stage() == int64_t(netw::entity::Stage::UNBOUND)) {
+        entity->set_player(p_owner);
+    }
+}
+
+bool Pipeline::spawn_admitted(Node *p_node, const char *p_verb) {
     NetwMultiplayer *plane = core();
     if (plane == nullptr) {
         return authors(lifecycle::Kind::SPAWN, is_server_authority());
     }
     const Ref<NetwEntity> entity = NetwEntity::of(p_node);
+    const Ref<NetwPlayer> represented
+        = entity.is_valid() ? entity->unbound_player() : Ref<NetwPlayer>();
     lifecycle::Facts facts
         = plane->lifecycle_local_facts(entity.ptr(), lifecycle::Kind::SPAWN);
-    facts.player_bound = facts.player_bound || p_owner.is_valid();
+    facts.player_bound = facts.player_bound || represented.is_valid();
     String refusal;
     if (!plane->lifecycle_judge_verb(facts, String(p_verb), p_node, refusal)
              .admitted()) {
+        return false;
+    }
+    if (represented.is_valid() && !plane->player_holds(represented)) {
+        NETW_ERROR(
+            sys::SPAWN,
+            "Nothing was spawned, because player '%s' is not in the session. "
+            "Spawn for a player the session has admitted.",
+            String(represented->get_username())
+        );
         return false;
     }
     if (facts.peer_is_server || plane->liveness_lease_remaining() > 0) {
@@ -437,7 +451,8 @@ Ref<NetwEntity> Pipeline::replicate(
             "Netw.replicate was given a null or freed node."
         );
     }
-    if (!spawn_admitted(p_node, p_owner, "Netw.replicate")) {
+    write_owner(p_node, p_owner);
+    if (!spawn_admitted(p_node, "Netw.replicate")) {
         return Ref<NetwEntity>();
     }
     if (p_node->is_inside_tree()) {
@@ -482,7 +497,7 @@ Ref<NetwEntity> Pipeline::replicate(
     Record record;
     record.set_recipe(Book::RECIPE_SCENE);
     record.set_scene_path(p_node->get_scene_file_path());
-    return arm_authoritative_spawn(&record, p_node, p_owner);
+    return arm_authoritative_spawn(&record, p_node);
 }
 
 Node *Pipeline::spawn(
@@ -553,7 +568,8 @@ Node *Pipeline::spawn(
     bool admitted = false;
     {
         NETW_ZONE_NC("Spawn admit", colors::LIVENESS);
-        admitted = spawn_admitted(node, p_owner, "Netw.spawn");
+        write_owner(node, p_owner);
+        admitted = spawn_admitted(node, "Netw.spawn");
     }
     if (!admitted) {
         memdelete(node);
@@ -565,9 +581,14 @@ Node *Pipeline::spawn(
     record.bind_fn_host(host);
     record.set_fn_method(method);
     record.set_fn_args(p_args);
+    bool armed = false;
     {
         NETW_ZONE_NC("Spawn arm authoritative", colors::LIVENESS);
-        arm_authoritative_spawn(&record, node, p_owner);
+        armed = arm_authoritative_spawn(&record, node).is_valid();
+    }
+    if (!armed) {
+        memdelete(node);
+        return nullptr;
     }
     {
         NETW_ZONE_NC("Spawn wrap world", colors::SCENE);
@@ -659,7 +680,8 @@ Node *Pipeline::spawn_registered(
             p_id
         );
     }
-    if (!spawn_admitted(node, p_owner, "spawn_registered")) {
+    write_owner(node, p_owner);
+    if (!spawn_admitted(node, "spawn_registered")) {
         memdelete(node);
         return nullptr;
     }
@@ -667,7 +689,10 @@ Node *Pipeline::spawn_registered(
     record.set_recipe(Book::RECIPE_FN_REGISTRY);
     record.set_fn_registry_id(p_id);
     record.set_fn_args(p_args);
-    arm_authoritative_spawn(&record, node, p_owner);
+    if (arm_authoritative_spawn(&record, node).is_null()) {
+        memdelete(node);
+        return nullptr;
+    }
     NetwMultiplayer::scene_wrap_world(node);
     return node;
 }
@@ -681,7 +706,7 @@ Ref<NetwEntity> Pipeline::adopt_in_place(Node *p_root) {
     record.set_recipe(Book::RECIPE_ADOPT);
     record.bind_origin(NetwMultiplayer::scene_outer_of(p_root)->get_parent());
     const Ref<NetwEntity> entity
-        = arm_authoritative_spawn(&record, p_root, Ref<NetwPlayer>());
+        = arm_authoritative_spawn(&record, p_root);
     if (entity.is_valid()) {
         NetwMultiplayer *plane = core();
         if (plane != nullptr) {
@@ -703,7 +728,7 @@ bool Pipeline::readmit(Node *p_node, const Record &p_recipe) {
     record.set_recipients(PackedInt32Array());
     record.bind_node(p_node);
     record.bind_origin(p_node->get_parent());
-    return arm_authoritative_spawn(&record, p_node, Ref<NetwPlayer>())
+    return arm_authoritative_spawn(&record, p_node)
         .is_valid();
 }
 
@@ -718,7 +743,7 @@ Ref<NetwEntity> Pipeline::arm_consumed_spawn(
     record.bind_spawner(Object::cast_to<MultiplayerSpawner>(p_spawner));
     record.set_scene_index(p_scene_index);
     record.set_custom_data(p_data);
-    return arm_authoritative_spawn(&record, p_node, Ref<NetwPlayer>());
+    return arm_authoritative_spawn(&record, p_node);
 }
 
 void Pipeline::on_armed_tree_entered(int64_t p_route) {
@@ -762,7 +787,7 @@ void Pipeline::flush_armed_spawn(int64_t p_route) {
         send_authored_spawn(p_route);
         return;
     }
-    if (!armed_owner_survives(p_route)) {
+    if (armed_player_left(p_route)) {
         discard_armed_spawn(p_route);
         return;
     }
@@ -858,7 +883,7 @@ void Pipeline::publish_nested(Node *p_node) {
     Record record;
     record.set_recipe(Book::RECIPE_ADOPT);
     record.bind_origin(NetwMultiplayer::scene_outer_of(p_node)->get_parent());
-    if (arm_authoritative_spawn(&record, p_node, Ref<NetwPlayer>()).is_null()) {
+    if (arm_authoritative_spawn(&record, p_node).is_null()) {
         return;
     }
     if (NetwMultiplayer *plane = core()) {
@@ -1819,8 +1844,7 @@ void Pipeline::issue_controller_spawn(SpawnBuild &r_built, int64_t p_sender) {
         record.set_fn_method(StringName(frame.method));
         record.set_fn_args(r_built.args);
     }
-    if (arm_authoritative_spawn(&record, r_built.node, Ref<NetwPlayer>())
-            .is_null()) {
+    if (arm_authoritative_spawn(&record, r_built.node).is_null()) {
         spawn_book.drop_armed(route);
         r_built.node->queue_free();
         refuse_controller_spawn(route, p_sender, ERR_UNAVAILABLE, true);
@@ -2812,6 +2836,35 @@ void Pipeline::clear_action_gates() {
     plane->action_gate_clear();
     disconnect_action_reveal_if_idle();
     applying_action_gate = false;
+}
+
+void Pipeline::free_session_nodes() {
+    const LocalVector<ObjectID> nodes = spawn_book.session_nodes();
+    for (const ObjectID &id : nodes) {
+        Node *node = Object::cast_to<Node>(gd::instance_from_id(id));
+        if (node == nullptr || node->is_queued_for_deletion()) {
+            continue;
+        }
+        if (node->is_inside_tree()) {
+            node->queue_free();
+            continue;
+        }
+        String scene_path;
+        if (spawn_book.armed_scene_path(id, scene_path)) {
+            NETW_WARN(
+                sys::SPAWN,
+                "'%s' (%s) was replicated but never entered the tree before "
+                "the session ended. Call add_child after Netw.replicate.",
+                node->get_name(),
+                scene_path
+            );
+        }
+        Node *parent = node->get_parent();
+        if (parent != nullptr) {
+            parent->remove_child(node);
+        }
+        memdelete(node);
+    }
 }
 
 void Pipeline::clear_session() {

@@ -42,8 +42,6 @@ var entity: NetwEntity
 
 func _init() -> void:
 	entity = Netw.configure_entity(self)
-	entity.initial_controller = NetwEntity.INITIAL_PLAYER
-	entity.on_controller_disconnect = NetwEntity.DISCONNECT_DESPAWN
 	entity.authority = NetwEntity.AUTHORITY_CONTROLLER
 	entity.transfer = NetwEntity.TRANSFER_IMMEDIATE
 	entity.simulation.replicas = NetwSimulation.REPLICAS_ACTIVE
@@ -123,8 +121,8 @@ func hover(direction: Vector3) -> void:
 	)
 	for cube in cubes_nearby():
 		if entity.is_controlled_locally:
-			cube.claim(NetwEntity.HOLD_YIELDABLE)
-		if not drives(cube, NetwEntity.HOLD_YIELDABLE):
+			cube.claim(NetwEntity.HOLD_SOFT)
+		if not drives(cube, NetwEntity.HOLD_SOFT):
 			continue
 		var away := cube.global_position - global_position
 		away.y = 0.0
@@ -163,7 +161,7 @@ func let_go_of_strays() -> void:
 func drives(cube: PlayCube, hold: NetwEntity.Hold) -> bool:
 	if entity.is_controlled_locally:
 		return cube.entity.is_controlled_locally
-	if cube.entity.control_kind == NetwEntity.CONTROL_SERVER_CONTROLLED:
+	if cube.entity.controller == null:
 		return true
 	if cube.entity.controller == entity.controller:
 		return true

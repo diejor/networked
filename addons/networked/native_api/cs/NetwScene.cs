@@ -194,7 +194,7 @@ public sealed class NetwScene : NetwRefCounted
 
     /// <summary>
     /// The <see cref="NetwEntity"/> on <see cref="NetwScene.Root"/>, or
-    /// <c>null</c> when no scene was found.
+    /// <c>null</c> once the scene is freed.
     /// </summary>
     public NetwEntity Entity
     {
@@ -203,23 +203,6 @@ public sealed class NetwScene : NetwRefCounted
             IntPtr answered = default;
             NetwThunks.Ptrcall0_IntPtr(_bindGetEntity, Checked, ref answered);
             return NetwEntity.Adopt(answered);
-        }
-    }
-
-    private static readonly IntPtr _bindGetIsDeclared =
-        NetwApi.MethodBind("NetwScene", "get_is_declared", 36873697UL);
-
-    /// <summary>
-    /// Whether a scene was found. <c>false</c> for an entity outside every
-    /// scene or not in the tree, and every other member is empty.
-    /// </summary>
-    public bool IsDeclared
-    {
-        get
-        {
-            byte answered = default;
-            NetwThunks.Ptrcall0_Byte(_bindGetIsDeclared, Checked, ref answered);
-            return answered != 0;
         }
     }
 

@@ -217,8 +217,8 @@ public sealed class NetwEndpoint : NetwRefCounted
 
     /// <summary>
     /// <c>true</c> after <see cref="NetwConnection.Invite"/>. Cleared when
-    /// joining this server reaches
-    /// <see cref="NetwConnection.StateEnum.Online"/> or the row is removed.
+    /// joining this server reaches <see cref="NetwSession.StateEnum.Online"/>
+    /// or the row is removed.
     /// </summary>
     public bool IsInvited
     {

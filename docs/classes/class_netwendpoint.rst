@@ -238,7 +238,7 @@ The sender's display name while :ref:`is_invited<class_NetwEndpoint_property_is_
 
 - :godot:`bool` **get_is_invited**\ (\ )
 
-``true`` after :ref:`NetwConnection.invite()<class_NetwConnection_method_invite>`. Cleared when joining this server reaches :ref:`NetwConnection.STATE_ONLINE<class_NetwConnection_constant_STATE_ONLINE>` or the row is removed.
+``true`` after :ref:`NetwConnection.invite()<class_NetwConnection_method_invite>`. Cleared when joining this server reaches :ref:`NetwSession.STATE_ONLINE<class_NetwSession_constant_STATE_ONLINE>` or the row is removed.
 
 .. rst-class:: classref-item-separator
 

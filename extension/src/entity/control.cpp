@@ -8,11 +8,8 @@ namespace netw::entity {
 
 using namespace godot;
 
-int64_t Control::resolve(int64_t p_peer_id) const {
-    if (configured) {
-        return controller;
-    }
-    return initial == int(InitialController::PLAYER) ? p_peer_id : SERVER;
+int64_t Control::resolve() const {
+    return configured ? controller : SERVER;
 }
 
 StringName Control::write_book_key() {
@@ -142,7 +139,7 @@ bool Control::excludes(
     if (p_current == SERVER || p_current == p_requester) {
         return false;
     }
-    return p_current_hold == HOLD_EXCLUSIVE || p_hold == HOLD_YIELDABLE;
+    return p_current_hold == HOLD_EXCLUSIVE || p_hold == HOLD_SOFT;
 }
 
 Control::Ruling Control::rule(
@@ -217,11 +214,11 @@ bool Control::take_abandoned(uint64_t p_op) {
     return false;
 }
 
-bool Control::controlled_by(int64_t p_local_peer, int64_t p_peer_id) const {
+bool Control::controlled_by(int64_t p_local_peer) const {
     if (p_local_peer == 0) {
         return false;
     }
-    const int64_t steering = resolve(p_peer_id);
+    const int64_t steering = resolve();
     return steering != SERVER && steering == p_local_peer;
 }
 
@@ -235,7 +232,7 @@ Control::Verdict Control::disconnect_verdict(
     if (p_peer_id == p_disconnected) {
         return DESPAWN_REPRESENTED;
     }
-    if (resolve(p_peer_id) != p_disconnected) {
+    if (resolve() != p_disconnected) {
         return NOTHING;
     }
     return on_disconnect == int(DisconnectRule::DESPAWN) ? DESPAWN_CONTROLLER

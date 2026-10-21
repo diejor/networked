@@ -31,7 +31,7 @@ TEST_CASE(
 
     const Ref<netw::NetwScene> named = api->scene_handle_of(scene);
     REQUIRE(named.is_valid());
-    CHECK(named->get_is_declared());
+    CHECK(named->get_root() == container);
     CHECK(named->get_rid() == scene);
     CHECK(named->get_label() == StringName("Arena"));
 
@@ -184,15 +184,46 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene] a node outside every scene answers a view "
-    "that declares nothing rather than null, so a caller reads a fact "
-    "instead of branching on absence"
+    "[Networked][Scene] an entity answers the scene that contains it, and "
+    "null off the tree or outside every scene"
 ) {
     LoopbackRig rig(1);
+    rig.mount();
+    const RID scene = rig.declare_scene(StringName("Arena"));
+    netw::NetwMultiplayer *api = rig.server();
+    Node *container = api->entity_get_node(scene);
+    REQUIRE(container != nullptr);
+    rig.branch(-1)->add_child(container);
+    const Ref<netw::NetwScene> arena = api->scene_handle_of(scene);
+    REQUIRE(arena.is_valid());
+
     Node *orphan = memnew(Node);
-    const Ref<netw::NetwScene> view = netw::Netw::scene(orphan);
-    CHECK(view.is_null());
+    const Ref<netw::NetwEntity> off_tree = netw::Netw::configure_entity(orphan);
+    REQUIRE(off_tree.is_valid());
+    CHECK(off_tree->get_scene().is_null());
+    CHECK(netw::Netw::scene(orphan).is_null());
+
+    Node *loose = memnew(Node);
+    const Ref<netw::NetwEntity> outside = netw::Netw::configure_entity(loose);
+    rig.branch(-1)->add_child(loose);
+    REQUIRE(api->entity_of(loose).is_valid());
+    CHECK(outside->get_scene().is_null());
+    CHECK(netw::Netw::scene(loose).is_null());
+
+    Node *member = memnew(Node);
+    const Ref<netw::NetwEntity> inside = netw::Netw::configure_entity(member);
+    container->add_child(member);
+    REQUIRE(api->entity_of(member).is_valid());
+    CHECK(inside->get_scene() == arena);
+    CHECK(netw::Netw::scene(member) == arena);
+    CHECK(netw::Netw::scene(container) == arena);
+
+    container->remove_child(member);
+    memdelete(member);
+    rig.branch(-1)->remove_child(loose);
+    memdelete(loose);
     memdelete(orphan);
+    rig.branch(-1)->remove_child(container);
 }
 
 } // namespace TestSceneViewLaws

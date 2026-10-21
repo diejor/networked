@@ -247,7 +247,7 @@ func follow(leader: int) -> void:
 	assert_bool(proof.is_empty()).is_false()
 
 	var ended := func() -> bool:
-		return session.connection.state == NetwConnection.STATE_OFFLINE
+		return session.state == NetwSession.STATE_OFFLINE
 	if not await step("carry: the leader ends the session", ended):
 		return
 	await seconds(10.0)

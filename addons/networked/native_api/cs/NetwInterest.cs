@@ -22,7 +22,7 @@ namespace Networked;
 ///             .on_enter(_on_interest_enter)
 ///
 /// # later
-/// Netw.configure_entity(self).interest.join(&amp;"team:blue")
+/// NetwEntity.of(self).interest.join(&amp;"team:blue")
 /// </code>
 /// </remarks>
 public sealed class NetwInterest : NetwRefCounted

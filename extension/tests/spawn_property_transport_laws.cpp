@@ -125,7 +125,6 @@ TEST_CASE(
     check_marker(mirror->marker(), "ordering");
     CHECK(mirror->saw(StringName("parented")));
     check_marker(mirror->marker_at(StringName("parented")), "");
-    check_marker(mirror->marker_at(StringName("spawning")), "ordering");
     check_marker(mirror->marker_at(StringName("enter_tree")), "ordering");
     check_marker(mirror->marker_at(StringName("ready")), "ordering");
 }
@@ -164,8 +163,8 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Spawn] SP3 an instance nothing bound is UNBOUND and is not a "
-    "template, so a bare copy never becomes a live entity by existing"
+    "[Networked][Spawn] SP3 an instance nothing bound is UNBOUND, so a bare "
+    "copy never becomes a live entity by existing"
 ) {
     Node *bare = build_probe_player(String("Bare"));
 
@@ -173,7 +172,6 @@ TEST_CASE(
     REQUIRE(entity.is_valid());
 
     NETW_CHECK_EQ(entity->get_stage(), int64_t(netw::entity::Stage::UNBOUND));
-    CHECK_FALSE(entity->get_is_template());
     check_marker(probe_of(bare)->marker(), "");
 
     memdelete(bare);

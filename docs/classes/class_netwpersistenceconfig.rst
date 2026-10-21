@@ -122,7 +122,7 @@ Saves only when a property changed. ``0.0`` saves only through :ref:`NetwPersist
 
 :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` **load_on_spawn**\ (\ enabled\: :godot:`bool` = true\ ) :ref:`🔗<class_NetwPersistenceConfig_method_load_on_spawn>`
 
-Whether the server loads the stored record when the :ref:`NetwEntity<class_NetwEntity>`'s node is ready.
+Whether the server loads the stored record when the :ref:`NetwEntity<class_NetwEntity>`'s node is ready. A :ref:`NetwPersistence.load()<class_NetwPersistence_method_load>` called before the node enters the tree takes the place of this load.
 
 Clients do not receive the :ref:`NetwEntity<class_NetwEntity>` until the load succeeds or finds no record. Call :ref:`NetwPersistence.load()<class_NetwPersistence_method_load>` to retry a failed load.
 
@@ -155,7 +155,7 @@ Upgrades saved data from ``from_version`` to the next version. A load calls ``st
 
 :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` **record_id**\ (\ provider\: :godot:`Callable`\ ) :ref:`🔗<class_NetwPersistenceConfig_method_record_id>`
 
-Calls ``provider`` once when the root is ready. Its nonempty :godot:`StringName` identifies the record across sessions.
+Calls ``provider`` once on the server, when :ref:`Netw.spawn()<class_Netw_method_spawn>` returns the root or, for a root that was not spawned, when it is ready. Its nonempty :godot:`StringName` identifies the record across sessions.
 
 .. rst-class:: classref-item-separator
 

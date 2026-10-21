@@ -150,10 +150,35 @@ TEST_CASE(
     memdelete(tree);
 }
 
+struct ArmOnAdd {
+    netw::NetwMultiplayer *api = nullptr;
+    Node *body = nullptr;
+    StringName key;
+    bool armed = false;
+};
+
+ArmOnAdd &arm_on_add() {
+    static ArmOnAdd state;
+    return state;
+}
+
+void arm_when_added(Node *p_added) {
+    ArmOnAdd &state = arm_on_add();
+    if (p_added != state.body || state.api == nullptr) {
+        return;
+    }
+    state.api->lagcomp_effect_arm(
+        state.key,
+        Callable(p_added, StringName("get_name")),
+        0
+    );
+    state.armed = state.api->lagcomp_effect_pending(state.key);
+}
+
 TEST_CASE(
-    "[Networked][LagComp][Settle][SceneTree] SO3 an entity observed "
-    "while it still carried no id is adopted when it spawns, because the id "
-    "is stamped on the way into the tree and the observation is what waits"
+    "[Networked][LagComp][Settle][SceneTree] SO3 an effect armed after the "
+    "session observed its entity entering the tree is adopted when the "
+    "entity's root is ready, before any settle runs"
 ) {
     Node *root = netw::gd::scene_root();
     REQUIRE(root != nullptr);
@@ -163,27 +188,25 @@ TEST_CASE(
         = LoopbackRig::core_of(tree->get(StringName("api")));
     REQUIRE(api != nullptr);
     Node *body = memnew(Node);
-    body->set_name("Nameless");
-    tree->add_child(body);
+    body->set_name("Subject");
     const Ref<NetwEntity> entity = NetwEntity::ensure(body);
     REQUIRE(entity.is_valid());
-    api->observe_node_entity(body);
-
-    api->lagcomp_effect_arm(
-        StringName("spawned-subject"),
-        Callable(body, StringName("get_name")),
-        0
-    );
     entity->set_name(StringName("spawned-subject"));
-    REQUIRE_MESSAGE(
-        api->lagcomp_effect_pending(StringName("spawned-subject")),
-        "the arm must outlive the stamp, or the adopt proves nothing"
+
+    arm_on_add() = ArmOnAdd{api, body, StringName("spawned-subject")};
+    const Callable armer = callable_mp_static(&arm_when_added);
+    root->get_tree()->connect(StringName("node_added"), armer);
+    tree->add_child(body);
+    root->get_tree()->disconnect(StringName("node_added"), armer);
+
+    CHECK_MESSAGE(
+        arm_on_add().armed,
+        "the arm must outlive the observation, or the adopt proves nothing"
     );
-
-    entity->emit_signal(StringName("spawned"));
-
+    CHECK(entity->get_ready_fired());
     CHECK_FALSE(api->lagcomp_effect_pending(StringName("spawned-subject")));
 
+    arm_on_add() = ArmOnAdd{};
     root->remove_child(tree);
     memdelete(tree);
 }

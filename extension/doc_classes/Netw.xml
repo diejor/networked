@@ -287,7 +287,7 @@
 				Netw.despawn(bullet)
 				[/codeblock]
 				See [NetwDespawnOpts] for [param opts]. Returns [constant @GlobalScope.ERR_DOES_NOT_EXIST] for a node that was not spawned, and [constant @GlobalScope.ERR_UNAVAILABLE] outside a session.
-				A client can call it when it is the [member NetwEntity.controller] and [member NetwEntity.lifecycle] is [constant NetwEntity.LIFECYCLE_CONTROLLER]. The node is removed on that client at once, and comes back if the server refuses.
+				A client can call it when its player is the [member NetwEntity.controller] and [member NetwEntity.lifecycle] is [constant NetwEntity.LIFECYCLE_CONTROLLER]. The node is removed on that client at once, and comes back if the server refuses.
 			</description>
 		</method>
 		<method name="emit_entity_signal" qualifiers="vararg static">
@@ -325,13 +325,13 @@
 				Netw.prepare_join(self, &amp;"Dev", &amp;"red")
 				multiplayer.multiplayer_peer = peer
 				[/codeblock]
-				Call it before or after assigning [member MultiplayerAPI.multiplayer_peer]. The join can still be refused later, which emits [signal NetwSession.join_failed].
+				Call it before assigning [member MultiplayerAPI.multiplayer_peer]. The join can still be refused later, which emits [signal NetwSession.join_failed].
 				[codeblock lang=text]
 				Error
 				┠╴OK                     the join will be sent
-				┠╴ERR_UNAVAILABLE        the join could not be sent
-				┠╴ERR_ALREADY_IN_USE     a join was already requested
-				┖╴ERR_INVALID_PARAMETER  username is empty
+				┠╴ERR_ALREADY_IN_USE     the session is already online
+				┠╴ERR_INVALID_PARAMETER  username is empty
+				┖╴ERR_UNCONFIGURED       node is not inside a session
 				[/codeblock]
 				[b]Player request.[/b]
 			</description>
@@ -356,7 +356,7 @@
 				[/codeblock]
 				Unlike [method Node.reparent], it does not fire [Area3D] and [Area2D] enter and exit signals during the move, which works around [url=https://github.com/godotengine/godot/issues/14578]this issue[/url]. Otherwise [method Node.reparent] works fine.
 				The promise fails with [constant @GlobalScope.ERR_DOES_NOT_EXIST] when [param node] has no entity, and [constant @GlobalScope.ERR_UNAVAILABLE] outside a session.
-				A client can call it when it is the [member NetwEntity.controller] and [member NetwEntity.lifecycle] is [constant NetwEntity.LIFECYCLE_CONTROLLER]. The node moves on that client at once, and moves back if the server refuses.
+				A client can call it when its player is the [member NetwEntity.controller] and [member NetwEntity.lifecycle] is [constant NetwEntity.LIFECYCLE_CONTROLLER]. The node moves on that client at once, and moves back if the server refuses.
 			</description>
 		</method>
 		<method name="replicate" qualifiers="static">
@@ -371,7 +371,7 @@
 				avatar.position = spawn_point
 				scene.add_child(avatar)
 				[/codeblock]
-				A client can call it without [param owner] when [param node] sets [member NetwEntity.lifecycle] to [constant NetwEntity.LIFECYCLE_CONTROLLER]. That client becomes its [member NetwEntity.controller].
+				A client can call it without [param owner] when [param node] sets [member NetwEntity.lifecycle] to [constant NetwEntity.LIFECYCLE_CONTROLLER]. That client's player becomes its [member NetwEntity.controller].
 			</description>
 		</method>
 		<method name="request" qualifiers="vararg static">
@@ -396,7 +396,7 @@
 			<return type="NetwPromise" />
 			<param index="0" name="callable" type="Callable" />
 			<description>
-				Calls [param callable] on the peer driving the node, its [member NetwEntity.controller].
+				Calls [param callable] on the peer of the node's [member NetwEntity.controller].
 			</description>
 		</method>
 		<method name="request_id" qualifiers="vararg static">
@@ -443,7 +443,7 @@
 			<return type="void" />
 			<param index="0" name="callable" type="Callable" />
 			<description>
-				Calls [param callable] on the peer driving the node, its [member NetwEntity.controller].
+				Calls [param callable] on the peer of the node's [member NetwEntity.controller].
 			</description>
 		</method>
 		<method name="rpc_id" qualifiers="vararg static">
@@ -473,7 +473,7 @@
 			<return type="NetwScene" />
 			<param index="0" name="node" type="Node" />
 			<description>
-				Returns the multiplayer scene [param node] is in. Use [method NetwSession.find_scene] to find one by name.
+				Returns the multiplayer scene [param node] is in, or [code]null[/code] when no scene was found. Use [method NetwSession.find_scene] to find one by name.
 				[codeblock]
 				var here := Netw.scene(self)
 				var track := Netw.session(self).find_scene(&amp;"Track")
@@ -484,7 +484,7 @@
 			<return type="NetwSession" />
 			<param index="0" name="node" type="Node" />
 			<description>
-				The [NetwSession] of the [member Node.multiplayer]. It holds the players, the signals and [member NetwSession.connection], which finds servers and joins or hosts one.
+				The [NetwSession] of the [member Node.multiplayer], or [code]null[/code] before [param node] enters the tree. It holds the players, the signals and [member NetwSession.connection], which finds servers and joins or hosts one.
 				[codeblock]
 				var s := Netw.session(self)
 				s.entered.connect(on_entered)
@@ -501,7 +501,7 @@
 				muzzle.add_child(Netw.spawn(_spawn_bullet, dir, 2))
 				[/codeblock]
 				Register [param fn] with [method configure_spawn] first, and add the node to the tree before the next tick.
-				A client can call it when the node sets [member NetwEntity.lifecycle] to [constant NetwEntity.LIFECYCLE_CONTROLLER]. That client becomes its [member NetwEntity.controller], sees it at once, and loses it if the server refuses.
+				A client can call it when the node sets [member NetwEntity.lifecycle] to [constant NetwEntity.LIFECYCLE_CONTROLLER]. That client's player becomes its [member NetwEntity.controller]. The client sees it at once and loses it if the server refuses.
 			</description>
 		</method>
 		<method name="spawn_player" qualifiers="vararg static">
@@ -509,13 +509,18 @@
 			<param index="0" name="player" type="NetwPlayer" />
 			<param index="1" name="fn" type="Callable" />
 			<description>
-				Like [method spawn], for the node [param player] controls.
+				Like [method spawn], and writes [member NetwEntity.player] on the node [param fn] returns. The two lines below spawn the same entity.
 				[codeblock]
-				players.add_child(
-				    Netw.spawn_player(player, make_avatar, character_class)
-				)
+				players.add_child(Netw.spawn_player(player, make_avatar))
+				players.add_child(Netw.spawn(make_avatar_of, player.peer_id))
+
+				func make_avatar_of(peer_id: int) -&gt; Node:
+				    var avatar := make_avatar()
+				    var who := Netw.session(self).player_of(peer_id)
+				    NetwEntity.of(avatar).player = who
+				    return avatar
 				[/codeblock]
-				The node is despawned when [param player] leaves. With [method NetwPersistenceConfig.load_on_spawn], other peers receive it once its save is loaded.
+				Returns [code]null[/code] and spawns nothing when the session does not hold [param player]. The node is despawned when [param player] leaves. With [method NetwPersistenceConfig.load_on_spawn], other peers receive it once its save is loaded.
 				[b]Server Only.[/b]
 			</description>
 		</method>

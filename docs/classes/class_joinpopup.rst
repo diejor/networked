@@ -39,6 +39,8 @@ Properties
    +-------------------------------------------------+------------------------------------------------------------------------+---------------+
    | :godot:`Label`                                  | :ref:`leave_warning<class_JoinPopup_property_leave_warning>`           | ``<unknown>`` |
    +-------------------------------------------------+------------------------------------------------------------------------+---------------+
+   | :ref:`NetwSession<class_NetwSession>`           | :ref:`session<class_JoinPopup_property_session>`                       | ``<unknown>`` |
+   +-------------------------------------------------+------------------------------------------------------------------------+---------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -187,6 +189,20 @@ Property Descriptions
 :godot:`Label` **leave_warning** = ``<unknown>`` :ref:`🔗<class_JoinPopup_property_leave_warning>`
 
 Warns that joining leaves the current lobby.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_JoinPopup_property_session:
+
+.. rst-class:: classref-property
+
+:ref:`NetwSession<class_NetwSession>` **session** = ``<unknown>`` :ref:`🔗<class_JoinPopup_property_session>`
+
+.. container:: contribute
+
+	There is currently no description for this property. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
 
 .. rst-class:: classref-section-separator
 

@@ -5,8 +5,7 @@ namespace netw::entity {
 bool stage_edge_is_legal(int64_t p_from, int64_t p_to) {
     switch (Stage(p_from)) {
         case Stage::UNBOUND:
-            return p_to == int(Stage::TEMPLATE) || p_to == int(Stage::ARMED)
-                || p_to == int(Stage::DESPAWNING);
+            return p_to == int(Stage::ARMED) || p_to == int(Stage::DESPAWNING);
         case Stage::ARMED:
             return p_to == int(Stage::LIVE) || p_to == int(Stage::DESPAWNING);
         case Stage::LIVE:
@@ -15,7 +14,6 @@ bool stage_edge_is_legal(int64_t p_from, int64_t p_to) {
             return p_to == int(Stage::LINGERING) || p_to == int(Stage::FREED);
         case Stage::LINGERING:
             return p_to == int(Stage::FREED);
-        case Stage::TEMPLATE:
         case Stage::FREED:
             return false;
     }

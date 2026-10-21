@@ -158,11 +158,6 @@ public:
 
     void deactivate(godot::Node *p_owner);
 
-    bool mark_template(
-        godot::Node *p_owner,
-        godot::Object *p_wrapper = nullptr
-    );
-
     bool publish_stage(godot::Object *p_wrapper, int64_t p_from);
 
     void apply_control(
@@ -215,13 +210,7 @@ public:
     bool complete_departure(godot::Object *p_wrapper);
     void readmit();
 
-    bool classify_activation(
-        godot::Node *p_owner,
-        godot::Object *p_wrapper = nullptr
-    );
-
-    static bool declares_template(godot::Node *p_owner);
-    static godot::StringName template_meta();
+    bool classify_activation();
 
     godot::Variant part(int64_t p_part, godot::Object *p_wrapper);
     godot::Variant minted_part(int64_t p_part) const;

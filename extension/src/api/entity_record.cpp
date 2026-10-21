@@ -185,34 +185,6 @@ void NetwEntityRecord::deactivate(Node *p_owner) {
     synchronizers::sync_only_server(owner);
 }
 
-StringName NetwEntityRecord::template_meta() {
-    return StringName("_networked_spawn_template");
-}
-
-bool NetwEntityRecord::declares_template(Node *p_owner) {
-    Node *owner = p_owner;
-    if (owner == nullptr) {
-        return false;
-    }
-    return owner->get_owner() != nullptr || owner->has_meta(template_meta());
-}
-
-bool NetwEntityRecord::mark_template(Node *p_owner, Object *p_wrapper) {
-    const Ref<RefCounted> keep(Object::cast_to<RefCounted>(p_wrapper));
-    const int64_t from = stage;
-    if (stage == int64_t(entity::Stage::TEMPLATE)) {
-        return true;
-    }
-    if (!transition(int64_t(entity::Stage::TEMPLATE), p_owner)) {
-        return false;
-    }
-    Node *owner = p_owner;
-    if (owner != nullptr && owner->is_inside_tree()) {
-        deactivate(owner);
-    }
-    publish_stage(p_wrapper, from);
-    return true;
-}
 
 StringName NetwEntityRecord::entity_meta() {
     return StringName("netw_entity");
@@ -494,8 +466,7 @@ bool NetwEntityRecord::finish_teardown(Object *p_wrapper) {
 
 bool NetwEntityRecord::complete_departure(Object *p_wrapper) {
     const Ref<RefCounted> keep(Object::cast_to<RefCounted>(p_wrapper));
-    if (stage == int64_t(entity::Stage::TEMPLATE)
-        || stage == int64_t(entity::Stage::FREED)) {
+    if (stage == int64_t(entity::Stage::FREED)) {
         return false;
     }
     if (entity::stage_can_begin_despawn(stage)) {
@@ -517,21 +488,11 @@ void NetwEntityRecord::readmit() {
     projected_follower = 0;
 }
 
-bool NetwEntityRecord::classify_activation(Node *p_owner, Object *p_wrapper) {
-    if (stage == int64_t(entity::Stage::TEMPLATE)) {
-        deactivate(p_owner);
-        return false;
-    }
+bool NetwEntityRecord::classify_activation() {
     if (stage != int64_t(entity::Stage::UNBOUND)) {
         return true;
     }
-    if (entity_id != StringName()) {
-        return true;
-    }
-    if (declares_template(p_owner)) {
-        mark_template(p_owner, p_wrapper);
-    }
-    return false;
+    return entity_id != StringName();
 }
 
 } // namespace netw

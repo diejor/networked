@@ -64,24 +64,34 @@ public sealed class NetwSession : NetwRefCounted
         return Adopt(NetwApi.Retained(NetwApi.ObjectOf(value)));
     }
 
-    public enum SessionState : long
+    public enum StateEnum : long
     {
         /// <summary>
         /// Not connected.
         /// </summary>
         Offline = 0,
         /// <summary>
-        /// Hosting or joining, and may still fail.
+        /// <see cref="NetwConnection.Join"/> or
+        /// <see cref="NetwConnection.Host"/> is creating the
+        /// <see cref="MultiplayerPeer"/>.
         /// </summary>
-        Connecting = 1,
+        Creating = 1,
         /// <summary>
-        /// Connected.
+        /// A <see cref="MultiplayerPeer"/> is assigned and connecting, and may
+        /// still fail.
         /// </summary>
-        Online = 2,
+        Connecting = 2,
         /// <summary>
-        /// Disconnecting.
+        /// Connected, and <see cref="NetwSession.Entered"/> has fired. This
+        /// peer's player is admitted later, at
+        /// <see cref="NetwSession.LocalJoined"/>.
         /// </summary>
-        Disconnecting = 3,
+        Online = 3,
+        /// <summary>
+        /// <see cref="NetwSession.Exiting"/> has fired and
+        /// <see cref="NetwSession.Exited"/> has not.
+        /// </summary>
+        Disconnecting = 4,
     }
 
     public enum RoleEnum : long
@@ -146,6 +156,23 @@ public sealed class NetwSession : NetwRefCounted
         /// Each client keeps its world and its nodes.
         /// </summary>
         Continue = 1,
+    }
+
+    /// <summary>
+    /// Emitted when <see cref="NetwSession.State"/> changes. A server transfer
+    /// does not change it.
+    /// </summary>
+    public event Action<NetwSession.StateEnum> StateChanged
+    {
+        add => ConnectBridge(
+            "state_changed",
+            value,
+            Callable.From(
+                (long a0) =>
+                    value((NetwSession.StateEnum)a0)
+            )
+        );
+        remove => DisconnectBridge("state_changed", value);
     }
 
     /// <summary>
@@ -366,6 +393,33 @@ public sealed class NetwSession : NetwRefCounted
                 Checked,
                 ref answered);
             return NetwPlayer.Adopt(answered);
+        }
+    }
+
+    private static readonly IntPtr _bindGetState =
+        NetwApi.MethodBind("NetwSession", "get_state", 1135084573UL);
+
+    /// <summary>
+    /// Where this peer is in connecting, playing and leaving, reported by
+    /// <see cref="NetwSession.StateChanged"/>. The values only rise while
+    /// connecting, so <c>state &gt;= STATE_ONLINE</c> reads as connected or
+    /// leaving.
+    /// <code>
+    /// func on_state_changed(state: NetwSession.State) -&gt; void:
+    ///     match state:
+    ///         NetwSession.STATE_CREATING, NetwSession.STATE_CONNECTING:
+    ///             connecting_popup.show()
+    ///         _:
+    ///             connecting_popup.hide()
+    /// </code>
+    /// </summary>
+    public NetwSession.StateEnum State
+    {
+        get
+        {
+            long answered = default;
+            NetwThunks.Ptrcall0_Long(_bindGetState, Checked, ref answered);
+            return (NetwSession.StateEnum)answered;
         }
     }
 

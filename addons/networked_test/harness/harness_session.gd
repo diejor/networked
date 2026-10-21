@@ -154,7 +154,7 @@ func disconnect_tree(tree: MultiplayerViewport) -> int:
 
 	var peer := tree.api.multiplayer_peer as LocalMultiplayerPeer
 	var peer_id := tree.api.multiplayer_peer.get_unique_id()
-	tree.api.session_set_state(NetwSession.SESSION_STATE_DISCONNECTING)
+	tree.api.session_set_state(NetwSession.STATE_DISCONNECTING)
 	if peer:
 		_session.release_inbound_packets(peer)
 	tree.api.multiplayer_peer.close()

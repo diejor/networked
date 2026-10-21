@@ -30,7 +30,7 @@ Get it from :ref:`NetwEntity.interest<class_NetwEntity_property_interest>`. Ever
                 .on_enter(_on_interest_enter)
 
     # later
-    Netw.configure_entity(self).interest.join(&"team:blue")
+    NetwEntity.of(self).interest.join(&"team:blue")
 
 .. rst-class:: classref-reftable-group
 

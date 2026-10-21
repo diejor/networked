@@ -362,8 +362,8 @@ public sealed class NetwSimulation : NetwRefCounted
     /// When a body of this entity runs here as
     /// <see cref="NetwSimulation.ModeEnum.Authority"/> and touches a free
     /// entity that also sets it, this peer claims that entity with
-    /// <see cref="NetwEntity.HoldEnum.Yieldable"/>. A claimed entity claims
-    /// what it touches in the same tick. It raises
+    /// <see cref="NetwEntity.HoldEnum.Soft"/>. A claimed entity claims what it
+    /// touches in the same tick. It raises
     /// <c>RigidBody3D.max_contacts_reported</c> on the bodies.
     /// <c>RigidBody3D.body_entered</c> and <c>RigidBody3D.body_exited</c> need
     /// the game's own <c>RigidBody3D.contact_monitor</c>. It needs
@@ -410,7 +410,7 @@ public sealed class NetwSimulation : NetwRefCounted
     /// The seconds the bodies must sleep before this peer releases the entity
     /// with <see cref="NetwEntity.ReleaseControl"/>, or <c>0</c> to never
     /// release. It only releases an entity this peer holds with
-    /// <see cref="NetwEntity.HoldEnum.Yieldable"/>. It needs
+    /// <see cref="NetwEntity.HoldEnum.Soft"/>. It needs
     /// <see cref="NetwEntity.TransferEnum.Immediate"/> on an entity with no
     /// <see cref="NetwPropertyConfig.State"/> property and no prediction, and
     /// does nothing otherwise.

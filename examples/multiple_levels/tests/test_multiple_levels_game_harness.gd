@@ -257,9 +257,9 @@ func test_client_round_trip_teleport_stays_functional() -> void:
 			.override_failure_message("jose has no local player after return") \
 			.is_not_null()
 	var jose_scene: NetwScene = NetwEntity.of(jose_local).scene
-	assert_bool(jose_scene.is_declared) \
+	assert_that(jose_scene) \
 			.override_failure_message("jose's player belongs to no scene") \
-			.is_true()
+			.is_not_null()
 	assert_int(Netw.session(jose.tree).scenes.size()) \
 			.override_failure_message("jose still holds the level he left") \
 			.is_equal(1)
@@ -322,6 +322,32 @@ func test_a_reconnecting_player_is_restored_where_it_saved() -> void:
 	var again := await game.add_client("jose", true)
 	await _wait_for_transition(again)
 	_assert_arrived_at_marker(again, "Level2")
+
+
+func test_a_player_saved_in_level_2_never_appears_in_level_1() -> void:
+	var valeria := await game.add_host("valeria", true)
+	var jose := await game.add_client("jose", true)
+	var maria := await game.add_client("maria", true)
+	await _wait_for_transitions()
+
+	await _teleport_without_bridge(jose, valeria, _LEVEL_2_PATH, &"Level2")
+	await game.disconnect_runner(jose)
+	await game.sync_ticks(16)
+
+	var parents: Array[StringName] = []
+	var watch := func(node: Node) -> void:
+		if node.name == &"jose" and maria.tree.is_ancestor_of(node):
+			parents.append(StringName(node.get_parent().name))
+	get_tree().node_added.connect(watch)
+	var again := await game.add_client("jose", true)
+	await _wait_for_transition(again)
+	await game.sync_ticks(16)
+	get_tree().node_added.disconnect(watch)
+
+	_assert_arrived_at_marker(again, "Level2")
+	assert_array(parents) \
+			.override_failure_message("maria saw jose under %s" % [parents]) \
+			.not_contains([&"Level1"])
 
 
 func test_teleport_to_a_missing_marker_rejects_and_leaves_the_player_home() -> void:
@@ -495,7 +521,8 @@ func _wait_for_body_in(
 ) -> Node2D:
 	for _i in 180:
 		var body := participant.find_player(player_username) as Node2D
-		if body != null and Netw.scene(body).label == label:
+		var scene: NetwScene = Netw.scene(body) if body != null else null
+		if scene != null and scene.label == label:
 			return body
 		await game.sync_ticks(1)
 	return null

@@ -59,7 +59,7 @@
 			<return type="NetwPersistenceConfig" />
 			<param index="0" name="enabled" type="bool" default="true" />
 			<description>
-				Whether the server loads the stored record when the [NetwEntity]'s node is ready.
+				Whether the server loads the stored record when the [NetwEntity]'s node is ready. A [method NetwPersistence.load] called before the node enters the tree takes the place of this load.
 				Clients do not receive the [NetwEntity] until the load succeeds or finds no record. Call [method NetwPersistence.load] to retry a failed load.
 			</description>
 		</method>
@@ -81,7 +81,7 @@
 			<return type="NetwPersistenceConfig" />
 			<param index="0" name="provider" type="Callable" />
 			<description>
-				Calls [param provider] once when the root is ready. Its nonempty [StringName] identifies the record across sessions.
+				Calls [param provider] once on the server, when [method Netw.spawn] returns the root or, for a root that was not spawned, when it is ready. Its nonempty [StringName] identifies the record across sessions.
 			</description>
 		</method>
 		<method name="storage_version">

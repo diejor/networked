@@ -42,10 +42,6 @@ protected:
             "set_identity_packet",
             "get_identity_packet"
         );
-        godot::ClassDB::bind_method(
-            D_METHOD("record_spawning"),
-            &SpawnIdentityProbe::record_spawning
-        );
     }
 
     void _notification(int p_what) {
@@ -58,18 +54,12 @@ protected:
         if (entity.is_null()) {
             return;
         }
-        entity->set_initial_controller(netw::NetwEntity::INITIAL_PLAYER);
         entity->set_authority(netw::NetwEntity::AUTHORITY_CONTROLLER);
         netw::script::model::configure_node_property(
             this,
             godot::StringName("identity_packet")
         )
             ->on_spawn();
-        const godot::Callable sink
-            = godot::Callable(this, godot::StringName("record_spawning"));
-        if (!entity->is_connected(godot::StringName("spawning"), sink)) {
-            entity->connect(godot::StringName("spawning"), sink);
-        }
     }
 
 public:
@@ -79,10 +69,6 @@ public:
 
     void _ready() override {
         record(godot::StringName("ready"));
-    }
-
-    void record_spawning() {
-        record(godot::StringName("spawning"));
     }
 
     void set_identity_packet(const godot::Dictionary &p_packet) {

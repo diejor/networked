@@ -11,7 +11,7 @@ using netw::entity::Stage;
 using netw::entity::stage_can_begin_despawn;
 using netw::entity::stage_edge_is_legal;
 
-constexpr int STAGES = 7;
+constexpr int STAGES = 6;
 
 struct Edge {
     Stage from;
@@ -19,7 +19,6 @@ struct Edge {
 };
 
 constexpr Edge LEGAL_EDGES[] = {
-    {Stage::UNBOUND, Stage::TEMPLATE},
     {Stage::UNBOUND, Stage::ARMED},
     {Stage::UNBOUND, Stage::DESPAWNING},
     {Stage::ARMED, Stage::LIVE},
@@ -63,11 +62,10 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Entity][Hosted] S3 the two terminal stages admit nothing, and "
+    "[Networked][Entity][Hosted] S3 the terminal stage admits nothing, and "
     "a stage off the table admits nothing either"
 ) {
     for (int to = 0; to < STAGES; ++to) {
-        CHECK_FALSE(stage_edge_is_legal(int(Stage::TEMPLATE), to));
         CHECK_FALSE(stage_edge_is_legal(int(Stage::FREED), to));
     }
 
@@ -85,7 +83,6 @@ TEST_CASE(
     CHECK(stage_can_begin_despawn(int(Stage::ARMED)));
     CHECK(stage_can_begin_despawn(int(Stage::LIVE)));
 
-    CHECK_FALSE(stage_can_begin_despawn(int(Stage::TEMPLATE)));
     CHECK_FALSE(stage_can_begin_despawn(int(Stage::DESPAWNING)));
     CHECK_FALSE(stage_can_begin_despawn(int(Stage::LINGERING)));
     CHECK_FALSE(stage_can_begin_despawn(int(Stage::FREED)));
@@ -188,8 +185,6 @@ public:
 };
 
 void connect_lifecycle(const Ref<NetwEntity> &p_entity, CallLog &p_log) {
-    p_entity->connect("spawning", p_log.callable("spawning"));
-    p_entity->connect("spawned", p_log.callable("spawned"));
     p_entity->connect("despawning", p_log.callable("despawning"));
     p_entity->connect("despawned", p_log.callable("despawned"));
 }
@@ -209,36 +204,14 @@ TEST_CASE(
     const Ref<NetwEntity> entity = NetwEntity::ensure(owner);
     CallLog log;
     connect_lifecycle(entity, log);
+    netw::gd::add_signal(entity.ptr(), "stage_changed", 2);
     entity->connect(
         "stage_changed",
         Callable(memnew(StageProbe(entity.ptr(), &log)))
     );
     NETW_CHECK_EQ(log.count("stage"), 0);
 
-    SUBCASE("template classification is observable once") {
-        entity->set_is_template(true);
-        entity->set_is_template(true);
-        check_edge(log, 0, Stage::UNBOUND, Stage::TEMPLATE);
-        entity->_remote_despawn("template_refusal", 0.0);
-        NETW_CHECK_EQ(log.count("stage"), 1);
-        NETW_CHECK_EQ(log.count("despawning"), 0);
-    }
-
-    SUBCASE("tree entry publishes inferred template classification") {
-        owner->set_meta(netw::NetwEntityRecord::template_meta(), true);
-        NetwMultiplayer::entity_enter_tree(
-            entity.ptr(),
-            owner,
-            entity->get_record(),
-            nullptr,
-            true
-        );
-        check_edge(log, 0, Stage::UNBOUND, Stage::TEMPLATE);
-        NETW_CHECK_EQ(log.count("stage"), 1);
-        NETW_CHECK_EQ(log.count("spawning"), 0);
-    }
-
-    SUBCASE("live precedes spawning and ready precedes spawned") {
+    SUBCASE("live is published once, and ready runs once it is live") {
         entity->set_name("stage_crate");
         entity->arm(Ref<NetwMultiplayer>());
         NetwMultiplayer::entity_enter_tree(
@@ -250,11 +223,9 @@ TEST_CASE(
         );
         check_edge(log, 0, Stage::UNBOUND, Stage::ARMED);
         check_edge(log, 1, Stage::ARMED, Stage::LIVE);
-        NETW_CHECK_EQ(log.count("spawning"), 1);
-        NETW_CHECK_EQ(log.count("spawned"), 0);
-        CHECK(log.order()[2] == StringName("spawning"));
+        CHECK_FALSE(entity->get_ready_fired());
         entity->_on_owner_ready();
-        NETW_CHECK_EQ(log.count("spawned"), 1);
+        CHECK(entity->get_ready_fired());
         NetwMultiplayer::entity_enter_tree(
             entity.ptr(),
             owner,
@@ -294,15 +265,16 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Entity][Hosted] stage callbacks can complete teardown "
-    "without a stale spawning or despawning announcement"
+    "without a stale ready or despawning announcement"
 ) {
     Node *owner = memnew(Node);
     const Ref<NetwEntity> entity = NetwEntity::ensure(owner);
     entity->set_name("stage_reentrant");
     CallLog log;
     connect_lifecycle(entity, log);
+    netw::gd::add_signal(entity.ptr(), "stage_changed", 2);
 
-    SUBCASE("teardown during live publication suppresses spawning") {
+    SUBCASE("teardown during live publication suppresses ready") {
         entity->connect(
             "stage_changed",
             Callable(
@@ -320,10 +292,9 @@ TEST_CASE(
         check_edge(log, 1, Stage::ARMED, Stage::LIVE);
         check_edge(log, 2, Stage::LIVE, Stage::DESPAWNING);
         check_edge(log, 3, Stage::DESPAWNING, Stage::FREED);
-        NETW_CHECK_EQ(log.count("spawning"), 0);
         NETW_CHECK_EQ(log.count("despawned"), 1);
         entity->_on_owner_ready();
-        NETW_CHECK_EQ(log.count("spawned"), 0);
+        CHECK_FALSE(entity->get_ready_fired());
     }
 
     SUBCASE("completion during despawn publication suppresses despawning") {
@@ -354,6 +325,7 @@ TEST_CASE(
     const ObjectID wrapper_id = netw::gd::instance_id(entity.ptr());
     CallLog log;
     connect_lifecycle(entity, log);
+    netw::gd::add_signal(entity.ptr(), "stage_changed", 2);
     entity->connect(
         "stage_changed",
         Callable(memnew(
@@ -370,7 +342,6 @@ TEST_CASE(
     );
     CHECK(entity.is_null());
     CHECK(netw::gd::object_of(wrapper_id) == nullptr);
-    NETW_CHECK_EQ(log.count("spawning"), 0);
     NETW_CHECK_EQ(log.count("stage"), 2);
 }
 

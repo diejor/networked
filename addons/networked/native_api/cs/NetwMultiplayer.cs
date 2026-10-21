@@ -104,7 +104,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// </summary>
         Reparented = 4,
         /// <summary>
-        /// An entity's <see cref="NetwEntity.StageEnum"/> changed.
+        /// An entity's internal lifecycle stage changed, for debugging.
         /// <c>detail</c> has <c>from</c> and <c>to</c>.
         /// </summary>
         StageTransition = 5,
@@ -1466,8 +1466,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// </summary>
         ClockStabilityChanged = 19,
         /// <summary>
-        /// <see cref="NetwMultiplayer.State"/> changed. The callback receives
-        /// <c>(old_state: int, new_state: int)</c>.
+        /// The notification form of <see cref="NetwSession.StateChanged"/>. The
+        /// callback receives <c>(old_state: int, new_state: int)</c>.
         /// </summary>
         SessionStateChanged = 20,
         /// <summary>
@@ -1477,8 +1477,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// </summary>
         SessionJoinSubmitted = 21,
         /// <summary>
-        /// The session became <see cref="NetwSession.SessionState.Online"/>.
-        /// The callback receives no arguments.
+        /// The session became <see cref="NetwSession.StateEnum.Online"/>. The
+        /// callback receives no arguments.
         /// </summary>
         SessionEntered = 22,
         /// <summary>
@@ -1489,8 +1489,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
         SessionJoinFailed = 23,
         /// <summary>
         /// The session stopped being
-        /// <see cref="NetwSession.SessionState.Online"/>. The callback receives
-        /// no arguments.
+        /// <see cref="NetwSession.StateEnum.Online"/>. The callback receives no
+        /// arguments.
         /// </summary>
         SessionEnded = 24,
         /// <summary>
@@ -1641,27 +1641,23 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// </summary>
         SceneLive = 49,
         /// <summary>
-        /// The notification form of <see cref="NetwConnection.StateChanged"/>.
-        /// </summary>
-        ConnectionStateChanged = 50,
-        /// <summary>
         /// The notification form of <see cref="NetwConnection.Progressed"/>.
         /// </summary>
-        ConnectionProgressed = 51,
+        ConnectionProgressed = 50,
         /// <summary>
         /// The notification form of <see cref="NetwConnection.Failed"/>.
         /// </summary>
-        ConnectionFailed = 52,
+        ConnectionFailed = 51,
         /// <summary>
         /// The notification form of
         /// <see cref="NetwConnection.JoinAddressChanged"/>.
         /// </summary>
-        ConnectionJoinAddressChanged = 53,
+        ConnectionJoinAddressChanged = 52,
         /// <summary>
         /// The notification form of <see cref="NetwConnection.Invited"/>. The
         /// callback receives <c>(endpoint: RID)</c>.
         /// </summary>
-        ConnectionInvited = 54,
+        ConnectionInvited = 53,
     }
 
     /// <summary>
@@ -1821,16 +1817,12 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind(
             "NetwMultiplayer",
             "session_get_state",
-            2693128761UL);
+            1135084573UL);
 
     /// <summary>
-    /// Whether the session is connected.
-    /// - <see cref="NetwSession.SessionState.Offline"/> not connected
-    /// - <see cref="NetwSession.SessionState.Connecting"/> connecting, may fail
-    /// - <see cref="NetwSession.SessionState.Online"/> connected
-    /// - <see cref="NetwSession.SessionState.Disconnecting"/> disconnecting
+    /// Same as <see cref="NetwSession.State"/>.
     /// </summary>
-    public NetwSession.SessionState State
+    public NetwSession.StateEnum State
     {
         get
         {
@@ -1839,7 +1831,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
                 _bindSessionGetState,
                 Checked,
                 ref answered);
-            return (NetwSession.SessionState)answered;
+            return (NetwSession.StateEnum)answered;
         }
     }
 
@@ -1875,7 +1867,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
 
     /// <summary>
     /// <c>true</c> when <see cref="NetwMultiplayer.State"/> is
-    /// <see cref="NetwSession.SessionState.Online"/>.
+    /// <see cref="NetwSession.StateEnum.Online"/>.
     /// </summary>
     public bool IsOnline
     {
@@ -3851,25 +3843,6 @@ public sealed class NetwMultiplayer : NetwRefCounted
             _bindTransportCancelAttempt,
             Checked,
             ref discarded);
-    }
-
-    private static readonly IntPtr _bindTransportGetAttemptState =
-        NetwApi.MethodBind(
-            "NetwMultiplayer",
-            "transport_get_attempt_state",
-            3905245786UL);
-
-    /// <summary>
-    /// The flat form of <see cref="NetwConnection.State"/>.
-    /// </summary>
-    public long TransportGetAttemptState()
-    {
-        long answered = default;
-        NetwThunks.Ptrcall0_Long(
-            _bindTransportGetAttemptState,
-            Checked,
-            ref answered);
-        return answered;
     }
 
     private static readonly IntPtr _bindTransportSetDefaults =
@@ -6858,8 +6831,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <summary>
     /// Returns what this peer knows about the entity at
     /// <paramref name="route"/>, or an empty
-    /// <see cref="Godot.Collections.Dictionary"/>. <c>stage</c> is a
-    /// <see cref="NetwEntity.StageEnum"/> and <c>liveness</c> is an
+    /// <see cref="Godot.Collections.Dictionary"/>. <c>stage</c> is an internal
+    /// lifecycle number for debugging and <c>liveness</c> is an
     /// <see cref="NetwMultiplayer.EntityState"/>.
     /// <code>
     /// Dictionary
@@ -7167,9 +7140,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
 
     /// <summary>
     /// Sets the join request sent when
-    /// <see cref="MultiplayerApi.MultiplayerPeer"/> connects. A server sends it
-    /// at <see cref="NetwMultiplayer.SessionSubmitJoin"/>. The promise result
-    /// is an <c>@GlobalScope.Error</c>.
+    /// <see cref="MultiplayerApi.MultiplayerPeer"/> connects. The promise
+    /// result is an <c>@GlobalScope.Error</c>.
     /// <code>
     /// var prepared := api.session_prepare_join(&amp;"Dev")
     /// if not prepared.is_settled:
@@ -7210,11 +7182,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind("NetwMultiplayer", "session_leave", 1931563502UL);
 
     /// <summary>
-    /// Disconnects and returns to
-    /// <see cref="NetwSession.SessionState.Offline"/>. On the server, it saves
-    /// every persistent entity first, and a failed save keeps the session
-    /// online. The promise resolves with an <c>@GlobalScope.Error</c> within
-    /// three seconds.
+    /// Disconnects and returns to <see cref="NetwSession.StateEnum.Offline"/>.
+    /// On the server, it saves every persistent entity first, and a failed save
+    /// keeps the session online. The promise resolves with an
+    /// <c>@GlobalScope.Error</c> once the peer is closed.
     /// <code>
     /// var left := api.session_leave()
     /// if not left.is_settled:
@@ -10380,10 +10351,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
             3804025326UL);
 
     /// <summary>
-    /// Assigns <see cref="NetwEntity.Controller"/> on
-    /// <paramref name="entity"/>. Returns <c>@GlobalScope.ERR_UNAUTHORIZED</c>
-    /// on a client, or <c>@GlobalScope.ERR_DOES_NOT_EXIST</c> when
-    /// <paramref name="entity"/> has no bound node.
+    /// Gives control of <paramref name="entity"/> to <paramref name="peer"/>.
+    /// Returns <c>@GlobalScope.ERR_UNAUTHORIZED</c> on a client, or
+    /// <c>@GlobalScope.ERR_DOES_NOT_EXIST</c> when <paramref name="entity"/>
+    /// has no bound node.
     /// </summary>
     public Error EntityGrantControl(Rid entity, long peer)
     {
@@ -10691,15 +10662,16 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind(
             "NetwMultiplayer",
             "session_set_state",
-            2816520180UL);
+            3094329231UL);
 
     /// <summary>
     /// Sets <see cref="NetwMultiplayer.State"/> without checking the change is
     /// allowed, and notifies
     /// <see cref="NetwMultiplayer.Notification.SessionStateChanged"/>. Prefer
     /// <see cref="NetwMultiplayer.SessionTransition"/>.
+    /// <see cref="NetwSession.StateEnum.Creating"/> is refused with an error.
     /// </summary>
-    public void SessionSetState(NetwSession.SessionState state)
+    public void SessionSetState(NetwSession.StateEnum state)
     {
         long slot0 = (long)state;
         long discarded = default;
@@ -10730,48 +10702,19 @@ public sealed class NetwMultiplayer : NetwRefCounted
             ref discarded);
     }
 
-    private static readonly IntPtr _bindSessionSubmitJoin =
-        NetwApi.MethodBind(
-            "NetwMultiplayer",
-            "session_submit_join",
-            480973127UL);
-
-    /// <summary>
-    /// Sends the local player's join request now. It replaces one from
-    /// <see cref="NetwMultiplayer.SessionPrepareJoin"/>. An empty
-    /// <paramref name="userName"/> sends nothing. <b>Player request.</b>
-    /// </summary>
-    public void SessionSubmitJoin(
-        StringName userName,
-        Godot.Collections.Array args = null)
-    {
-        args ??= new Godot.Collections.Array();
-        godot_variant slot0 = VariantUtils.CreateFromStringName(userName);
-        godot_variant slot1 = VariantUtils.CreateFromArray(args);
-        godot_variant answered = default;
-        NetwThunks.Call2(
-            _bindSessionSubmitJoin,
-            Checked,
-            in slot0,
-            in slot1,
-            ref answered);
-        slot0.Dispose();
-        slot1.Dispose();
-        answered.Dispose();
-    }
-
     private static readonly IntPtr _bindSessionTransition =
         NetwApi.MethodBind(
             "NetwMultiplayer",
             "session_transition",
-            2816520180UL);
+            3094329231UL);
 
     /// <summary>
     /// Changes <see cref="NetwMultiplayer.State"/> and notifies
     /// <see cref="NetwMultiplayer.Notification.SessionStateChanged"/>. A change
-    /// that is not allowed pushes an error and does nothing.
+    /// that is not allowed, or <see cref="NetwSession.StateEnum.Creating"/>,
+    /// pushes an error and does nothing.
     /// </summary>
-    public void SessionTransition(NetwSession.SessionState state)
+    public void SessionTransition(NetwSession.StateEnum state)
     {
         long slot0 = (long)state;
         long discarded = default;

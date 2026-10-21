@@ -382,17 +382,15 @@ Ref<NetwPromise> Netw::prepare_join(
         "Netw.prepare_join got a node that is not inside a session. Call it "
         "from a node in the scene tree under a MultiplayerViewport."
     );
-    if (!api->is_online()) {
-        return api->session_prepare_join(p_username, p_args);
+    if (api->is_online()) {
+        NETW_ERROR(
+            sys::SESSION,
+            "Netw.prepare_join was called after the session connected. Call "
+            "it before assigning multiplayer_peer."
+        );
+        return NetwPromise::resolved(ERR_ALREADY_IN_USE);
     }
-    NETW_ERR_COND_V(
-        String(p_username).is_empty(),
-        NetwPromise::resolved(ERR_INVALID_PARAMETER),
-        sys::SESSION,
-        "Netw.prepare_join needs a username, and it was empty."
-    );
-    api->session_submit_join(p_username, p_args);
-    return NetwPromise::resolved(OK);
+    return api->session_prepare_join(p_username, p_args);
 }
 
 Ref<NetwScene> Netw::scene(Node *p_node) {

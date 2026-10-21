@@ -1,5 +1,6 @@
 #include "support/loopback_rig.h"
 #include "support/netw_recorder.h"
+#include "support/session_state_walk.h"
 
 #if defined(NETW_TIER_HOSTED)
 
@@ -77,8 +78,31 @@ Mode sim_mode(NetwMultiplayer *p_seat, const RID &p_entity) {
 
 const char *BODY_ID = "transfer_body";
 
+const char *RUNNING_SOURCE = R"(extends Node2D
+
+var hp := 0
+
+func _init() -> void:
+	var e := Netw.configure_entity(self)
+	e.authority = NetwEntity.AUTHORITY_CONTROLLER
+	e.transfer = NetwEntity.TRANSFER_IMMEDIATE
+	Netw.configure_property(self, &"hp").broadcast()
+)";
+
+Ref<Script> &running_body() {
+    static Ref<Script> held;
+    return held;
+}
+
 Node *build_body(const Variant &p_name) {
-    Node2D *made = memnew(Node2D);
+    Node *made = nullptr;
+    if (running_body().is_valid()) {
+        made = Object::cast_to<Node>(
+            netw::gd::live_object(running_body()->call("new"))
+        );
+    } else {
+        made = memnew(Node2D);
+    }
     made->set_name(String(p_name));
     return made;
 }
@@ -489,6 +513,84 @@ TEST_CASE(
     }
 }
 
+std::vector<netw_test::StateHeard> &heard_states(int64_t p_seat) {
+    static std::vector<netw_test::StateHeard> heard[CLIENTS + 1];
+    return heard[p_seat + 1];
+}
+
+void hear_state(int64_t p_state, uint64_t p_seat_id, int64_t p_seat) {
+    NetwMultiplayer *seat = Object::cast_to<NetwMultiplayer>(
+        netw::gd::object_of(ObjectID(p_seat_id))
+    );
+    const int64_t read
+        = seat != nullptr ? int64_t(seat->get_session()->get_state()) : -1;
+    heard_states(p_seat).push_back({p_state, read});
+}
+
+TEST_CASE(
+    "[Networked][Session][Transfer][SceneTree] TX36 NetwSession.state reads "
+    "STATE_ONLINE on every seat straight through a server transfer, handed "
+    "on or lost, rejoined or continued, and state_changed stays silent"
+) {
+    enum Move {
+        MOVE_HANDED,
+        MOVE_HANDED_KEPT,
+        MOVE_LOST,
+    };
+    for (const Move move : {MOVE_HANDED, MOVE_HANDED_KEPT, MOVE_LOST}) {
+        NETW_FORMAT_INT(move_text, int(move));
+        CAPTURE(move_text);
+        Table table;
+        if (move == MOVE_HANDED_KEPT) {
+            table.keep_world();
+        }
+        for (int at = -1; at < CLIENTS; ++at) {
+            heard_states(at).clear();
+            const Ref<NetwSession> door = table.seat(at)->get_session();
+            const uint64_t seat_id
+                = uint64_t(netw::gd::instance_id(table.seat(at)));
+            door->connect(
+                StringName("state_changed"),
+                callable_mp_static(&hear_state).bind(seat_id, int64_t(at))
+            );
+        }
+
+        const int64_t successor_was = table.was(table.lowest_client());
+        if (move == MOVE_LOST) {
+            REQUIRE(int(table.rig.session()->lose_server()) == int(OK));
+        } else {
+            NETW_REQUIRE_EQ(
+                int(table.seat(-1)->get_session()->transfer_server(
+                    successor_was
+                )),
+                int(OK)
+            );
+        }
+        table.rig.pump(SETTLE_PUMPS);
+
+        const int first = move == MOVE_LOST ? 0 : -1;
+        for (int at = first; at < CLIENTS; ++at) {
+            NETW_FORMAT_INT(seat_text, at);
+            CAPTURE(seat_text);
+            const Ref<NetwSession> door = table.seat(at)->get_session();
+            NETW_CHECK_EQ(
+                int(door->get_state()),
+                int(NetwSession::STATE_ONLINE)
+            );
+            const netw_test::LawVerdict walk = netw_test::law_state_walk(
+                heard_states(at),
+                NetwSession::STATE_ONLINE
+            );
+            CAPTURE(walk.detail);
+            CHECK(walk.held);
+            NETW_CHECK_EQ(int(heard_states(at).size()), 0);
+        }
+        for (int at = -1; at < CLIENTS; ++at) {
+            heard_states(at).clear();
+        }
+    }
+}
+
 TEST_CASE(
     "[Networked][Session][Transfer][SceneTree] TX3 after the server is lost "
     "with the world kept, every survivor reads the successor's player and "
@@ -520,11 +622,11 @@ TEST_CASE(
     const struct {
         int route;
         int64_t controller;
-        NetwEntity::ControlKind kind;
+        bool player_controlled;
     } rows[] = {
-        {carried, 1, NetwEntity::CONTROL_PEER_CONTROLLED},
-        {steered, third_label, NetwEntity::CONTROL_PEER_CONTROLLED},
-        {served, 1, NetwEntity::CONTROL_SERVER_CONTROLLED},
+        {carried, 1, true},
+        {steered, third_label, true},
+        {served, 1, false},
     };
     for (int at = 0; at < CLIENTS; ++at) {
         NETW_FORMAT_INT(seat_text, at);
@@ -552,8 +654,8 @@ TEST_CASE(
             );
             NETW_CHECK_EQ(int64_t(body->get_multiplayer_authority()), 1);
             NETW_CHECK_EQ(
-                int(NetwEntity::of(body)->get_control_kind()),
-                int(row.kind)
+                int(NetwEntity::of(body)->get_controller_player().is_valid()),
+                int(row.player_controlled)
             );
         }
     }
@@ -1121,6 +1223,66 @@ TEST_CASE(
 }
 
 TEST_CASE(
+    "[Networked][Session][Transfer][SceneTree] TX13b a claim running ahead "
+    "on a lost server fails with ERR_UNAVAILABLE and stops steering, whether "
+    "the world is kept or rebuilt, and a kept world gives the claimant back "
+    "the value the successor holds"
+) {
+    bool keep = false;
+    SUBCASE("rebuilt") {
+        keep = false;
+    }
+    SUBCASE("kept") {
+        keep = true;
+    }
+    Table table;
+    if (keep) {
+        table.keep_world();
+    }
+    table.rig.declare_world(netw_test::WorldDecl().clocked());
+    const int successor = table.lowest_client();
+    const int survivor = (successor + 1) % CLIENTS;
+    running_body() = netw_test::minted_script(RUNNING_SOURCE);
+    const int served = table.spawn_body("Running", -2, 0);
+    running_body() = Ref<Script>();
+    present(table.body_at(served, -1))->set(StringName("hp"), 4);
+    table.rig.step_ticks(12);
+    NETW_REQUIRE_EQ(
+        int64_t(present(table.body_at(served, survivor))->get("hp")),
+        int64_t(4)
+    );
+    const Ref<NetwEntity> claimant
+        = NetwEntity::of(present(table.body_at(served, survivor)));
+    const Ref<NetwPromise> claim = claimant->claim_control();
+    REQUIRE_FALSE(claim->get_is_settled());
+    REQUIRE(claimant->get_is_controlled_locally());
+    present(table.body_at(served, survivor))->set(StringName("hp"), 9);
+
+    REQUIRE(int(table.rig.session()->lose_server()) == int(OK));
+    table.rig.pump(SETTLE_PUMPS);
+
+    REQUIRE(claim->get_is_failed());
+    NETW_CHECK_EQ(int(claim->get_code()), int(ERR_UNAVAILABLE));
+    NETW_CHECK_EQ(int(claim->get_detail().contains("server moved")), 1);
+    CHECK_FALSE(claimant->get_is_controlled_locally());
+    CHECK_FALSE(claimant->is_claim_pending());
+    const Ref<NetwEntity> seen
+        = NetwEntity::of(present(table.body_at(served, survivor)));
+    CHECK_FALSE(seen->get_is_controlled_locally());
+    NETW_CHECK_EQ(seen->get_controller(), int64_t(1));
+    if (keep) {
+        for (const int at : { successor, survivor }) {
+            NETW_FORMAT_INT(seat_text, at);
+            CAPTURE(seat_text);
+            NETW_CHECK_EQ(
+                int64_t(present(table.body_at(served, at))->get("hp")),
+                int64_t(4)
+            );
+        }
+    }
+}
+
+TEST_CASE(
     "[Networked][Session][Transfer][SceneTree] TX14 a survivor that missed a "
     "player's admission before the server was lost learns that player from "
     "the successor's roster"
@@ -1447,6 +1609,14 @@ Node *build_leased(const Variant &p_name) {
     return made;
 }
 
+Node *build_npc(const Variant &p_name) {
+    Node *made = build_body(p_name);
+    NetwEntity::ensure(made)->set_on_controller_disconnect(
+        NetwEntity::DISCONNECT_DESPAWN
+    );
+    return made;
+}
+
 bool alive(const Table &p_table, int p_route, int p_at) {
     Node *node = p_table.body_at(p_route, p_at);
     if (node == nullptr || !node->is_inside_tree()) {
@@ -1696,6 +1866,62 @@ TEST_CASE(
         NETW_CHECK_EQ(int(alive(table, route, at)), 0);
         NETW_CHECK_EQ(int(alive(table, steady, at)), 1);
     }
+}
+
+TEST_CASE(
+    "[Networked][Session][Transfer][SceneTree] TX20b an NPC whose spawn "
+    "function asks for DISCONNECT_DESPAWN begins despawning on the successor "
+    "when the survivor steering it leaves, whether the world is kept or "
+    "rebuilt"
+) {
+    bool keep = false;
+    SUBCASE("rebuilt") {
+        keep = false;
+    }
+    SUBCASE("kept") {
+        keep = true;
+    }
+    Table table;
+    if (keep) {
+        table.keep_world();
+    }
+    const int successor = table.lowest_client();
+    const int survivor = (successor + 1) % CLIENTS;
+    for (int at = -1; at < CLIENTS; ++at) {
+        table.rig.register_constructor(
+            table.seat(at),
+            StringName("transfer_npc"),
+            callable_mp_static(&build_npc),
+            string_types()
+        );
+    }
+    const RID served = table.rig.server()->spawn_registered(
+        StringName("transfer_npc"),
+        named("Npc"),
+        nullptr
+    );
+    Node *npc = present(table.rig.server()->entity_get_node(served));
+    table.arena->add_child(npc);
+    NetwEntity::of(npc)->set_controller(table.was(survivor));
+    const int route = int(table.rig.server()->entity_get_route(served));
+    table.rig.pump(SETTLE_PUMPS);
+
+    NETW_REQUIRE_EQ(int(table.rig.session()->lose_server()), int(OK));
+    table.rig.pump(SETTLE_PUMPS);
+    const Ref<NetwEntity> held
+        = NetwEntity::of(present(table.body_at(route, successor)));
+    NETW_REQUIRE_EQ(held->get_stage(), int64_t(netw::entity::Stage::LIVE));
+
+    table.links[successor + 1]->NETW_PEER_VIRTUAL(disconnect_peer)(
+        int(table.seat(survivor)->get_unique_id()),
+        false
+    );
+    table.rig.pump(SETTLE_PUMPS);
+
+    NETW_CHECK_EQ(
+        held->get_stage(),
+        int64_t(netw::entity::Stage::DESPAWNING)
+    );
 }
 
 TEST_CASE(
@@ -2036,11 +2262,7 @@ TEST_CASE(
     table.rig.pump(SETTLE_PUMPS);
     table.rig.hold(successor);
     for (int missed : missed_clients) {
-        netw::Netw::prepare_join(
-            table.rig.branch(missed),
-            StringName("missed"),
-            Array()
-        );
+        table.seat(missed)->session_submit_join(StringName("missed"), Array());
     }
     table.rig.pump(SETTLE_PUMPS);
     const int seats = table.rig.count();
@@ -2061,11 +2283,7 @@ TEST_CASE(
     }
     const int late = table.rig.add_client();
     table.rig.mount_late(late);
-    netw::Netw::prepare_join(
-        table.rig.branch(late),
-        StringName("late"),
-        Array()
-    );
+    table.seat(late)->session_submit_join(StringName("late"), Array());
     table.rig.pump(SETTLE_PUMPS);
     NetwMultiplayer *host = table.seat(successor);
     NETW_CHECK_EQ(int(host->is_structure_halted()), 1);

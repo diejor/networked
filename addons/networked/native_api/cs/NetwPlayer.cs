@@ -17,7 +17,7 @@ namespace Networked;
 /// var player := session.player_of(peer_id)
 /// greet(player.username)
 /// for entity: NetwEntity in player.entities:
-///     follow(entity.owner)
+///     follow(entity.root)
 /// </code>
 /// <para>
 /// A player is not a peer. After the player leaves,
@@ -124,7 +124,8 @@ public sealed class NetwPlayer : NetwRefCounted
         NetwApi.MethodBind("NetwPlayer", "get_username", 2002593661UL);
 
     /// <summary>
-    /// The username from <see cref="Netw.PrepareJoin"/>. It is kept after the
+    /// The username from <see cref="Netw.PrepareJoin"/>. It is empty for a peer
+    /// that never called <see cref="Netw.PrepareJoin"/>. It is kept after the
     /// player leaves. Two players may join with the same name, unless
     /// <see cref="Netw.ConfigureAdmission"/> refuses it.
     /// </summary>

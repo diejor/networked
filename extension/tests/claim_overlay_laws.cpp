@@ -30,6 +30,7 @@ using Control = netw::entity::Control;
 constexpr int TICKRATE = 30;
 constexpr double TICK_MS = 1000.0 / TICKRATE;
 constexpr int CLAIM_FLIGHT_TICKS = 8;
+constexpr int SLOW_CLAIM_FLIGHT_TICKS = 20;
 constexpr const char *BOARD_ID = "claim_overlay_board";
 
 constexpr const char *BOARD_SOURCE = R"(extends Node2D
@@ -40,6 +41,17 @@ func _init() -> void:
 	var e := Netw.configure_entity(self)
 	e.authority = NetwEntity.AUTHORITY_CONTROLLER
 	e.transfer = NetwEntity.TRANSFER_IMMEDIATE
+	Netw.configure_property(self, &"strokes").broadcast().on_spawn()
+)";
+
+constexpr const char *WAITING_BOARD_SOURCE = R"(extends Node2D
+
+var strokes := 0
+
+func _init() -> void:
+	var e := Netw.configure_entity(self)
+	e.authority = NetwEntity.AUTHORITY_CONTROLLER
+	e.transfer = NetwEntity.TRANSFER_REQUESTABLE
 	Netw.configure_property(self, &"strokes").broadcast().on_spawn()
 )";
 
@@ -77,8 +89,12 @@ struct Board {
     Ref<Script> script;
     int route = 0;
 
-    explicit Board(int64_t p_first_strokes = 0) : rig(2) {
-        script = minted_script(BOARD_SOURCE);
+    explicit Board(
+        int64_t p_first_strokes = 0,
+        const char *p_source = BOARD_SOURCE
+    )
+        : rig(2) {
+        script = minted_script(p_source);
         board_script = script.ptr();
         first_board_strokes = p_first_strokes;
         rig.mount();
@@ -259,7 +275,7 @@ TEST_CASE(
         = claimant->claim_control(Control::HOLD_EXCLUSIVE);
     grab->then(log.callable("grab"));
     const Ref<NetwPromise> toss
-        = claimant->claim_control(Control::HOLD_YIELDABLE);
+        = claimant->claim_control(Control::HOLD_SOFT);
     toss->then(log.callable("throw"));
     CHECK_FALSE(toss->get_is_settled());
     CHECK(claimant->get_is_controlled_locally());
@@ -273,12 +289,12 @@ TEST_CASE(
     CHECK(grab_first);
     const Ref<NetwEntity> host = stand.entity(-1);
     NETW_CHECK_EQ(host->get_controller(), int64_t(a));
-    NETW_CHECK_EQ(int(host->get_hold()), int(Control::HOLD_YIELDABLE));
+    NETW_CHECK_EQ(int(host->get_hold()), int(Control::HOLD_SOFT));
     NETW_CHECK_EQ(
         int64_t(host->get_control_tenure()),
         int64_t(host->get_control_revision()) - 1
     );
-    NETW_CHECK_EQ(int(claimant->get_hold()), int(Control::HOLD_YIELDABLE));
+    NETW_CHECK_EQ(int(claimant->get_hold()), int(Control::HOLD_SOFT));
 }
 
 TEST_CASE(
@@ -333,6 +349,41 @@ TEST_CASE(
     NETW_CHECK_EQ(stand.strokes(0), 3);
     stand.rig.release(0);
     stand.rig.step_ticks(12);
+}
+
+TEST_CASE(
+    "[Networked][Control][SceneTree] CO6 a claim under AUTHORITY_CONTROLLER "
+    "runs ahead of the grant under TRANSFER_IMMEDIATE, and under "
+    "TRANSFER_REQUESTABLE the claimant reads the server's board until the "
+    "grant lands"
+) {
+    bool immediate = false;
+    SUBCASE("TRANSFER_IMMEDIATE") {
+        immediate = true;
+    }
+    SUBCASE("TRANSFER_REQUESTABLE") {
+        immediate = false;
+    }
+    Board stand(0, immediate ? BOARD_SOURCE : WAITING_BOARD_SOURCE);
+    stand.rig.conditions(
+        -1,
+        latency_of(SLOW_CLAIM_FLIGHT_TICKS),
+        stand.rig.peer_id(0)
+    );
+    const Ref<NetwEntity> claimant = stand.entity(0);
+    stand.draw(-1, 3);
+    stand.rig.step_ticks(SLOW_CLAIM_FLIGHT_TICKS / 2);
+
+    const Ref<NetwPromise> claim = claimant->claim_control();
+    NETW_CHECK_EQ(int(claimant->get_is_controlled_locally()), int(immediate));
+    stand.draw(0, 9);
+    stand.rig.step_ticks(SLOW_CLAIM_FLIGHT_TICKS - 4);
+    CHECK_FALSE(claim->get_is_settled());
+    NETW_CHECK_EQ(stand.strokes(0), immediate ? 9 : 3);
+
+    stand.rig.step_ticks(8);
+    CHECK(claim->get_is_completed());
+    CHECK(claimant->get_is_controlled_locally());
 }
 
 } // namespace TestClaimOverlay

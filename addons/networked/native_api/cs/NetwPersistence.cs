@@ -11,8 +11,9 @@ namespace Networked;
 /// </summary>
 /// <remarks>
 /// The server reads the <see cref="NetwPersistenceConfig"/> and saved
-/// properties when the root is ready. Wait for
-/// <see cref="NetwPersistence.Loaded"/> before using stored values.
+/// properties when <see cref="Netw.Spawn"/> returns the root, or when a root
+/// that was not spawned is ready. Wait for <see cref="NetwPersistence.Loaded"/>
+/// before using stored values.
 /// <code>
 /// @onready var entity: NetwEntity = NetwEntity.of(self)
 ///
@@ -24,8 +25,8 @@ namespace Networked;
 /// </code>
 /// <para>
 /// <see cref="NetwPersistenceConfig.Interval"/> saves changed values
-/// automatically. Freeing the root saves one last time. Failed loads and saves
-/// emit <see cref="NetwDatabase.Failed"/>.
+/// automatically. Freeing the root saves one last time, unless it never entered
+/// the tree. Failed loads and saves emit <see cref="NetwDatabase.Failed"/>.
 /// </para>
 /// </remarks>
 public sealed class NetwPersistence : NetwRefCounted
@@ -161,6 +162,8 @@ public sealed class NetwPersistence : NetwRefCounted
     /// promise returns <c>true</c> when a record was found, and <c>false</c>
     /// when none was stored and the properties keep their values. A failed load
     /// fails the promise, and <see cref="NetwPromise.Wait"/> returns the code.
+    /// On a node from <see cref="Netw.Spawn"/>, awaiting it before
+    /// <see cref="Node.AddChild"/> adds the node with its stored values.
     /// <code>
     /// Error
     /// ┠╴ERR_UNCONFIGURED       no persistence, unopened database or missing migration

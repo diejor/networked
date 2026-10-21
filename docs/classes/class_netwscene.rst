@@ -46,8 +46,6 @@ Properties
    +-------------------------------------------------------+------------------------------------------------------------------------------+
    | :ref:`NetwEntity<class_NetwEntity>`                   | :ref:`entity<class_NetwScene_property_entity>`                               |
    +-------------------------------------------------------+------------------------------------------------------------------------------+
-   | :godot:`bool`                                         | :ref:`is_declared<class_NetwScene_property_is_declared>`                     |
-   +-------------------------------------------------------+------------------------------------------------------------------------------+
    | :godot:`StringName`                                   | :ref:`label<class_NetwScene_property_label>`                                 |
    +-------------------------------------------------------+------------------------------------------------------------------------------+
    | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] | :ref:`local_player_entities<class_NetwScene_property_local_player_entities>` |
@@ -276,23 +274,7 @@ Every entity in this scene.
 
 - :ref:`NetwEntity<class_NetwEntity>` **get_entity**\ (\ )
 
-The :ref:`NetwEntity<class_NetwEntity>` on :ref:`root<class_NetwScene_property_root>`, or ``null`` when no scene was found.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwScene_property_is_declared:
-
-.. rst-class:: classref-property
-
-:godot:`bool` **is_declared** :ref:`🔗<class_NetwScene_property_is_declared>`
-
-.. rst-class:: classref-property-setget
-
-- :godot:`bool` **get_is_declared**\ (\ )
-
-Whether a scene was found. ``false`` for an entity outside every scene or not in the tree, and every other member is empty.
+The :ref:`NetwEntity<class_NetwEntity>` on :ref:`root<class_NetwScene_property_root>`, or ``null`` once the scene is freed.
 
 .. rst-class:: classref-item-separator
 

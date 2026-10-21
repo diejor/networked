@@ -647,6 +647,23 @@ void NetwMultiplayer::persist_notify_failed(
     notify(DATABASE_FAILED, p_database, int(p_error), p_detail);
 }
 
+void NetwMultiplayer::persist_bind_spawned(Node *p_root) {
+    if (p_root == nullptr || p_root->is_inside_tree() || !is_host()
+        || script::model::get_persistence_config(p_root).is_null()) {
+        return;
+    }
+    persist::Bindings *plane = get_bindings();
+    if (plane->find(p_root).is_valid() || plane->refuses(p_root)) {
+        return;
+    }
+    const RID binding = persist_bind(p_root);
+    if (!binding.is_valid()) {
+        plane->refuse(p_root);
+        return;
+    }
+    plane->at(binding)->unmounted = true;
+}
+
 bool NetwMultiplayer::persist_enroll(Node *p_root) {
     if (p_root == nullptr || !is_host()) {
         return false;
@@ -657,14 +674,33 @@ bool NetwMultiplayer::persist_enroll(Node *p_root) {
         return false;
     }
     persist::Bindings *plane = get_bindings();
-    if (plane->find(p_root).is_valid()) {
+    if (plane->refuses(p_root)) {
+        plane->withhold(p_root);
+        return true;
+    }
+    RID binding = plane->find(p_root);
+    persist::Binding *spawned = plane->at(binding);
+    if (spawned != nullptr && !spawned->unmounted) {
         return plane->withholds(p_root);
+    }
+    if (spawned != nullptr) {
+        spawned->unmounted = false;
+        if (spawned->loading.is_valid()) {
+            plane->withhold(p_root);
+            return true;
+        }
+        if (spawned->loaded) {
+            return false;
+        }
+        spawned->reference = plane->live_values(binding);
     }
     const bool gated = config->get_load_at_spawn();
     if (gated) {
         plane->withhold(p_root);
     }
-    const RID binding = persist_bind(p_root);
+    if (spawned == nullptr) {
+        binding = persist_bind(p_root);
+    }
     if (!binding.is_valid() || !gated) {
         return gated;
     }
@@ -702,6 +738,9 @@ void NetwMultiplayer::persist_publish(const RID &p_binding) {
 
 Ref<NetwPromise> NetwMultiplayer::persist_begin_load(const RID &p_binding) {
     persist::Binding *held = get_bindings()->at(p_binding);
+    if (held->unmounted && !held->loaded) {
+        held->reference = bindings.live_values(p_binding);
+    }
     const int64_t tenure = persist_tenure();
     const int64_t generation = databases.generation_of(held->database);
     const Ref<NetwPromise> asked
@@ -745,7 +784,8 @@ Ref<NetwPromise> NetwMultiplayer::persist_load_binding(const RID &p_binding) {
             )
         );
     }
-    if (plane->has_unsaved_changes(p_binding)) {
+    const bool first_before_mount = held->unmounted && !held->loaded;
+    if (!first_before_mount && plane->has_unsaved_changes(p_binding)) {
         return NetwPromise::rejected(
             ERR_BUSY,
             vformat(
@@ -797,6 +837,14 @@ void NetwMultiplayer::persist_read_settled(
         return;
     }
     held->loading = Ref<NetwPromise>();
+    if (held->unmounted && gd::object_of(held->root) == nullptr) {
+        plane->release(p_binding);
+        p_answer->reject(
+            ERR_DOES_NOT_EXIST,
+            "the node was freed before it was added to the tree"
+        );
+        return;
+    }
     const RID database = held->database;
     if (!persist_current(p_tenure, database, p_generation)) {
         p_answer->reject(ERR_UNAVAILABLE, STALE_LOAD);
@@ -851,6 +899,10 @@ void NetwMultiplayer::persist_read_settled(
         plane->adopt(p_binding, plane->live_values(p_binding));
     } else {
         held->reference = plane->live_values(p_binding);
+    }
+    persist::Binding *settled = plane->at(p_binding);
+    if (settled != nullptr) {
+        settled->loaded = true;
     }
     persist_publish(p_binding);
     persist_notify_loaded(p_binding, found);
@@ -1195,6 +1247,7 @@ void NetwMultiplayer::persist_tick_default(double p_delta) {
     if (!bindings_bound || !is_host()) {
         return;
     }
+    bindings.sweep_unmounted();
     persist_write(bindings.due(p_delta));
 }
 
@@ -1202,6 +1255,7 @@ Ref<NetwPromise> NetwMultiplayer::persist_flush_all() {
     if (!is_host()) {
         return NetwPromise::resolved(int(ERR_UNAUTHORIZED));
     }
+    get_bindings()->sweep_unmounted();
     persist_write(get_bindings()->enrolled());
     Ref<NetwPromise> answer;
     answer.instantiate();

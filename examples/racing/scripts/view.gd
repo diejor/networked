@@ -14,7 +14,7 @@ func _ready() -> void:
 
 func take_local_car(player: NetwEntity) -> void:
 	if player.is_controlled_locally:
-		target = player.owner as Vehicle
+		target = player.root as Vehicle
 
 
 func _physics_process(delta: float) -> void:

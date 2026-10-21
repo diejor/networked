@@ -74,15 +74,15 @@ func repaint() -> void:
 func paint(cube: PlayCube) -> void:
 	var e := cube.entity
 	if e.is_control_pending and e.is_controlled_locally:
-		cube.paint(color_of(multiplayer.get_unique_id()))
-	elif e.control_kind == NetwEntity.CONTROL_SERVER_CONTROLLED:
+		cube.paint(color_of(Netw.session(self).local_player))
+	elif e.controller == null:
 		cube.paint(free_material.albedo_color)
 	else:
 		cube.paint(color_of(e.controller))
 
 
-func color_of(peer: int) -> Color:
+func color_of(controller: NetwPlayer) -> Color:
 	for player: PlayPlayer in players.get_children():
-		if player.entity.controller == peer:
+		if player.entity.controller == controller:
 			return player.color
 	return free_material.albedo_color

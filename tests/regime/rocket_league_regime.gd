@@ -165,7 +165,10 @@ func wheel_gap(car: RocketCar) -> float:
 
 func car_key(car: RocketCar) -> String:
 	var entity := NetwEntity.of(car)
-	return "car%d_%s" % [entity.controller, entity.name] if entity else ""
+	if entity == null:
+		return ""
+	var steerer: int = entity.controller.peer_id if entity.controller else 1
+	return "car%d_%s" % [steerer, entity.name]
 
 
 func drive_chase(seconds: float) -> void:
@@ -305,7 +308,7 @@ func start_match() -> void:
 func local_car() -> RocketCar:
 	var here: NetwPlayer = session_handle.local_player
 	var mine: Array[NetwEntity] = here.entities if here else []
-	return mine[0].owner as RocketCar if mine.size() == 1 else null
+	return mine[0].root as RocketCar if mine.size() == 1 else null
 
 
 func arena_level() -> Node:

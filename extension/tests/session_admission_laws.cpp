@@ -346,6 +346,29 @@ TEST_CASE(
     release_branch(host, branch);
 }
 
+TEST_CASE(
+    "[Networked][Session][SceneTree] a default join with no username is "
+    "refused for a missing proof like any other join"
+) {
+    Node *branch = mounted_branch("DefaultJoinProof");
+    const Ref<NetwMultiplayer> host = branch_session(branch);
+    Node *gate = gate_on(branch, ASYNC_GATE);
+    const Ref<netw::NetwAdmissionConfig> config
+        = netw::Netw::configure_admission(
+            Callable(gate, StringName("admit"))
+        );
+    REQUIRE(config.is_valid());
+    config->proof(Callable(gate, StringName("prove")));
+
+    join_as(host, "", 9);
+
+    CHECK(host->peer_get_player(9).is_null());
+    NETW_CHECK_EQ(int(gate->get("calls")), 0);
+    CHECK(String(host->session_refusal(9))
+              .contains(String("admission proof is missing")));
+    release_branch(host, branch);
+}
+
 struct ProofEvidence {
     bool driven = false;
     bool waited_for_proof = false;
@@ -516,8 +539,8 @@ public:
                 evidence.waited_for_proof = !client->is_online();
                 client->connect_plane().on_poll(60.0);
                 evidence.outlasted_timeout_hint
-                    = client->transport_get_attempt_state()
-                    == int64_t(netw::connect::ATTEMPT_CONNECTING);
+                    = client->connect_plane().attempt_state()
+                    == int(netw::connect::ATTEMPT_CONNECTING);
                 if (server_gives_up) {
                     host->set_auth_timeout(0.001);
                     phase = 6;

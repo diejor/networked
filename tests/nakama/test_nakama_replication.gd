@@ -124,5 +124,5 @@ func _find_player(tree: MultiplayerViewport, username: String) -> Node:
 	var username_id := StringName(username)
 	for player: NetwEntity in tree.api.player_entities:
 		if player.name == username_id:
-			return player.owner
+			return player.root
 	return null

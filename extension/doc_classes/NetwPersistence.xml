@@ -4,7 +4,7 @@
 		One [NetwEntity]'s saved record, reached as [member NetwEntity.persistence].
 	</brief_description>
 	<description>
-		The server reads the [NetwPersistenceConfig] and saved properties when the root is ready. Wait for [signal loaded] before using stored values.
+		The server reads the [NetwPersistenceConfig] and saved properties when [method Netw.spawn] returns the root, or when a root that was not spawned is ready. Wait for [signal loaded] before using stored values.
 		[codeblock]
 		@onready var entity: NetwEntity = NetwEntity.of(self)
 
@@ -14,7 +14,7 @@
 		func on_loaded(_found: bool) -&gt; void:
 		    show_contents()
 		[/codeblock]
-		[method NetwPersistenceConfig.interval] saves changed values automatically. Freeing the root saves one last time. Failed loads and saves emit [signal NetwDatabase.failed].
+		[method NetwPersistenceConfig.interval] saves changed values automatically. Freeing the root saves one last time, unless it never entered the tree. Failed loads and saves emit [signal NetwDatabase.failed].
 	</description>
 	<tutorials>
 	</tutorials>
@@ -22,7 +22,7 @@
 		<method name="load">
 			<return type="NetwPromise" />
 			<description>
-				Reads the stored record and applies it to the configured properties. The promise returns [code]true[/code] when a record was found, and [code]false[/code] when none was stored and the properties keep their values. A failed load fails the promise, and [method NetwPromise.wait] returns the code.
+				Reads the stored record and applies it to the configured properties. The promise returns [code]true[/code] when a record was found, and [code]false[/code] when none was stored and the properties keep their values. A failed load fails the promise, and [method NetwPromise.wait] returns the code. On a node from [method Netw.spawn], awaiting it before [method Node.add_child] adds the node with its stored values.
 				[codeblock lang=text]
 				Error
 				┠╴ERR_UNCONFIGURED       no persistence, unopened database or missing migration

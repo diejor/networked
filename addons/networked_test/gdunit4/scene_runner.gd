@@ -34,7 +34,7 @@ var local_player_entities: Array[NetwEntity]:
 			return []
 		var owned: Array[NetwEntity] = []
 		for player: NetwEntity in who.entities:
-			if is_instance_valid(player.owner):
+			if is_instance_valid(player.root):
 				owned.append(player)
 		return owned
 
@@ -43,7 +43,7 @@ var local_player_entities: Array[NetwEntity]:
 var local_player: Node:
 	get:
 		var mine: Array[NetwEntity] = local_player_entities
-		return mine[0].owner if mine.size() == 1 else null
+		return mine[0].root if mine.size() == 1 else null
 
 var _pending_input: Array[InputEvent] = []
 
@@ -101,9 +101,9 @@ func find_player(player_username: StringName) -> Node:
 
 	var player_name := StringName(str(player_username))
 	for player: NetwEntity in tree.api.player_entities:
-		if player != null and is_instance_valid(player.owner):
-			if _player_matches_username(player.owner, player_name):
-				return player.owner
+		if player != null and is_instance_valid(player.root):
+			if _player_matches_username(player.root, player_name):
+				return player.root
 	return null
 
 

@@ -183,13 +183,13 @@ void NetwMultiplayer::sim_rest_pass(
             rest = sim::Rest();
         } else if (!asleep && !steering.claiming) {
             rest = sim::Rest();
-            r_row.view->claim_control(entity::Control::HOLD_YIELDABLE)
+            r_row.view->claim_control(entity::Control::HOLD_SOFT)
                 ->mark_failure_observed();
         }
         return;
     }
     const bool resting = asleep && here && !steering.pending
-        && steering.hold == entity::Control::HOLD_YIELDABLE
+        && steering.hold == entity::Control::HOLD_SOFT
         && sim::thawed(r_row.bodies);
     const double ticktime = clock_engine().ticktime();
     const int64_t needed = ticktime > 0.0

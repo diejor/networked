@@ -943,7 +943,7 @@
 			<return type="Dictionary" />
 			<param index="0" name="route" type="int" />
 			<description>
-				Returns what this peer knows about the entity at [param route], or an empty [Dictionary]. [code]stage[/code] is a [enum NetwEntity.Stage] and [code]liveness[/code] is an [enum EntityState].
+				Returns what this peer knows about the entity at [param route], or an empty [Dictionary]. [code]stage[/code] is an internal lifecycle number for debugging and [code]liveness[/code] is an [enum EntityState].
 				[codeblock lang=text]
 				Dictionary
 				┠╴route        int              the route asked about
@@ -1032,7 +1032,7 @@
 			<param index="0" name="entity" type="RID" />
 			<param index="1" name="peer" type="int" />
 			<description>
-				Assigns [member NetwEntity.controller] on [param entity]. Returns [constant @GlobalScope.ERR_UNAUTHORIZED] on a client, or [constant @GlobalScope.ERR_DOES_NOT_EXIST] when [param entity] has no bound node.
+				Gives control of [param entity] to [param peer]. Returns [constant @GlobalScope.ERR_UNAUTHORIZED] on a client, or [constant @GlobalScope.ERR_DOES_NOT_EXIST] when [param entity] has no bound node.
 			</description>
 		</method>
 		<method name="entity_of">
@@ -2623,7 +2623,7 @@
 		<method name="session_leave">
 			<return type="NetwPromise" />
 			<description>
-				Disconnects and returns to [constant NetwSession.SESSION_STATE_OFFLINE]. On the server, it saves every persistent entity first, and a failed save keeps the session online. The promise resolves with an [enum @GlobalScope.Error] within three seconds.
+				Disconnects and returns to [constant NetwSession.STATE_OFFLINE]. On the server, it saves every persistent entity first, and a failed save keeps the session online. The promise resolves with an [enum @GlobalScope.Error] once the peer is closed.
 				[codeblock]
 				var left := api.session_leave()
 				if not left.is_settled:
@@ -2652,7 +2652,7 @@
 			<param index="0" name="username" type="StringName" />
 			<param index="1" name="args" type="Array" default="[]" />
 			<description>
-				Sets the join request sent when [member MultiplayerAPI.multiplayer_peer] connects. A server sends it at [method session_submit_join]. The promise result is an [enum @GlobalScope.Error].
+				Sets the join request sent when [member MultiplayerAPI.multiplayer_peer] connects. The promise result is an [enum @GlobalScope.Error].
 				[codeblock]
 				var prepared := api.session_prepare_join(&amp;"Dev")
 				if not prepared.is_settled:
@@ -2702,25 +2702,16 @@
 		</method>
 		<method name="session_set_state">
 			<return type="void" />
-			<param index="0" name="state" type="int" enum="NetwSession.SessionState" />
+			<param index="0" name="state" type="int" enum="NetwSession.State" />
 			<description>
-				Sets [member state] without checking the change is allowed, and notifies [constant SESSION_STATE_CHANGED]. Prefer [method session_transition].
-			</description>
-		</method>
-		<method name="session_submit_join">
-			<return type="void" />
-			<param index="0" name="username" type="StringName" />
-			<param index="1" name="args" type="Array" default="[]" />
-			<description>
-				Sends the local player's join request now. It replaces one from [method session_prepare_join]. An empty [param username] sends nothing.
-				[b]Player request.[/b]
+				Sets [member state] without checking the change is allowed, and notifies [constant SESSION_STATE_CHANGED]. Prefer [method session_transition]. [constant NetwSession.STATE_CREATING] is refused with an error.
 			</description>
 		</method>
 		<method name="session_transition">
 			<return type="void" />
-			<param index="0" name="state" type="int" enum="NetwSession.SessionState" />
+			<param index="0" name="state" type="int" enum="NetwSession.State" />
 			<description>
-				Changes [member state] and notifies [constant SESSION_STATE_CHANGED]. A change that is not allowed pushes an error and does nothing.
+				Changes [member state] and notifies [constant SESSION_STATE_CHANGED]. A change that is not allowed, or [constant NetwSession.STATE_CREATING], pushes an error and does nothing.
 			</description>
 		</method>
 		<method name="session_unpause">
@@ -3162,12 +3153,6 @@
 				[/codeblock]
 			</description>
 		</method>
-		<method name="transport_get_attempt_state" qualifiers="const">
-			<return type="int" />
-			<description>
-				The flat form of [member NetwConnection.state].
-			</description>
-		</method>
 		<method name="transport_get_defaults">
 			<return type="Dictionary" />
 			<param index="0" name="transport" type="RID" />
@@ -3283,7 +3268,7 @@
 			[code]true[/code] when this peer has its own player, which is at [constant NetwSession.ROLE_CLIENT] and [constant NetwSession.ROLE_LISTEN_SERVER].
 		</member>
 		<member name="is_online" type="bool" setter="" getter="get_is_online" default="false">
-			[code]true[/code] when [member state] is [constant NetwSession.SESSION_STATE_ONLINE].
+			[code]true[/code] when [member state] is [constant NetwSession.STATE_ONLINE].
 		</member>
 		<member name="local_player" type="NetwPlayer" setter="" getter="player_local">
 			The accepted [NetwPlayer] for this peer, or [code]null[/code] before its join is accepted.
@@ -3322,12 +3307,8 @@
 		<member name="server_relay" type="bool" setter="set_server_relay_enabled" getter="is_server_relay_enabled" default="true">
 			Same as [member SceneMultiplayer.server_relay], applied to [member inner].
 		</member>
-		<member name="state" type="int" setter="" getter="session_get_state" enum="NetwSession.SessionState" default="0">
-			Whether the session is connected.
-			- [constant NetwSession.SESSION_STATE_OFFLINE] not connected
-			- [constant NetwSession.SESSION_STATE_CONNECTING] connecting, may fail
-			- [constant NetwSession.SESSION_STATE_ONLINE] connected
-			- [constant NetwSession.SESSION_STATE_DISCONNECTING] disconnecting
+		<member name="state" type="int" setter="" getter="session_get_state" enum="NetwSession.State" default="0">
+			Same as [member NetwSession.state].
 		</member>
 	</members>
 	<signals>
@@ -3368,7 +3349,7 @@
 			An entity was reparented. [code]detail[/code] has [code]reason[/code] and [code]moved[/code], which is [code]true[/code] when its position changed too.
 		</constant>
 		<constant name="EVENT_STAGE_TRANSITION" value="5" enum="Event">
-			An entity's [enum NetwEntity.Stage] changed. [code]detail[/code] has [code]from[/code] and [code]to[/code].
+			An entity's internal lifecycle stage changed, for debugging. [code]detail[/code] has [code]from[/code] and [code]to[/code].
 		</constant>
 		<constant name="EVENT_CONTROL_CHANGED" value="6" enum="Event">
 			The peer controlling an entity changed. [code]detail[/code] has [code]from[/code] and [code]to[/code].
@@ -4203,19 +4184,19 @@
 			[method clock_is_stable] changed. The callback receives [code](is_stable: bool)[/code].
 		</constant>
 		<constant name="SESSION_STATE_CHANGED" value="20" enum="Notification">
-			[member state] changed. The callback receives [code](old_state: int, new_state: int)[/code].
+			The notification form of [signal NetwSession.state_changed]. The callback receives [code](old_state: int, new_state: int)[/code].
 		</constant>
 		<constant name="SESSION_JOIN_SUBMITTED" value="21" enum="Notification">
 			This peer sent its join request. It does not mean the join was accepted. The callback receives [code](username: StringName, args: Array)[/code].
 		</constant>
 		<constant name="SESSION_ENTERED" value="22" enum="Notification">
-			The session became [constant NetwSession.SESSION_STATE_ONLINE]. The callback receives no arguments.
+			The session became [constant NetwSession.STATE_ONLINE]. The callback receives no arguments.
 		</constant>
 		<constant name="SESSION_JOIN_FAILED" value="23" enum="Notification">
 			This peer's join was rejected. Games usually use [signal NetwSession.join_failed]. The callback receives [code](error: int, reason: String)[/code].
 		</constant>
 		<constant name="SESSION_ENDED" value="24" enum="Notification">
-			The session stopped being [constant NetwSession.SESSION_STATE_ONLINE]. The callback receives no arguments.
+			The session stopped being [constant NetwSession.STATE_ONLINE]. The callback receives no arguments.
 		</constant>
 		<constant name="SESSION_RECLAIMED" value="25" enum="Notification">
 			Right after [constant SESSION_ENDED]. Free nodes the session owned here. The callback receives no arguments.
@@ -4292,19 +4273,16 @@
 		<constant name="SCENE_LIVE" value="49" enum="Notification">
 			A scene is ready on this peer, and every node in it is in the tree and ready. The callback receives [code](scene: NetwScene)[/code].
 		</constant>
-		<constant name="CONNECTION_STATE_CHANGED" value="50" enum="Notification">
-			The notification form of [signal NetwConnection.state_changed].
-		</constant>
-		<constant name="CONNECTION_PROGRESSED" value="51" enum="Notification">
+		<constant name="CONNECTION_PROGRESSED" value="50" enum="Notification">
 			The notification form of [signal NetwConnection.progressed].
 		</constant>
-		<constant name="CONNECTION_FAILED" value="52" enum="Notification">
+		<constant name="CONNECTION_FAILED" value="51" enum="Notification">
 			The notification form of [signal NetwConnection.failed].
 		</constant>
-		<constant name="CONNECTION_JOIN_ADDRESS_CHANGED" value="53" enum="Notification">
+		<constant name="CONNECTION_JOIN_ADDRESS_CHANGED" value="52" enum="Notification">
 			The notification form of [signal NetwConnection.join_address_changed].
 		</constant>
-		<constant name="CONNECTION_INVITED" value="54" enum="Notification">
+		<constant name="CONNECTION_INVITED" value="53" enum="Notification">
 			The notification form of [signal NetwConnection.invited]. The callback receives [code](endpoint: RID)[/code].
 		</constant>
 	</constants>

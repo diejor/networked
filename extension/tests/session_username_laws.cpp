@@ -46,23 +46,26 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Session][Hosted] U2 a join carrying no username at all is "
-    "not resolved, so a forged payload seats nobody"
+    "[Networked][Session][Hosted] U2 two joins carrying no username are both "
+    "admitted, each with an empty username on its own membership"
 ) {
-    netw_test::FaultWatch expected_faults;
-    expected_faults.expect_warning(
-        "[warn][session] Peer * was refused, because its join "
-        "request had no username.",
-        1
-    );
-
     Ref<NetwMultiplayer> session;
     session.instantiate();
 
-    netw::JoinRequest nameless;
-    AcceptFrame seated;
-    CHECK_FALSE(session->session_resolve_inbound_join(nameless, 4, seated));
-    CHECK(session->player_of(4).is_null());
+    for (int64_t peer : {int64_t(4), int64_t(5)}) {
+        netw::JoinRequest nameless;
+        AcceptFrame seated;
+        CHECK(session->session_resolve_inbound_join(nameless, peer, seated));
+        session->session_admit(seated);
+    }
+
+    const Ref<netw::NetwPlayer> one = session->player_of(4);
+    const Ref<netw::NetwPlayer> other = session->player_of(5);
+    REQUIRE(one.is_valid());
+    REQUIRE(other.is_valid());
+    CHECK(one->player_id() != other->player_id());
+    CHECK(String(one->get_username()).is_empty());
+    CHECK(String(other->get_username()).is_empty());
 }
 
 } // namespace TestNetwSessionUsername

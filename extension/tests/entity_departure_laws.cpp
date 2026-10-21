@@ -199,8 +199,8 @@ TEST_CASE(
 
     SUBCASE("a declared despawn cannot be taken back by landing again") {
         expected_faults.expect_error(
-            "[error][entity] Entity '*' cannot move from stage 4 to"
-            " stage 3.",
+            "[error][entity] Entity '*' cannot move from stage 3 to"
+            " stage 2.",
             1
         );
 

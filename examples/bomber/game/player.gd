@@ -42,8 +42,6 @@ var pressed := {
 
 func _init() -> void:
 	entity = Netw.configure_entity(self)
-	entity.initial_controller = NetwEntity.INITIAL_PLAYER
-	entity.on_controller_disconnect = NetwEntity.DISCONNECT_DESPAWN
 	entity.prediction.archetype = NetwPrediction.ARCHETYPE_SCRIPTED
 	entity.display.visual_root = ^"sprite"
 	entity.display.live_mode = NetwDisplay.LIVE_MODE_BRACKETED

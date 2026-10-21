@@ -30,8 +30,14 @@ void NetwPersistence::bind(NetwEntity *p_entity) {
 
 NetwMultiplayer *NetwPersistence::session() const {
     NetwEntity *held = Object::cast_to<NetwEntity>(gd::object_of(entity_id));
-    return held != nullptr ? NetwEntity::session_core_for(held->get_owner())
-                           : nullptr;
+    if (held == nullptr) {
+        return nullptr;
+    }
+    NetwMultiplayer *mounted = NetwEntity::session_core_for(held->get_owner());
+    if (mounted != nullptr) {
+        return mounted;
+    }
+    return Object::cast_to<NetwMultiplayer>(held->get_multiplayer().ptr());
 }
 
 void NetwPersistence::announce_loaded(const RID &p_entity, bool p_found) {

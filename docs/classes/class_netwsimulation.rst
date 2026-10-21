@@ -331,7 +331,7 @@ Set it in ``_init``. A later write warns and is ignored.
 - |void| **set_claim_on_contact**\ (\ value\: :godot:`bool`\ )
 - :godot:`bool` **get_claim_on_contact**\ (\ )
 
-When a body of this entity runs here as :ref:`MODE_AUTHORITY<class_NetwSimulation_constant_MODE_AUTHORITY>` and touches a free entity that also sets it, this peer claims that entity with :ref:`NetwEntity.HOLD_YIELDABLE<class_NetwEntity_constant_HOLD_YIELDABLE>`. A claimed entity claims what it touches in the same tick.
+When a body of this entity runs here as :ref:`MODE_AUTHORITY<class_NetwSimulation_constant_MODE_AUTHORITY>` and touches a free entity that also sets it, this peer claims that entity with :ref:`NetwEntity.HOLD_SOFT<class_NetwEntity_constant_HOLD_SOFT>`. A claimed entity claims what it touches in the same tick.
 
 It raises :godot:`RigidBody3D.max_contacts_reported <RigidBody3D#class_RigidBody3D_property_max_contacts_reported>` on the bodies. :godot:`RigidBody3D.body_entered <RigidBody3D#class_RigidBody3D_signal_body_entered>` and :godot:`RigidBody3D.body_exited <RigidBody3D#class_RigidBody3D_signal_body_exited>` need the game's own :godot:`RigidBody3D.contact_monitor <RigidBody3D#class_RigidBody3D_property_contact_monitor>`. It needs :ref:`NetwEntity.TRANSFER_IMMEDIATE<class_NetwEntity_constant_TRANSFER_IMMEDIATE>` on an entity with no :ref:`NetwPropertyConfig.state()<class_NetwPropertyConfig_method_state>` property and no prediction, and does nothing otherwise.
 
@@ -383,7 +383,7 @@ The mode this entity runs in on this peer. :ref:`mode_changed<class_NetwSimulati
 - |void| **set_release_on_rest**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_release_on_rest**\ (\ )
 
-The seconds the bodies must sleep before this peer releases the entity with :ref:`NetwEntity.release_control()<class_NetwEntity_method_release_control>`, or ``0`` to never release. It only releases an entity this peer holds with :ref:`NetwEntity.HOLD_YIELDABLE<class_NetwEntity_constant_HOLD_YIELDABLE>`.
+The seconds the bodies must sleep before this peer releases the entity with :ref:`NetwEntity.release_control()<class_NetwEntity_method_release_control>`, or ``0`` to never release. It only releases an entity this peer holds with :ref:`NetwEntity.HOLD_SOFT<class_NetwEntity_constant_HOLD_SOFT>`.
 
 It needs :ref:`NetwEntity.TRANSFER_IMMEDIATE<class_NetwEntity_constant_TRANSFER_IMMEDIATE>` on an entity with no :ref:`NetwPropertyConfig.state()<class_NetwPropertyConfig_method_state>` property and no prediction, and does nothing otherwise.
 

@@ -84,8 +84,6 @@ var heading: float:
 
 func _init() -> void:
 	var e := Netw.configure_entity(self)
-	e.initial_controller = NetwEntity.INITIAL_PLAYER
-	e.on_controller_disconnect = NetwEntity.DISCONNECT_DESPAWN
 	e.simulation.bodies = [^"Sphere"]
 
 	Netw.configure_property(self, &"sphere_position").broadcast().masked() \

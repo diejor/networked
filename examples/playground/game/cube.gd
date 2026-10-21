@@ -65,14 +65,14 @@ func paint(color: Color) -> void:
 func claim(hold: NetwEntity.Hold) -> void:
 	if entity.is_control_pending or entity.hold >= hold and (
 			entity.is_controlled_locally
-			or entity.control_kind == NetwEntity.CONTROL_PEER_CONTROLLED
+			or entity.controller != null
 	):
 		return
 	entity.claim_control(hold).catch_error(refused)
 
 
 func let_go() -> void:
-	entity.claim_control(NetwEntity.HOLD_YIELDABLE).catch_error(refused)
+	entity.claim_control(NetwEntity.HOLD_SOFT).catch_error(refused)
 
 
 func refused(_code: Error, _detail: String) -> void:

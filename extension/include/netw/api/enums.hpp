@@ -268,7 +268,6 @@ struct NetwMultiplayer {
         PLAYER_LOCAL_JOINED,
         PLAYER_LEFT,
         SCENE_LIVE,
-        CONNECTION_STATE_CHANGED,
         CONNECTION_PROGRESSED,
         CONNECTION_FAILED,
         CONNECTION_JOIN_ADDRESS_CHANGED,
@@ -278,11 +277,12 @@ struct NetwMultiplayer {
 };
 
 struct NetwSession {
-    enum SessionState {
-        SESSION_STATE_OFFLINE = SessionCore::STATE_OFFLINE,
-        SESSION_STATE_CONNECTING = SessionCore::STATE_CONNECTING,
-        SESSION_STATE_ONLINE = SessionCore::STATE_ONLINE,
-        SESSION_STATE_DISCONNECTING = SessionCore::STATE_DISCONNECTING,
+    enum State {
+        STATE_OFFLINE = SessionCore::STATE_OFFLINE,
+        STATE_CREATING = connect::ATTEMPT_CREATING,
+        STATE_CONNECTING = SessionCore::STATE_CONNECTING,
+        STATE_ONLINE = SessionCore::STATE_ONLINE,
+        STATE_DISCONNECTING = SessionCore::STATE_DISCONNECTING,
     };
 
     enum Role {
@@ -334,13 +334,6 @@ struct NetwClock {
 };
 
 struct NetwConnection {
-    enum State {
-        STATE_OFFLINE = connect::ATTEMPT_OFFLINE,
-        STATE_CREATING = connect::ATTEMPT_CREATING,
-        STATE_CONNECTING = connect::ATTEMPT_CONNECTING,
-        STATE_ONLINE = connect::ATTEMPT_ONLINE,
-    };
-
     enum TransportMode {
         TRANSPORT_MODE_HOST = connect::PEER_MODE_HOST,
         TRANSPORT_MODE_CLIENT = connect::PEER_MODE_CLIENT,
@@ -447,14 +440,13 @@ struct LobbyDirectory {
 VARIANT_ENUM_CAST(netw::enums::NetwScene::SceneChange);
 VARIANT_ENUM_CAST(netw::enums::NetwScene::SceneIsolation);
 VARIANT_ENUM_CAST(netw::enums::NetwScene::SceneEvent);
-VARIANT_ENUM_CAST(netw::enums::NetwSession::SessionState);
+VARIANT_ENUM_CAST(netw::enums::NetwSession::State);
 VARIANT_ENUM_CAST(netw::enums::NetwSession::Role);
 VARIANT_ENUM_CAST(netw::enums::NetwSession::ExitReason);
 VARIANT_ENUM_CAST(netw::enums::NetwSession::TransferMode);
 VARIANT_ENUM_CAST(netw::enums::NetwClock::SyncMode);
 VARIANT_ENUM_CAST(netw::enums::NetwClock::MismatchAction);
 VARIANT_ENUM_CAST(netw::enums::NetwClock::ClockMonitor);
-VARIANT_ENUM_CAST(netw::enums::NetwConnection::State);
 VARIANT_ENUM_CAST(netw::enums::NetwConnection::TransportMode);
 VARIANT_ENUM_CAST(netw::enums::NetwConnection::TransportCapability);
 VARIANT_ENUM_CAST(netw::enums::NetwEndpoint::Status);

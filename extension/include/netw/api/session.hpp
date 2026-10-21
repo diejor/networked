@@ -39,6 +39,7 @@ protected:
 
 public:
     void bind_session(NetwMultiplayer *p_session);
+    void announce_state_changed(State p_state);
     void announce_entered();
     void announce_exiting(ExitReason p_reason, const godot::String &p_detail);
     void announce_exited(ExitReason p_reason, const godot::String &p_detail);
@@ -61,6 +62,7 @@ public:
         const godot::Variant &p_type
     ) const;
 
+    State get_state() const;
     enums::NetwSession::Role get_role() const;
     bool get_is_online() const;
     bool get_is_local_client() const;

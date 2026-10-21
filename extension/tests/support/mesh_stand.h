@@ -75,6 +75,7 @@ class MeshStand {
                 = session->session_get_inner();
             inner->set_root_path(godot::NodePath("/"));
             inner->set_server_relay_enabled(relays_through_hub);
+            session->session_default_join_held = true;
             session->set("multiplayer_peer", p_peer);
         }
         return session;

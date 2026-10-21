@@ -13,11 +13,6 @@ class Control {
 public:
     static constexpr int64_t SERVER = 0;
 
-    enum class InitialController : int {
-        SERVER = 0,
-        PLAYER = 1,
-    };
-
     enum class Authority : int {
         SERVER = 0,
         CONTROLLER = 1,
@@ -31,7 +26,7 @@ public:
 
     enum Hold : int {
         HOLD_NONE = 0,
-        HOLD_YIELDABLE = 1,
+        HOLD_SOFT = 1,
         HOLD_EXCLUSIVE = 2,
     };
 
@@ -94,7 +89,6 @@ public:
 
     int64_t controller = 0;
     bool configured = false;
-    int64_t initial = int(InitialController::SERVER);
     int64_t transfer = int(Transfer::FIXED);
     int64_t authority = int(Authority::SERVER);
     bool authority_declared = false;
@@ -108,7 +102,7 @@ public:
     godot::LocalVector<uint64_t> abandoned;
     uint64_t last_op = 0;
 
-    int64_t resolve(int64_t p_peer_id) const;
+    int64_t resolve() const;
 
     bool decide(int64_t p_controller, int64_t p_hold);
     bool install(uint64_t p_revision, bool p_tenure_changed, int64_t p_hold);
@@ -168,8 +162,12 @@ public:
     }
 
     bool set_controller(int64_t p_controller);
+    void clear_controller() {
+        configured = false;
+        controller = SERVER;
+    }
 
-    bool controlled_by(int64_t p_local_peer, int64_t p_peer_id) const;
+    bool controlled_by(int64_t p_local_peer) const;
 
     bool admits_request() const {
         return transfer != int(Transfer::FIXED);
@@ -182,12 +180,6 @@ public:
     }
     bool get_configured() const {
         return configured;
-    }
-    int64_t get_initial() const {
-        return initial;
-    }
-    void set_initial(int64_t p_initial) {
-        initial = p_initial;
     }
     int64_t get_transfer() const {
         return transfer;

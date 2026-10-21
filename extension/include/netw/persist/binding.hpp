@@ -32,6 +32,8 @@ struct Binding {
     double interval = 0.0;
     double elapsed = 0.0;
     bool load_on_spawn = true;
+    bool unmounted = false;
+    bool loaded = false;
     bool in_flight = false;
     bool departed = false;
     bool final_save = true;
@@ -49,6 +51,7 @@ class Bindings {
     mutable godot::RID_PtrOwner<Binding> book;
     godot::HashMap<uint64_t, godot::RID> by_root;
     godot::HashSet<uint64_t> withheld;
+    godot::HashSet<uint64_t> refused;
     godot::LocalVector<godot::RID> order;
     NetwMultiplayer *session = nullptr;
 
@@ -77,6 +80,9 @@ public:
     void unwithhold(godot::ObjectID p_root);
     bool withholds(godot::Node *p_root) const;
     bool awaits_load(const godot::RID &p_binding) const;
+    void refuse(godot::Node *p_root);
+    bool refuses(godot::Node *p_root) const;
+    void sweep_unmounted();
 
     godot::Dictionary live_values(const godot::RID &p_binding) const;
     bool is_dirty(const godot::RID &p_binding) const;

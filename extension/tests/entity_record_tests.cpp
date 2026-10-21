@@ -464,78 +464,27 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Entity][Hosted] R9 a template is declared once and stays "
-    "terminal"
-) {
-    Record record;
-    Node *owner = memnew(Node);
-
-    CHECK(record->mark_template(owner));
-    NETW_CHECK_EQ(record->get_stage(), int(Stage::TEMPLATE));
-
-    CHECK(record->mark_template(owner));
-    NETW_CHECK_EQ(record->get_stage(), int(Stage::TEMPLATE));
-
-    SUBCASE("a marked record is not carried down the go-live path") {
-        CHECK_FALSE(record->classify_activation(owner));
-    }
-
-    memdelete(owner);
-}
-
-TEST_CASE(
     "[Networked][Entity][Hosted] R10 what an unbound record on a node in the "
     "tree IS, decided once"
 ) {
-    Node *scene = memnew(Node);
-
     SUBCASE("a bound identity goes live") {
         Record record;
-        Node *owner = memnew(Node);
         record->set_entity_id("crate");
-        CHECK(record->classify_activation(owner));
+        CHECK(record->classify_activation());
         NETW_CHECK_EQ(record->get_stage(), int(Stage::UNBOUND));
-        memdelete(owner);
     }
 
-    SUBCASE("an editor-placed factory declares itself a template") {
+    SUBCASE("a node with no identity stays inert") {
         Record record;
-        Node *owner = memnew(Node);
-        scene->add_child(owner);
-        owner->set_owner(scene);
-        CHECK(NetwEntityRecord::declares_template(owner));
-        CHECK_FALSE(record->classify_activation(owner));
-        NETW_CHECK_EQ(record->get_stage(), int(Stage::TEMPLATE));
-    }
-
-    SUBCASE("a scene assembled without ownership declares it by mark") {
-        Record record;
-        Node *owner = memnew(Node);
-        owner->set_meta(NetwEntityRecord::template_meta(), true);
-        CHECK(NetwEntityRecord::declares_template(owner));
-        CHECK_FALSE(record->classify_activation(owner));
-        NETW_CHECK_EQ(record->get_stage(), int(Stage::TEMPLATE));
-        memdelete(owner);
-    }
-
-    SUBCASE("a bare programmatic node stays inert rather than becoming one") {
-        Record record;
-        Node *owner = memnew(Node);
-        CHECK_FALSE(NetwEntityRecord::declares_template(owner));
-        CHECK_FALSE(record->classify_activation(owner));
+        CHECK_FALSE(record->classify_activation());
         NETW_CHECK_EQ(record->get_stage(), int(Stage::UNBOUND));
-        memdelete(owner);
     }
 
     SUBCASE("a record past UNBOUND is already classified") {
         Record record;
-        Node *owner = memnew(Node);
         REQUIRE(record->advance(int(Stage::ARMED)));
-        CHECK(record->classify_activation(owner));
-        memdelete(owner);
+        CHECK(record->classify_activation());
     }
-
-    memdelete(scene);
 }
 
 TEST_CASE(
@@ -575,11 +524,12 @@ TEST_CASE(
 ) {
     Record record;
     Ref<RefCounted> wrapper = make_wrapper();
-    REQUIRE(record->mark_template(nullptr));
+    REQUIRE(record->advance(int(Stage::DESPAWNING)));
+    REQUIRE(record->advance(int(Stage::FREED)));
 
     Ref<netw::NetwDespawnOpts> none;
     CHECK_FALSE(record->begin_despawn(wrapper.ptr(), nullptr, none));
-    NETW_CHECK_EQ(record->get_stage(), int(Stage::TEMPLATE));
+    NETW_CHECK_EQ(record->get_stage(), int(Stage::FREED));
     CHECK(record->get_active_despawn_opts().is_null());
 
     SUBCASE("an unbound record with no options tears down by default") {
@@ -860,9 +810,9 @@ TEST_CASE(
 
     SUBCASE("an unidentified node stays inert rather than activating") {
         Record inert;
-        CHECK_FALSE(inert->classify_activation(owner));
+        CHECK_FALSE(inert->classify_activation());
         inert->set_entity_id("crate");
-        CHECK(inert->classify_activation(owner));
+        CHECK(inert->classify_activation());
     }
 
     memdelete(owner);

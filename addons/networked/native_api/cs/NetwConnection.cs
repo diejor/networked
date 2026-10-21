@@ -9,15 +9,14 @@ namespace Networked;
 /// Finds servers, and joins or hosts one for its session.
 /// </summary>
 /// <remarks>
-/// One attempt runs at a time, and <see cref="NetwConnection.State"/> follows
-/// any peer the session is given, including one a game assigns itself.
+/// One attempt runs at a time, and <see cref="NetwSession.State"/> follows any
+/// peer the session is given, including one a game assigns itself.
 /// <code>
 /// @onready var connection: NetwConnection = Netw.session(self).connection
 ///
 /// func _ready() -&gt; void:
 ///     connection.endpoint_added.connect(on_endpoint_added)
 ///     connection.endpoint_removed.connect(on_endpoint_removed)
-///     connection.state_changed.connect(on_state_changed)
 ///     connection.failed.connect(on_failed)
 ///     visibility_changed.connect(on_visibility_changed)
 ///     connection.browsing = visible
@@ -122,26 +121,6 @@ public sealed class NetwConnection : NetwRefCounted
         return Adopt(NetwApi.Retained(NetwApi.ObjectOf(value)));
     }
 
-    public enum StateEnum : long
-    {
-        /// <summary>
-        /// No connection attempt or online session.
-        /// </summary>
-        Offline = 0,
-        /// <summary>
-        /// The transport is creating a <see cref="MultiplayerPeer"/>.
-        /// </summary>
-        Creating = 1,
-        /// <summary>
-        /// The <see cref="MultiplayerPeer"/> is assigned and connecting.
-        /// </summary>
-        Connecting = 2,
-        /// <summary>
-        /// The session is online.
-        /// </summary>
-        Online = 3,
-    }
-
     public enum TransportMode : long
     {
         /// <summary>
@@ -177,26 +156,6 @@ public sealed class NetwConnection : NetwRefCounted
         /// The transport accepts an empty address when joining.
         /// </summary>
         AcceptsEmptyAddress = 16,
-    }
-
-    /// <summary>
-    /// Emitted when <see cref="NetwConnection.State"/> moves between
-    /// <see cref="NetwConnection.StateEnum.Offline"/>,
-    /// <see cref="NetwConnection.StateEnum.Creating"/>,
-    /// <see cref="NetwConnection.StateEnum.Connecting"/> and
-    /// <see cref="NetwConnection.StateEnum.Online"/>.
-    /// </summary>
-    public event Action<NetwConnection.StateEnum> StateChanged
-    {
-        add => ConnectBridge(
-            "state_changed",
-            value,
-            Callable.From(
-                (long a0) =>
-                    value((NetwConnection.StateEnum)a0)
-            )
-        );
-        remove => DisconnectBridge("state_changed", value);
     }
 
     /// <summary>
@@ -307,23 +266,6 @@ public sealed class NetwConnection : NetwRefCounted
         remove => DisconnectBridge("endpoint_removed", value);
     }
 
-    private static readonly IntPtr _bindGetState =
-        NetwApi.MethodBind("NetwConnection", "get_state", 3870163413UL);
-
-    /// <summary>
-    /// The connection attempt's <see cref="NetwConnection.StateEnum"/>,
-    /// reported by <see cref="NetwConnection.StateChanged"/>.
-    /// </summary>
-    public NetwConnection.StateEnum State
-    {
-        get
-        {
-            long answered = default;
-            NetwThunks.Ptrcall0_Long(_bindGetState, Checked, ref answered);
-            return (NetwConnection.StateEnum)answered;
-        }
-    }
-
     private static readonly IntPtr _bindGetCurrentEndpoint =
         NetwApi.MethodBind(
             "NetwConnection",
@@ -333,7 +275,7 @@ public sealed class NetwConnection : NetwRefCounted
     /// <summary>
     /// The connected server, including while hosting, at the address this peer
     /// connected through. <c>null</c> before
-    /// <see cref="NetwConnection.StateEnum.Online"/> or when an assigned peer
+    /// <see cref="NetwSession.StateEnum.Online"/> or when an assigned peer
     /// supplies no address. It can be absent from
     /// <see cref="NetwConnection.Endpoints"/>.
     /// </summary>
@@ -361,11 +303,10 @@ public sealed class NetwConnection : NetwRefCounted
     /// own transport's address, such as its LAN address for ENet, until it sets
     /// another. A client reads the address passed to
     /// <see cref="NetwConnection.Join"/> until its join is accepted, then the
-    /// server's value. Empty before
-    /// <see cref="NetwConnection.StateEnum.Online"/> or when an assigned peer
-    /// supplies no address. Only an online server sets it. A server behind a
-    /// router sets its internet address after <see cref="NetwConnection.Host"/>
-    /// settles, and every client follows.
+    /// server's value. Empty before <see cref="NetwSession.StateEnum.Online"/>
+    /// or when an assigned peer supplies no address. Only an online server sets
+    /// it. A server behind a router sets its internet address after
+    /// <see cref="NetwConnection.Host"/> settles, and every client follows.
     /// </summary>
     public string JoinAddress
     {

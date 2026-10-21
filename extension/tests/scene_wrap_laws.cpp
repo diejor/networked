@@ -33,6 +33,7 @@ Ref<NetwEntity> bind(const Ref<NetwMultiplayer> &p_core, Node *p_node) {
     wrapper.instantiate();
     const RID handle = p_core->get_liveness_core()->entity_create();
     wrapper->set_rid_handle(handle);
+    wrapper->stamp_multiplayer(p_core);
     REQUIRE(p_core->liveness_bind(
         handle,
         p_core->get_liveness_core()->reserve_route(),

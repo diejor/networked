@@ -19,7 +19,7 @@ Finds servers, and joins or hosts one for its session.
 Description
 -----------
 
-One attempt runs at a time, and :ref:`state<class_NetwConnection_property_state>` follows any peer the session is given, including one a game assigns itself.
+One attempt runs at a time, and :ref:`NetwSession.state<class_NetwSession_property_state>` follows any peer the session is given, including one a game assigns itself.
 
 ::
 
@@ -28,7 +28,6 @@ One attempt runs at a time, and :ref:`state<class_NetwConnection_property_state>
     func _ready() -> void:
         connection.endpoint_added.connect(on_endpoint_added)
         connection.endpoint_removed.connect(on_endpoint_removed)
-        connection.state_changed.connect(on_state_changed)
         connection.failed.connect(on_failed)
         visibility_changed.connect(on_visibility_changed)
         connection.browsing = visible
@@ -125,8 +124,6 @@ Properties
    | :godot:`int`                                              | :ref:`max_players<class_NetwConnection_property_max_players>`           |
    +-----------------------------------------------------------+-------------------------------------------------------------------------+
    | :godot:`float`                                            | :ref:`probe_interval<class_NetwConnection_property_probe_interval>`     |
-   +-----------------------------------------------------------+-------------------------------------------------------------------------+
-   | :ref:`State<enum_NetwConnection_State>`                   | :ref:`state<class_NetwConnection_property_state>`                       |
    +-----------------------------------------------------------+-------------------------------------------------------------------------+
 
 .. rst-class:: classref-reftable-group
@@ -252,18 +249,6 @@ Emitted when :ref:`join_address<class_NetwConnection_property_join_address>` cha
 
 ``ratio`` runs from 0 to 1, and is negative when the transport only has a ``message``.
 
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwConnection_signal_state_changed:
-
-.. rst-class:: classref-signal
-
-**state_changed**\ (\ state\: :ref:`State<enum_NetwConnection_State>`\ ) :ref:`🔗<class_NetwConnection_signal_state_changed>`
-
-Emitted when :ref:`state<class_NetwConnection_property_state>` moves between :ref:`STATE_OFFLINE<class_NetwConnection_constant_STATE_OFFLINE>`, :ref:`STATE_CREATING<class_NetwConnection_constant_STATE_CREATING>`, :ref:`STATE_CONNECTING<class_NetwConnection_constant_STATE_CONNECTING>` and :ref:`STATE_ONLINE<class_NetwConnection_constant_STATE_ONLINE>`.
-
 .. rst-class:: classref-section-separator
 
 ----
@@ -272,48 +257,6 @@ Emitted when :ref:`state<class_NetwConnection_property_state>` moves between :re
 
 Enumerations
 ------------
-
-.. _enum_NetwConnection_State:
-
-.. rst-class:: classref-enumeration
-
-enum **State**: :ref:`🔗<enum_NetwConnection_State>`
-
-.. _class_NetwConnection_constant_STATE_OFFLINE:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`State<enum_NetwConnection_State>` **STATE_OFFLINE** = ``0``
-
-No connection attempt or online session.
-
-.. _class_NetwConnection_constant_STATE_CREATING:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`State<enum_NetwConnection_State>` **STATE_CREATING** = ``1``
-
-The transport is creating a :godot:`MultiplayerPeer`.
-
-.. _class_NetwConnection_constant_STATE_CONNECTING:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`State<enum_NetwConnection_State>` **STATE_CONNECTING** = ``2``
-
-The :godot:`MultiplayerPeer` is assigned and connecting.
-
-.. _class_NetwConnection_constant_STATE_ONLINE:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`State<enum_NetwConnection_State>` **STATE_ONLINE** = ``3``
-
-The session is online.
-
-.. rst-class:: classref-item-separator
-
-----
 
 .. _enum_NetwConnection_TransportMode:
 
@@ -423,7 +366,7 @@ While ``true``, every :ref:`LobbyDirectory<class_LobbyDirectory>` keeps listing 
 
 - :ref:`NetwEndpoint<class_NetwEndpoint>` **get_current_endpoint**\ (\ )
 
-The connected server, including while hosting, at the address this peer connected through. ``null`` before :ref:`STATE_ONLINE<class_NetwConnection_constant_STATE_ONLINE>` or when an assigned peer supplies no address. It can be absent from :ref:`endpoints<class_NetwConnection_property_endpoints>`.
+The connected server, including while hosting, at the address this peer connected through. ``null`` before :ref:`NetwSession.STATE_ONLINE<class_NetwSession_constant_STATE_ONLINE>` or when an assigned peer supplies no address. It can be absent from :ref:`endpoints<class_NetwConnection_property_endpoints>`.
 
 .. rst-class:: classref-item-separator
 
@@ -456,7 +399,7 @@ The rows from :ref:`add()<class_NetwConnection_method_add>` come first.
 - |void| **set_join_address**\ (\ value\: :godot:`String`\ )
 - :godot:`String` **get_join_address**\ (\ )
 
-The address other players use to join this server. A server reads its own transport's address, such as its LAN address for ENet, until it sets another. A client reads the address passed to :ref:`join()<class_NetwConnection_method_join>` until its join is accepted, then the server's value. Empty before :ref:`STATE_ONLINE<class_NetwConnection_constant_STATE_ONLINE>` or when an assigned peer supplies no address.
+The address other players use to join this server. A server reads its own transport's address, such as its LAN address for ENet, until it sets another. A client reads the address passed to :ref:`join()<class_NetwConnection_method_join>` until its join is accepted, then the server's value. Empty before :ref:`NetwSession.STATE_ONLINE<class_NetwSession_constant_STATE_ONLINE>` or when an assigned peer supplies no address.
 
 Only an online server sets it. A server behind a router sets its internet address after :ref:`host()<class_NetwConnection_method_host>` settles, and every client follows.
 
@@ -492,22 +435,6 @@ The server's player limit from :ref:`NetwServerInfo.max_players<class_NetwServer
 - :godot:`float` **get_probe_interval**\ (\ )
 
 Seconds between probes of a row from :ref:`add()<class_NetwConnection_method_add>` while :ref:`browsing<class_NetwConnection_property_browsing>`. ``0`` probes it once each time browsing starts.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwConnection_property_state:
-
-.. rst-class:: classref-property
-
-:ref:`State<enum_NetwConnection_State>` **state** :ref:`🔗<class_NetwConnection_property_state>`
-
-.. rst-class:: classref-property-setget
-
-- :ref:`State<enum_NetwConnection_State>` **get_state**\ (\ )
-
-The connection attempt's :ref:`State<enum_NetwConnection_State>`, reported by :ref:`state_changed<class_NetwConnection_signal_state_changed>`.
 
 .. rst-class:: classref-section-separator
 

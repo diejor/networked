@@ -1432,7 +1432,7 @@ TEST_CASE(
     netw_test::FaultWatch expected_faults;
     expected_faults.expect_error(
         "[error][session] Condition \"!edge_is_legal(state, next)\" "
-        "is true. The session cannot move from state 0 to state 2.",
+        "is true. The session cannot move from state 0 to state 3.",
         1
     );
 
@@ -1446,6 +1446,34 @@ TEST_CASE(
     NETW_CHECK_EQ(
         int(core->session_plane().get_state()),
         int(SessionCore::STATE_OFFLINE)
+    );
+}
+
+TEST_CASE(
+    "[Networked][Multiplayer][Hosted] session_set_state and "
+    "session_transition refuse STATE_CREATING, which only an attempt reports, "
+    "and publish nothing"
+) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][session] Condition \"!is_session_core_state(p_state)\" is "
+        "true. State 1 cannot be set on a session. STATE_CREATING only "
+        "reports a peer being built, so pass STATE_OFFLINE, STATE_CONNECTING, "
+        "STATE_ONLINE or STATE_DISCONNECTING.",
+        2
+    );
+
+    Ref<NetwMultiplayer> core;
+    core.instantiate();
+    Recorder session(core.ptr(), session_edges());
+
+    core->session_set_state(NetwMultiplayer::SESSION_STATE_CREATING);
+    core->session_transition(NetwMultiplayer::SESSION_STATE_CREATING);
+
+    NETW_CHECK_EQ(session.order().size(), 0);
+    NETW_CHECK_EQ(
+        int(core->session_get_computed_state()),
+        int(NetwMultiplayer::SESSION_STATE_OFFLINE)
     );
 }
 
@@ -2850,27 +2878,18 @@ TEST_CASE(
         );
     }
 
-    SUBCASE(
-        "an entity this session never adopted still has its own facet, "
-        "because the scene an entity belongs to is asked before a session "
-        "adopts it, so a record the index does not hold must still answer "
-        "its own rather than nothing"
-    ) {
+    SUBCASE("an entity this session never adopted answers no scene") {
         netw_test::RecordBox stranger;
         Ref<netw::NetwEntity> its_wrapper;
         its_wrapper.instantiate();
-        CHECK(core->entity_scene_facet(stranger, its_wrapper.ptr()).is_valid());
+        CHECK(core->entity_scene_facet(stranger, its_wrapper.ptr()).is_null());
     }
 
-    SUBCASE("an entity under no declared scene answers its own facet") {
+    SUBCASE("an entity under no declared scene answers no scene") {
         const Bound loose = bind_under(core, root, true, false);
         CHECK(
             core->entity_scene_facet(loose.record, loose.wrapper.ptr())
-            == core->scene_handle_of(loose.handle)
-        );
-        CHECK(
-            core->entity_scene_facet(loose.record, loose.wrapper.ptr())
-            != container_handle
+                .is_null()
         );
     }
 
@@ -3186,35 +3205,33 @@ TEST_CASE(
     "reparent re-entry is not a second birth"
 ) {
     Node *owner = memnew(Node);
-    Ref<RefCounted> wrapper;
-    wrapper.instantiate();
-    netw::gd::add_signal(wrapper.ptr(), "spawning");
+    const Ref<netw::NetwEntity> entity = netw::NetwEntity::ensure(owner);
+    entity->set_name("crate");
     netw_test::CallLog log;
-    wrapper->connect("spawning", log.callable("live"));
-    netw_test::RecordBox record;
-    record->set_entity_id("crate");
-    REQUIRE(record->advance(int(netw::entity::Stage::ARMED)));
+    netw::gd::add_signal(entity.ptr(), "stage_changed", 2);
+    entity->connect("stage_changed", log.callable("stage"));
+    entity->arm(Ref<NetwMultiplayer>());
     NetwMultiplayer::entity_enter_tree(
-        wrapper.ptr(),
+        entity.ptr(),
         owner,
-        record,
+        entity->get_record(),
         nullptr,
         true
     );
 
-    NETW_CHECK_EQ(record->get_stage(), int(netw::entity::Stage::LIVE));
-    NETW_CHECK_EQ(log.count("live"), 1);
+    NETW_CHECK_EQ(entity->get_stage(), int(netw::entity::Stage::LIVE));
+    NETW_CHECK_EQ(log.count("stage"), 2);
 
     SUBCASE("a record already live is a reparent, and is born no second time") {
         NetwMultiplayer::entity_enter_tree(
-            wrapper.ptr(),
+            entity.ptr(),
             owner,
-            record,
+            entity->get_record(),
             nullptr,
             true
         );
-        NETW_CHECK_EQ(record->get_stage(), int(netw::entity::Stage::LIVE));
-        NETW_CHECK_EQ(log.count("live"), 1);
+        NETW_CHECK_EQ(entity->get_stage(), int(netw::entity::Stage::LIVE));
+        NETW_CHECK_EQ(log.count("stage"), 2);
     }
 
     memdelete(owner);
@@ -3222,9 +3239,7 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Multiplayer][Hosted] an entry the record classifies as "
-    "inert stops there: owned by an enclosing scene and carrying no "
-    "identity is an editor-placed factory, which declares itself a "
-    "template and never spawns"
+    "inert stops there: carrying no identity, it never spawns"
 ) {
     Node *scene = memnew(Node);
     Node *owner = memnew(Node);
@@ -3232,9 +3247,6 @@ TEST_CASE(
     owner->set_owner(scene);
     Ref<RefCounted> wrapper;
     wrapper.instantiate();
-    netw::gd::add_signal(wrapper.ptr(), "spawning");
-    netw_test::CallLog log;
-    wrapper->connect("spawning", log.callable("live"));
     netw_test::RecordBox record;
     NetwMultiplayer::entity_enter_tree(
         wrapper.ptr(),
@@ -3244,8 +3256,11 @@ TEST_CASE(
         true
     );
 
-    NETW_CHECK_EQ(record->get_stage(), int(netw::entity::Stage::TEMPLATE));
-    NETW_CHECK_EQ(log.count("live"), 0);
+    NETW_CHECK_EQ(record->get_stage(), int(netw::entity::Stage::UNBOUND));
+    CHECK_FALSE(owner->is_connected(
+        StringName("ready"),
+        Callable(wrapper.ptr(), StringName("_on_owner_ready"))
+    ));
 
     memdelete(scene);
 }

@@ -46,7 +46,7 @@ public:
     void announce_endpoint_added(const godot::RID &p_target);
     void announce_endpoint_removed(const godot::RID &p_target);
     void announce_endpoint_updated(const godot::RID &p_target);
-    void announce_state_changed(int64_t p_state);
+    void announce_attempt_moved(int64_t p_state);
     void announce_progressed(const godot::String &p_message, double p_ratio);
     bool announce_failed(int64_t p_error, const godot::String &p_reason);
     void announce_join_address_changed(const godot::String &p_address);
@@ -61,7 +61,6 @@ public:
     );
     void cancel_peer_creation(const godot::RID &p_ticket);
 
-    State get_state() const;
     godot::Ref<NetwPromise> join(
         const godot::Ref<NetwEndpoint> &p_endpoint,
         const godot::Dictionary &p_settings

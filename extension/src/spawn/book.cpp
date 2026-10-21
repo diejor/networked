@@ -338,20 +338,48 @@ int64_t Book::held_bytes() const {
     return bytes;
 }
 
-void Book::clear() {
-    for (const KeyValue<int64_t, Record> &row : armed) {
-        Node *node = row.value.node();
-        if (node == nullptr) {
-            continue;
-        }
-        NETW_WARN(
-            sys::SPAWN,
-            "'%s' (%s) was replicated but never entered the tree before the "
-            "session ended. Call add_child after Netw.replicate.",
-            node->get_name(),
-            row.value.get_scene_path()
-        );
+namespace {
+
+bool ends_with_session(int32_t p_recipe, bool p_authored) {
+    if (p_recipe == Book::RECIPE_ADOPT) {
+        return false;
     }
+    return p_recipe != Book::RECIPE_SPAWNER || !p_authored;
+}
+
+} // namespace
+
+LocalVector<ObjectID> Book::session_nodes() const {
+    LocalVector<ObjectID> out;
+    for (const KeyValue<int64_t, Record> &row : armed) {
+        if (ends_with_session(row.value.get_recipe(), true)) {
+            out.push_back(row.value.get_node_id());
+        }
+    }
+    for (const KeyValue<int64_t, Record> &row : spawned) {
+        if (ends_with_session(row.value.get_recipe(), true)) {
+            out.push_back(row.value.get_node_id());
+        }
+    }
+    for (const KeyValue<int64_t, Received> &row : received) {
+        if (ends_with_session(row.value.recipe, row.value.authored)) {
+            out.push_back(row.value.node);
+        }
+    }
+    return out;
+}
+
+bool Book::armed_scene_path(ObjectID p_node, String &r_path) const {
+    for (const KeyValue<int64_t, Record> &row : armed) {
+        if (row.value.get_node_id() == p_node) {
+            r_path = row.value.get_scene_path();
+            return true;
+        }
+    }
+    return false;
+}
+
+void Book::clear() {
     armed.clear();
     spawned.clear();
     received.clear();

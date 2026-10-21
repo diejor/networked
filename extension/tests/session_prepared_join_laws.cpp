@@ -18,15 +18,11 @@ Ref<NetwMultiplayer> a_session() {
     return session;
 }
 
-int64_t missing_join_warnings(const Ref<NetwMultiplayer> &p_session) {
-    return netw::session_missing_local_join_warnings(p_session.ptr());
-}
-
 TEST_CASE(
     "[Networked][Session][Hosted] PJ1 a client that reaches a session submits "
     "the join it prepared exactly once, because entering spends the "
     "preparation rather than reading it, so a reconnect on the same session "
-    "submits nothing until a fresh join is prepared"
+    "submits the default join with no username"
 ) {
     const Ref<NetwMultiplayer> session = a_session();
     NETW_CHECK_EQ(
@@ -47,10 +43,12 @@ TEST_CASE(
     session->session_announce_entered();
 
     NETW_CHECK_EQ(log.count("submitted"), 1);
+    CHECK(StringName(log.args("submitted", 0)[0]) == StringName("ana"));
     CHECK_FALSE(session->session_prepared_join().has_value());
 
     session->session_announce_entered();
-    NETW_CHECK_EQ(log.count("submitted"), 1);
+    NETW_CHECK_EQ(log.count("submitted"), 2);
+    CHECK(String(log.args("submitted", 1)[0]).is_empty());
 
     session->embed_dispose();
 }
@@ -88,9 +86,30 @@ TEST_CASE(
 }
 
 TEST_CASE(
+    "[Networked][Session][Hosted] PJ7 a dedicated server that prepared no "
+    "join submits none, because it is not a player"
+) {
+    const Ref<NetwMultiplayer> session = a_session();
+    CallLog log;
+    session->observe(
+        NetwMultiplayer::SESSION_JOIN_SUBMITTED,
+        log.callable("submitted")
+    );
+
+    session->session_set_role(NetwMultiplayer::ROLE_DEDICATED_SERVER);
+    session->session_announce_entered();
+    session->scene_announce_startup();
+
+    NETW_CHECK_EQ(log.count("submitted"), 0);
+    CHECK(session->player_local().is_null());
+
+    session->embed_dispose();
+}
+
+TEST_CASE(
     "[Networked][Session][Hosted] PJ3 falling offline discards the prepared "
-    "join, so a bring-up that was cancelled never submits a stale identity on "
-    "the next session this one enters"
+    "join, so the next session this one enters submits the default join and "
+    "never a stale identity"
 ) {
     const Ref<NetwMultiplayer> session = a_session();
     session->session_prepare_join(StringName("ana"), Array());
@@ -108,7 +127,8 @@ TEST_CASE(
     );
     session->session_set_role(NetwMultiplayer::ROLE_CLIENT);
     session->session_announce_entered();
-    NETW_CHECK_EQ(log.count("submitted"), 0);
+    NETW_CHECK_EQ(log.count("submitted"), 1);
+    CHECK(String(log.args("submitted", 0)[0]).is_empty());
 
     session->embed_dispose();
 }
@@ -206,81 +226,8 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Session][Hosted] W1 a session that enters with no prepared "
-    "join, no submitted request and no local player warns once, "
-    "because an ordinary assignment with nothing arranged for the local "
-    "player is a state a developer should be told about"
-) {
-    const Ref<NetwMultiplayer> session = a_session();
-    session->session_set_role(NetwMultiplayer::ROLE_LISTEN_SERVER);
-    session->session_announce_entered();
-
-    NETW_CHECK_EQ(missing_join_warnings(session), 1);
-
-    session->embed_dispose();
-}
-
-TEST_CASE(
-    "[Networked][Session][Hosted] W2 a dedicated server never warns for "
-    "having no local player, because it deliberately has none"
-) {
-    const Ref<NetwMultiplayer> session = a_session();
-    session->session_set_role(NetwMultiplayer::ROLE_DEDICATED_SERVER);
-    session->session_announce_entered();
-
-    NETW_CHECK_EQ(missing_join_warnings(session), 0);
-
-    session->embed_dispose();
-}
-
-TEST_CASE(
-    "[Networked][Session][Hosted] W4 a session that enters and submits its "
-    "prepared join does not warn while that request is still awaiting "
-    "admission, because the local player is already on its way in"
-) {
-    Ref<LocalMultiplayerPeer> client;
-    client.instantiate();
-    NETW_CHECK_EQ(int(client->create_client(7)), int(OK));
-
-    const Ref<NetwMultiplayer> session = a_session();
-    session->NETW_API_VIRTUAL(set_multiplayer_peer)(client);
-    NETW_CHECK_EQ(int64_t(session->NETW_API_VIRTUAL(get_unique_id)()), 7);
-
-    session->session_prepare_join(StringName("ana"), Array());
-    REQUIRE(session->session_prepared_join().has_value());
-
-    session->session_set_role(NetwMultiplayer::ROLE_CLIENT);
-    session->session_announce_entered();
-
-    CHECK_FALSE(session->session_prepared_join().has_value());
-    CHECK(session->player_local().is_null());
-    NETW_CHECK_EQ(missing_join_warnings(session), 0);
-
-    session->embed_dispose();
-}
-
-TEST_CASE(
-    "[Networked][Session][Hosted] W5 a session that already seated its local "
-    "player before entering never warns, because the local player is "
-    "already present"
-) {
-    const Ref<NetwMultiplayer> session = a_session();
-    session->session_set_role(NetwMultiplayer::ROLE_LISTEN_SERVER);
-    session->session_submit_join(StringName("ana"), Array());
-    REQUIRE(session->player_local().is_valid());
-
-    session->session_announce_entered();
-
-    NETW_CHECK_EQ(missing_join_warnings(session), 0);
-
-    session->embed_dispose();
-}
-
-TEST_CASE(
     "[Networked][Session][Hosted] W6 a client that assigned a peer with no "
-    "player arranged is warned once and is left exactly as connected as it "
-    "was, because the guidance is diagnostics and a warning that took the "
-    "peer away would be the defect it warns about"
+    "player arranged is left exactly as connected as it was"
 ) {
     Ref<LocalMultiplayerPeer> client;
     client.instantiate();
@@ -293,7 +240,6 @@ TEST_CASE(
 
     session->session_announce_entered();
 
-    NETW_CHECK_EQ(missing_join_warnings(session), 1);
     CHECK(
         session->NETW_API_VIRTUAL(get_multiplayer_peer)()
         == Ref<MultiplayerPeer>(client)

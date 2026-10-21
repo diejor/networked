@@ -90,7 +90,7 @@ func reveal_when_arrived() -> void:
 
 
 func is_in(scene_path: String) -> bool:
-	if scene == null or not scene.is_declared:
+	if scene == null or scene.root == null:
 		return false
 	return scene.root.scene_file_path == scene_path
 

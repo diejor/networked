@@ -51,7 +51,7 @@ func judge(peer_id: int, request: NetwLifecycleRequest) -> void:
 		"peer": peer_id,
 		"kind": request.kind,
 		"requester": request.requester,
-		"hp": request.entity.owner.get(&"hp"),
+		"hp": request.entity.root.get(&"hp"),
 		"placed": is_inside_tree(),
 		"destination": String(destination.name) if destination != null else "",
 	})

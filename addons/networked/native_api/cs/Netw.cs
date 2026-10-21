@@ -48,9 +48,10 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "session", 3534802101UL);
 
     /// <summary>
-    /// The <see cref="NetwSession"/> of the <see cref="Node.Multiplayer"/>. It
-    /// holds the players, the signals and <see cref="NetwSession.Connection"/>,
-    /// which finds servers and joins or hosts one.
+    /// The <see cref="NetwSession"/> of the <see cref="Node.Multiplayer"/>, or
+    /// <c>null</c> before <paramref name="node"/> enters the tree. It holds the
+    /// players, the signals and <see cref="NetwSession.Connection"/>, which
+    /// finds servers and joins or hosts one.
     /// <code>
     /// var s := Netw.session(self)
     /// s.entered.connect(on_entered)
@@ -81,15 +82,15 @@ public sealed class Netw : NetwRefCounted
     /// multiplayer.multiplayer_peer = peer
     /// </code>
     /// <para>
-    /// Call it before or after assigning
-    /// <see cref="MultiplayerApi.MultiplayerPeer"/>. The join can still be
-    /// refused later, which emits <see cref="NetwSession.JoinFailed"/>.
+    /// Call it before assigning <see cref="MultiplayerApi.MultiplayerPeer"/>.
+    /// The join can still be refused later, which emits
+    /// <see cref="NetwSession.JoinFailed"/>.
     /// <code>
     /// Error
     /// ┠╴OK                     the join will be sent
-    /// ┠╴ERR_UNAVAILABLE        the join could not be sent
-    /// ┠╴ERR_ALREADY_IN_USE     a join was already requested
-    /// ┖╴ERR_INVALID_PARAMETER  username is empty
+    /// ┠╴ERR_ALREADY_IN_USE     the session is already online
+    /// ┠╴ERR_INVALID_PARAMETER  username is empty
+    /// ┖╴ERR_UNCONFIGURED       node is not inside a session
     /// </code>
     /// </para>
     /// <para>
@@ -135,7 +136,8 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "scene", 867873299UL);
 
     /// <summary>
-    /// Returns the multiplayer scene <paramref name="node"/> is in. Use
+    /// Returns the multiplayer scene <paramref name="node"/> is in, or
+    /// <c>null</c> when no scene was found. Use
     /// <see cref="NetwSession.FindScene"/> to find one by name.
     /// <code>
     /// var here := Netw.scene(self)
@@ -713,7 +715,7 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "rpc_controller", 187483682UL);
 
     /// <summary>
-    /// Calls <paramref name="callable"/> on the peer driving the node, its
+    /// Calls <paramref name="callable"/> on the peer of the node's
     /// <see cref="NetwEntity.Controller"/>.
     /// </summary>
     public static void RpcController(Callable callable, params Variant[] rest)
@@ -924,7 +926,7 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "request_controller", 2325787334UL);
 
     /// <summary>
-    /// Calls <paramref name="callable"/> on the peer driving the node, its
+    /// Calls <paramref name="callable"/> on the peer of the node's
     /// <see cref="NetwEntity.Controller"/>.
     /// </summary>
     public static NetwPromise RequestController(
@@ -1139,8 +1141,8 @@ public sealed class Netw : NetwRefCounted
     /// <para>
     /// A client can call it without <paramref name="owner"/> when
     /// <paramref name="node"/> sets <see cref="NetwEntity.Lifecycle"/> to
-    /// <see cref="NetwEntity.LifecycleEnum.Controller"/>. That client becomes
-    /// its <see cref="NetwEntity.Controller"/>.
+    /// <see cref="NetwEntity.LifecycleEnum.Controller"/>. That client's player
+    /// becomes its <see cref="NetwEntity.Controller"/>.
     /// </para>
     /// </summary>
     public static NetwEntity Replicate(Node node, NetwPlayer owner = null)
@@ -1170,9 +1172,9 @@ public sealed class Netw : NetwRefCounted
     /// Register <paramref name="fn"/> with <see cref="Netw.ConfigureSpawn"/>
     /// first, and add the node to the tree before the next tick. A client can
     /// call it when the node sets <see cref="NetwEntity.Lifecycle"/> to
-    /// <see cref="NetwEntity.LifecycleEnum.Controller"/>. That client becomes
-    /// its <see cref="NetwEntity.Controller"/>, sees it at once, and loses it
-    /// if the server refuses.
+    /// <see cref="NetwEntity.LifecycleEnum.Controller"/>. That client's player
+    /// becomes its <see cref="NetwEntity.Controller"/>. The client sees it at
+    /// once and loses it if the server refuses.
     /// </para>
     /// </summary>
     public static Node Spawn(Callable fn, params Variant[] rest)
@@ -1211,15 +1213,23 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "spawn_player", 1228628813UL);
 
     /// <summary>
-    /// Like <see cref="Netw.Spawn"/>, for the node <paramref name="player"/>
-    /// controls.
+    /// Like <see cref="Netw.Spawn"/>, and writes
+    /// <see cref="NetwEntity.Player"/> on the node <paramref name="fn"/>
+    /// returns. The two lines below spawn the same entity.
     /// <code>
-    /// players.add_child(
-    ///     Netw.spawn_player(player, make_avatar, character_class)
-    /// )
+    /// players.add_child(Netw.spawn_player(player, make_avatar))
+    /// players.add_child(Netw.spawn(make_avatar_of, player.peer_id))
+    ///
+    /// func make_avatar_of(peer_id: int) -&gt; Node:
+    ///     var avatar := make_avatar()
+    ///     var who := Netw.session(self).player_of(peer_id)
+    ///     NetwEntity.of(avatar).player = who
+    ///     return avatar
     /// </code>
     /// <para>
-    /// The node is despawned when <paramref name="player"/> leaves. With
+    /// Returns <c>null</c> and spawns nothing when the session does not hold
+    /// <paramref name="player"/>. The node is despawned when
+    /// <paramref name="player"/> leaves. With
     /// <see cref="NetwPersistenceConfig.LoadOnSpawn"/>, other peers receive it
     /// once its save is loaded. <b>Server Only.</b>
     /// </para>
@@ -1286,7 +1296,7 @@ public sealed class Netw : NetwRefCounted
     /// See <see cref="NetwDespawnOpts"/> for <paramref name="opts"/>. Returns
     /// <c>@GlobalScope.ERR_DOES_NOT_EXIST</c> for a node that was not spawned,
     /// and <c>@GlobalScope.ERR_UNAVAILABLE</c> outside a session. A client can
-    /// call it when it is the <see cref="NetwEntity.Controller"/> and
+    /// call it when its player is the <see cref="NetwEntity.Controller"/> and
     /// <see cref="NetwEntity.Lifecycle"/> is
     /// <see cref="NetwEntity.LifecycleEnum.Controller"/>. The node is removed
     /// on that client at once, and comes back if the server refuses.
@@ -1323,8 +1333,9 @@ public sealed class Netw : NetwRefCounted
     /// <see cref="Node.Reparent"/> works fine. The promise fails with
     /// <c>@GlobalScope.ERR_DOES_NOT_EXIST</c> when <paramref name="node"/> has
     /// no entity, and <c>@GlobalScope.ERR_UNAVAILABLE</c> outside a session. A
-    /// client can call it when it is the <see cref="NetwEntity.Controller"/>
-    /// and <see cref="NetwEntity.Lifecycle"/> is
+    /// client can call it when its player is the
+    /// <see cref="NetwEntity.Controller"/> and
+    /// <see cref="NetwEntity.Lifecycle"/> is
     /// <see cref="NetwEntity.LifecycleEnum.Controller"/>. The node moves on
     /// that client at once, and moves back if the server refuses.
     /// </para>

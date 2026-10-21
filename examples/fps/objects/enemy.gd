@@ -43,7 +43,7 @@ func _init():
 
 func _notification(what):
 	if what == NOTIFICATION_PARENTED:
-		Netw.configure_entity(self).name = StringName(name)
+		NetwEntity.of(self).name = StringName(name)
 
 # When ready, save the initial position
 
@@ -58,8 +58,8 @@ func _process(delta):
 
 	player = null
 	for body: NetwEntity in scene.player_entities:
-		if player == null or position.distance_to(body.owner.position) < position.distance_to(player.position):
-			player = body.owner
+		if player == null or position.distance_to(body.root.position) < position.distance_to(player.position):
+			player = body.root
 
 	if player == null:
 		return

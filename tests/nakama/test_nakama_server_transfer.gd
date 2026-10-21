@@ -288,7 +288,6 @@ class Avatar:
 
 	func _init() -> void:
 		var declared := Netw.configure_entity(self)
-		declared.initial_controller = NetwEntity.INITIAL_PLAYER
 		Netw.configure_property(self, &"position").broadcast()
 
 
@@ -539,7 +538,7 @@ func body_of(tree: MultiplayerViewport, username: String) -> Node2D:
 	var wanted := StringName(username)
 	for body: NetwEntity in tree.api.player_entities:
 		if body.player != null and body.player.username == wanted:
-			return body.owner as Node2D
+			return body.root as Node2D
 	return null
 
 

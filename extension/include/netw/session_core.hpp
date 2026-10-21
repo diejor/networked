@@ -15,9 +15,9 @@ class SessionCore {
 public:
     enum State {
         STATE_OFFLINE = 0,
-        STATE_CONNECTING = 1,
-        STATE_ONLINE = 2,
-        STATE_DISCONNECTING = 3,
+        STATE_CONNECTING = 2,
+        STATE_ONLINE = 3,
+        STATE_DISCONNECTING = 4,
     };
 
     enum Role {

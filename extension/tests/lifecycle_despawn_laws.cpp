@@ -47,7 +47,7 @@ Node *build_crate(
     const Ref<NetwEntity> entity = NetwEntity::ensure(made);
     entity->set_lifecycle(NetwEntity::LIFECYCLE_CONTROLLER);
     entity->set_transfer(NetwEntity::TRANSFER_REQUESTABLE);
-    entity->connect(StringName("spawned"), Callable(p_spawned));
+    made->connect(StringName("ready"), Callable(p_spawned));
     return made;
 }
 
@@ -292,7 +292,7 @@ TEST_CASE(
 TEST_CASE(
     "[Networked][Lifecycle][Spawn][SceneTree] re-serve, a refused despawn "
     "brings the entity back on the author with the session's values and "
-    "spawned fired, and never touches an observer"
+    "ready fired once, and never touches an observer"
 ) {
     netw_test::FaultWatch expected_faults;
     expected_faults.expect_warning(

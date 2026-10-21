@@ -40,6 +40,11 @@ int64_t &builds_starting_controller() {
     return held;
 }
 
+int64_t &builds_root_authority() {
+    static int64_t held = 0;
+    return held;
+}
+
 Node *build_player(const Variant &p_name) {
     Node2D *made = memnew(Node2D);
     made->set_name(String(p_name));
@@ -50,6 +55,9 @@ Node *build_player(const Variant &p_name) {
     }
     if (builds_starting_controller() != 0) {
         NetwEntity::ensure(made)->set_controller(builds_starting_controller());
+    }
+    if (builds_root_authority() != 0) {
+        made->set_multiplayer_authority(int32_t(builds_root_authority()));
     }
     return made;
 }
@@ -446,15 +454,15 @@ TEST_CASE(
     teach_every_session(rig);
     const int route = seat_free(rig, arena, "Touched");
 
-    entity_at(rig, route, 0)->claim_control(Control::HOLD_YIELDABLE);
+    entity_at(rig, route, 0)->claim_control(Control::HOLD_SOFT);
     rig.pump(10);
     NETW_CHECK_EQ(entity_at(rig, route, -1)->get_controller(), rig.peer_id(0));
-    NETW_CHECK_EQ(hold_at(rig, route, 1), int(Control::HOLD_YIELDABLE));
+    NETW_CHECK_EQ(hold_at(rig, route, 1), int(Control::HOLD_SOFT));
     const int64_t touched
         = int64_t(entity_at(rig, route, -1)->get_control_tenure());
 
     const Ref<NetwPromise> nudged
-        = entity_at(rig, route, 1)->claim_control(Control::HOLD_YIELDABLE);
+        = entity_at(rig, route, 1)->claim_control(Control::HOLD_SOFT);
     CHECK(nudged->get_is_failed());
     NETW_CHECK_EQ(int(nudged->get_code()), int(ERR_UNAUTHORIZED));
 
@@ -490,7 +498,7 @@ TEST_CASE(
     const int route = seat_free(rig, arena, "Regripped");
     const Ref<NetwEntity> host = entity_at(rig, route, -1);
 
-    entity_at(rig, route, 0)->claim_control(Control::HOLD_YIELDABLE);
+    entity_at(rig, route, 0)->claim_control(Control::HOLD_SOFT);
     rig.pump(10);
     NETW_REQUIRE_EQ(host->get_controller(), int64_t(rig.peer_id(0)));
     const int64_t tenure = int64_t(host->get_control_tenure());
@@ -672,6 +680,50 @@ TEST_CASE(
 }
 
 TEST_CASE(
+    "[Networked][Entity] CA19b a spawn function that writes the controller "
+    "and also hands the root to that peer keeps AUTHORITY_SERVER, and every "
+    "peer warns as it moves the root back to the server"
+) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][entity] Handed had its multiplayer authority set to * "
+        "outside its entity, and the entity sets it back to 1. Choose who "
+        "holds it with NetwEntity.authority.",
+        3
+    );
+
+    LoopbackRig rig(2);
+    rig.mount();
+    Node *arena = rig.mirror_child("Arena");
+    teach_every_session(rig);
+    const int64_t steerer = rig.peer_id(0);
+    builds_starting_controller() = steerer;
+    builds_root_authority() = steerer;
+    const int route = seat_free(rig, arena, "Handed");
+    builds_starting_controller() = 0;
+    builds_root_authority() = 0;
+    rig.pump(10);
+
+    const int seats[] = {-1, 0, 1};
+    for (const int seat : seats) {
+        NETW_FORMAT_INT(seat_text, seat);
+        CAPTURE(seat_text);
+        const Ref<NetwEntity> seen = entity_at(rig, route, seat);
+        REQUIRE(seen.is_valid());
+        NETW_CHECK_EQ(seen->get_controller(), steerer);
+        NETW_CHECK_EQ(
+            int(seen->get_authority()),
+            int(NetwEntity::AUTHORITY_SERVER)
+        );
+        NETW_CHECK_EQ(
+            int64_t(rig.route_node(route, seat)->get_multiplayer_authority()),
+            int64_t(1)
+        );
+        NETW_CHECK_EQ(int(seen->get_is_controlled_locally()), int(seat == 0));
+    }
+}
+
+TEST_CASE(
     "[Networked][Entity] CA10 a late joiner starts on the revision, tenure "
     "and hold the session already decided"
 ) {
@@ -681,7 +733,7 @@ TEST_CASE(
     teach_every_session(rig);
     const int route = seat_free(rig, arena, "Seeded");
 
-    entity_at(rig, route, 0)->claim_control(Control::HOLD_YIELDABLE);
+    entity_at(rig, route, 0)->claim_control(Control::HOLD_SOFT);
     rig.pump(10);
     entity_at(rig, route, 0)->claim_control(Control::HOLD_EXCLUSIVE);
     rig.pump(10);
@@ -715,7 +767,7 @@ TEST_CASE(
     teach_every_session(rig);
     const int route = seat_free(rig, arena, "Deferred");
 
-    entity_at(rig, route, 0)->claim_control(Control::HOLD_YIELDABLE);
+    entity_at(rig, route, 0)->claim_control(Control::HOLD_SOFT);
     rig.pump(10);
     entity_at(rig, route, 0)->claim_control(Control::HOLD_EXCLUSIVE);
     rig.pump(10);
@@ -736,7 +788,7 @@ TEST_CASE(
     netw::session::ControlApply newer;
     newer.controller = uint64_t(rig.peer_id(0));
     newer.revision = 3;
-    newer.hold = uint8_t(Control::HOLD_YIELDABLE);
+    newer.hold = uint8_t(Control::HOLD_SOFT);
     deliver_apply(rig, late, route, newer);
 
     rig.release(late);
@@ -747,7 +799,7 @@ TEST_CASE(
     NETW_CHECK_EQ(joined->get_controller(), int64_t(rig.peer_id(0)));
     NETW_CHECK_EQ(int64_t(joined->get_control_revision()), int64_t(3));
     NETW_CHECK_EQ(int64_t(joined->get_control_tenure()), int64_t(1));
-    NETW_CHECK_EQ(int(joined->get_hold()), int(Control::HOLD_YIELDABLE));
+    NETW_CHECK_EQ(int(joined->get_hold()), int(Control::HOLD_SOFT));
 
     const Array moved = rows_of(
         rig.client(late)->event_ring(route),

@@ -135,15 +135,15 @@ constexpr int SETTLE_FRAMES = 80;
 const Vector3 DRIFT(0.0, 0.0, 1.0);
 const Vector3 WAKE_VELOCITY(0.0, 0.0, 2.0);
 const Hold REST_HOLDS[CUBES] = {
-    Hold::HOLD_YIELDABLE,
-    Hold::HOLD_YIELDABLE,
+    Hold::HOLD_SOFT,
+    Hold::HOLD_SOFT,
     Hold::HOLD_EXCLUSIVE,
     Hold::HOLD_EXCLUSIVE,
-    Hold::HOLD_YIELDABLE,
+    Hold::HOLD_SOFT,
 };
 const Hold REST_FINAL_HOLDS[CUBES] = {
     Hold::HOLD_NONE,
-    Hold::HOLD_YIELDABLE,
+    Hold::HOLD_SOFT,
     Hold::HOLD_EXCLUSIVE,
     Hold::HOLD_EXCLUSIVE,
     Hold::HOLD_EXCLUSIVE,
@@ -475,7 +475,7 @@ class ContactScenario : public netw_test::FrameScenario {
             case Kind::REST:
             case Kind::WAKE:
                 for (int index = 0; index < cube_count(); ++index) {
-                    const Hold hold = kind == Kind::WAKE ? Hold::HOLD_YIELDABLE
+                    const Hold hold = kind == Kind::WAKE ? Hold::HOLD_SOFT
                                                          : REST_HOLDS[index];
                     entity_at(A, index)->claim_control(hold);
                     RigidBody3D *sphere = sphere_at(A, index);
@@ -882,7 +882,7 @@ TEST_CASE(
     const Subject &touched = evidence.subjects[1];
     NETW_CHECK_GE(touched.claimed_frame, 0);
     NETW_CHECK_EQ(touched.server_controller, evidence.holder);
-    NETW_CHECK_EQ(touched.server_hold, int64_t(Hold::HOLD_YIELDABLE));
+    NETW_CHECK_EQ(touched.server_hold, int64_t(Hold::HOLD_SOFT));
 }
 
 TEST_CASE(
@@ -900,7 +900,7 @@ TEST_CASE(
         const Subject &subject = evidence.subjects[index];
         NETW_CHECK_EQ(subject.claimed_frame, first);
         NETW_CHECK_EQ(subject.server_controller, evidence.holder);
-        NETW_CHECK_EQ(subject.server_hold, int64_t(Hold::HOLD_YIELDABLE));
+        NETW_CHECK_EQ(subject.server_hold, int64_t(Hold::HOLD_SOFT));
     }
 }
 
@@ -960,7 +960,7 @@ TEST_CASE(
     NETW_CHECK_EQ(evidence.reclaims, int64_t(1));
     NETW_CHECK_EQ(subject.server_controller, evidence.holder);
     NETW_CHECK_EQ(subject.local_controller, evidence.holder);
-    NETW_CHECK_EQ(subject.server_hold, int64_t(Hold::HOLD_YIELDABLE));
+    NETW_CHECK_EQ(subject.server_hold, int64_t(Hold::HOLD_SOFT));
     CHECK(subject.local_velocity.is_equal_approx(WAKE_VELOCITY));
 }
 

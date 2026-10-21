@@ -22,6 +22,7 @@ namespace netw {
 
 namespace {
 
+const char *SIG_STATE_CHANGED = "state_changed";
 const char *SIG_ENTERED = "entered";
 const char *SIG_EXITING = "exiting";
 const char *SIG_EXITED = "exited";
@@ -40,6 +41,10 @@ NetwMultiplayer *NetwSession::session() const {
 
 void NetwSession::bind_session(NetwMultiplayer *p_session) {
     session_id = gd::instance_id(p_session);
+}
+
+void NetwSession::announce_state_changed(State p_state) {
+    emit_signal(StringName(SIG_STATE_CHANGED), p_state);
 }
 
 void NetwSession::announce_entered() {
@@ -124,6 +129,12 @@ Ref<NetwPlayer> NetwSession::find_player(const String &p_account) const {
 Variant NetwSession::bucket_of(int64_t p_peer, const Variant &p_type) const {
     NetwMultiplayer *api = session();
     return api != nullptr ? api->peer_get_bucket(p_peer, p_type) : Variant();
+}
+
+NetwSession::State NetwSession::get_state() const {
+    NetwMultiplayer *api = session();
+    return api != nullptr ? api->session_get_computed_state()
+                          : NetwSession::STATE_OFFLINE;
 }
 
 NetwSession::Role NetwSession::get_role() const {
@@ -313,10 +324,11 @@ void NetwSession::unregister_service(Object *p_service, Object *p_type) {
 }
 
 void NetwSession::_bind_methods() {
-    BIND_ENUM_CONSTANT(SESSION_STATE_OFFLINE);
-    BIND_ENUM_CONSTANT(SESSION_STATE_CONNECTING);
-    BIND_ENUM_CONSTANT(SESSION_STATE_ONLINE);
-    BIND_ENUM_CONSTANT(SESSION_STATE_DISCONNECTING);
+    BIND_ENUM_CONSTANT(STATE_OFFLINE);
+    BIND_ENUM_CONSTANT(STATE_CREATING);
+    BIND_ENUM_CONSTANT(STATE_CONNECTING);
+    BIND_ENUM_CONSTANT(STATE_ONLINE);
+    BIND_ENUM_CONSTANT(STATE_DISCONNECTING);
     BIND_ENUM_CONSTANT(ROLE_NONE);
     BIND_ENUM_CONSTANT(ROLE_CLIENT);
     BIND_ENUM_CONSTANT(ROLE_DEDICATED_SERVER);
@@ -360,6 +372,19 @@ void NetwSession::_bind_methods() {
         &NetwSession::bucket_of
     );
 
+    ClassDB::bind_method(D_METHOD("get_state"), &NetwSession::get_state);
+    ADD_PROPERTY(
+        PropertyInfo(
+            Variant::INT,
+            "state",
+            PROPERTY_HINT_NONE,
+            "",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "NetwSession.State"
+        ),
+        "",
+        "get_state"
+    );
     ClassDB::bind_method(D_METHOD("get_role"), &NetwSession::get_role);
     ADD_PROPERTY(
         PropertyInfo(
@@ -528,6 +553,17 @@ void NetwSession::_bind_methods() {
         PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
         "NetwSession.ExitReason"
     );
+    ADD_SIGNAL(MethodInfo(
+        SIG_STATE_CHANGED,
+        PropertyInfo(
+            Variant::INT,
+            "state",
+            PROPERTY_HINT_NONE,
+            "",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "NetwSession.State"
+        )
+    ));
     ADD_SIGNAL(MethodInfo(SIG_ENTERED));
     ADD_SIGNAL(MethodInfo(
         SIG_EXITING,

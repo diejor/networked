@@ -22,6 +22,10 @@ constexpr int PORT_RANGE_SIZE = 40;
 constexpr int CLOSED_PORT_OFFSET = 50;
 constexpr int64_t STEP_BUDGET_MSEC = 5000;
 constexpr int SETTLE_FRAMES = 20;
+constexpr int64_t OFFLINE = netw::NetwMultiplayer::SESSION_STATE_OFFLINE;
+constexpr int64_t CREATING = netw::NetwMultiplayer::SESSION_STATE_CREATING;
+constexpr int64_t CONNECTING = netw::NetwMultiplayer::SESSION_STATE_CONNECTING;
+constexpr int64_t ONLINE = netw::NetwMultiplayer::SESSION_STATE_ONLINE;
 
 enum Side {
     SIDE_HOST,
@@ -58,7 +62,7 @@ AttemptEvidence &attempt_evidence() {
     return evidence;
 }
 
-void record_state(int64_t p_state, int64_t p_side) {
+void record_state(int64_t, int64_t p_state, int64_t p_side) {
     attempt_evidence().sides[p_side].states.push_back(p_state);
 }
 
@@ -108,7 +112,7 @@ class ConnectAttemptScenario final : public netw_test::FrameScenario {
         Ref<netw::NetwMultiplayer> made;
         made.instantiate();
         made->observe(
-            netw::NetwMultiplayer::CONNECTION_STATE_CHANGED,
+            netw::NetwMultiplayer::SESSION_STATE_CHANGED,
             callable_mp_static(&record_state).bind(int64_t(p_side))
         );
         made->observe(
@@ -194,8 +198,7 @@ class ConnectAttemptScenario final : public netw_test::FrameScenario {
     }
 
     bool connecting() const {
-        return client->transport_get_attempt_state()
-            == int64_t(netw::connect::ATTEMPT_CONNECTING);
+        return client->session_get_computed_state() == CONNECTING;
     }
 
 public:
@@ -346,12 +349,7 @@ TEST_CASE(
     CHECK(side.promise_completed);
     CHECK_FALSE(side.address_when_settled.is_empty());
     NETW_CHECK_EQ(side.failed, 0);
-    check_states(
-        side,
-        {netw::connect::ATTEMPT_CREATING,
-         netw::connect::ATTEMPT_CONNECTING,
-         netw::connect::ATTEMPT_ONLINE}
-    );
+    check_states(side, {CREATING, CONNECTING, ONLINE});
 }
 
 TEST_CASE(
@@ -366,10 +364,7 @@ TEST_CASE(
         side.end_session_state,
         int(netw::NetwMultiplayer::SESSION_STATE_ONLINE)
     );
-    check_states(
-        side,
-        {netw::connect::ATTEMPT_CONNECTING, netw::connect::ATTEMPT_ONLINE}
-    );
+    check_states(side, {CONNECTING, ONLINE});
 }
 
 TEST_CASE(
@@ -381,12 +376,7 @@ TEST_CASE(
     const SideEvidence &side = evidence.sides[SIDE_CLOSED];
     NETW_CHECK_EQ(side.failed, 1);
     NETW_CHECK_EQ(side.failed_error, int64_t(ERR_CANT_CONNECT));
-    check_states(
-        side,
-        {netw::connect::ATTEMPT_CREATING,
-         netw::connect::ATTEMPT_CONNECTING,
-         netw::connect::ATTEMPT_OFFLINE}
-    );
+    check_states(side, {CREATING, CONNECTING, OFFLINE});
 }
 
 TEST_CASE(
@@ -405,12 +395,7 @@ TEST_CASE(
         side.end_session_state,
         int(netw::NetwMultiplayer::SESSION_STATE_OFFLINE)
     );
-    check_states(
-        side,
-        {netw::connect::ATTEMPT_CREATING,
-         netw::connect::ATTEMPT_CONNECTING,
-         netw::connect::ATTEMPT_OFFLINE}
-    );
+    check_states(side, {CREATING, CONNECTING, OFFLINE});
 }
 
 TEST_CASE(

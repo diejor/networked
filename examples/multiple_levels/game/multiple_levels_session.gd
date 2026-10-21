@@ -83,14 +83,10 @@ func open_level(path: String) -> NetwScene:
 
 
 func spawn_player(player: NetwPlayer) -> void:
-	var start := level_1.resource_path
-	open_level(start)
 	var body := Netw.spawn_player(player, spawn_avatar)
 	var roster: Array[NetwPlayer] = session.players
 	(body as Node2D).position = START_POSE + START_STRIDE * roster.size()
 	var tp: TPComponent = body.get_node("%TPComponent")
-	tp.current_scene_path = start
-	open_level(start).root.add_child(body)
+	tp.current_scene_path = level_1.resource_path
 	await NetwEntity.of(body).persistence.load().wait()
-	if tp.current_scene_path != start:
-		Netw.reparent(body, open_level(tp.current_scene_path).root)
+	open_level(tp.current_scene_path).root.add_child(body)

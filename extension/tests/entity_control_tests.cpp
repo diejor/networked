@@ -18,18 +18,15 @@ TEST_CASE(
 ) {
     Control held;
     Control *const control = &held;
-    NETW_CHECK_EQ(control->resolve(REPRESENTED), 0);
-
-    control->initial = int(Control::InitialController::PLAYER);
-    NETW_CHECK_EQ(control->resolve(REPRESENTED), REPRESENTED);
+    NETW_CHECK_EQ(control->resolve(), 0);
 
     CHECK_FALSE(control->configured);
     control->set_controller(OTHER);
     CHECK(control->configured);
-    NETW_CHECK_EQ(control->resolve(REPRESENTED), OTHER);
+    NETW_CHECK_EQ(control->resolve(), OTHER);
 
     control->set_controller(0);
-    NETW_CHECK_EQ(control->resolve(REPRESENTED), 0);
+    NETW_CHECK_EQ(control->resolve(), 0);
 }
 
 TEST_CASE(
@@ -51,14 +48,14 @@ TEST_CASE(
 ) {
     Control held;
     Control *const control = &held;
-    control->initial = int(Control::InitialController::PLAYER);
+    control->set_controller(REPRESENTED);
 
-    CHECK(control->controlled_by(REPRESENTED, REPRESENTED));
-    CHECK_FALSE(control->controlled_by(OTHER, REPRESENTED));
+    CHECK(control->controlled_by(REPRESENTED));
+    CHECK_FALSE(control->controlled_by(OTHER));
 
-    CHECK_FALSE(control->controlled_by(0, REPRESENTED));
+    CHECK_FALSE(control->controlled_by(0));
     control->set_controller(0);
-    CHECK_FALSE(control->controlled_by(REPRESENTED, REPRESENTED));
+    CHECK_FALSE(control->controlled_by(REPRESENTED));
 }
 
 TEST_CASE(
@@ -148,7 +145,7 @@ TEST_CASE(
     control.transfer = int(Control::Transfer::REQUESTABLE);
     control.hold = Control::HOLD_EXCLUSIVE;
     NETW_CHECK_EQ(
-        ruling_of(control, REPRESENTED, Control::HOLD_YIELDABLE, REPRESENTED),
+        ruling_of(control, REPRESENTED, Control::HOLD_SOFT, REPRESENTED),
         int(Control::Ruling::HOLD_CHANGE)
     );
     NETW_CHECK_EQ(
@@ -156,23 +153,23 @@ TEST_CASE(
         int(Control::Ruling::EXCLUDED)
     );
 
-    control.hold = Control::HOLD_YIELDABLE;
+    control.hold = Control::HOLD_SOFT;
     NETW_CHECK_EQ(
         ruling_of(control, OTHER, Control::HOLD_EXCLUSIVE, REPRESENTED),
         int(Control::Ruling::ASK_FILTER)
     );
     NETW_CHECK_EQ(
-        ruling_of(control, OTHER, Control::HOLD_YIELDABLE, REPRESENTED),
+        ruling_of(control, OTHER, Control::HOLD_SOFT, REPRESENTED),
         int(Control::Ruling::EXCLUDED)
     );
 
     control.hold = Control::HOLD_NONE;
     NETW_CHECK_EQ(
-        ruling_of(control, OTHER, Control::HOLD_YIELDABLE, REPRESENTED),
+        ruling_of(control, OTHER, Control::HOLD_SOFT, REPRESENTED),
         int(Control::Ruling::EXCLUDED)
     );
     NETW_CHECK_EQ(
-        ruling_of(control, OTHER, Control::HOLD_YIELDABLE, 0),
+        ruling_of(control, OTHER, Control::HOLD_SOFT, 0),
         int(Control::Ruling::ASK_FILTER)
     );
 }
@@ -185,7 +182,7 @@ TEST_CASE(
     Control coordinator;
     coordinator.set_controller(0);
 
-    CHECK(coordinator.decide(REPRESENTED, Control::HOLD_YIELDABLE));
+    CHECK(coordinator.decide(REPRESENTED, Control::HOLD_SOFT));
     coordinator.set_controller(REPRESENTED);
     NETW_CHECK_EQ(int64_t(coordinator.revision), int64_t(1));
     NETW_CHECK_EQ(int64_t(coordinator.tenure), int64_t(1));
@@ -206,7 +203,7 @@ TEST_CASE(
     NETW_CHECK_EQ(int64_t(receiver.tenure), int64_t(1));
     NETW_CHECK_EQ(receiver.hold, int64_t(Control::HOLD_EXCLUSIVE));
 
-    CHECK(receiver.install(3, false, Control::HOLD_YIELDABLE));
+    CHECK(receiver.install(3, false, Control::HOLD_SOFT));
     NETW_CHECK_EQ(int64_t(receiver.revision), int64_t(3));
     NETW_CHECK_EQ(int64_t(receiver.tenure), int64_t(1));
     CHECK(receiver.install(4, true, Control::HOLD_NONE));

@@ -526,7 +526,7 @@ Removes the node :ref:`spawn()<class_Netw_method_spawn>` or :ref:`replicate()<cl
 
 \ See :ref:`NetwDespawnOpts<class_NetwDespawnOpts>` for ``opts``. Returns :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>` for a node that was not spawned, and :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>` outside a session.
 
-A client can call it when it is the :ref:`NetwEntity.controller<class_NetwEntity_property_controller>` and :ref:`NetwEntity.lifecycle<class_NetwEntity_property_lifecycle>` is :ref:`NetwEntity.LIFECYCLE_CONTROLLER<class_NetwEntity_constant_LIFECYCLE_CONTROLLER>`. The node is removed on that client at once, and comes back if the server refuses.
+A client can call it when its player is the :ref:`NetwEntity.controller<class_NetwEntity_property_controller>` and :ref:`NetwEntity.lifecycle<class_NetwEntity_property_lifecycle>` is :ref:`NetwEntity.LIFECYCLE_CONTROLLER<class_NetwEntity_constant_LIFECYCLE_CONTROLLER>`. The node is removed on that client at once, and comes back if the server refuses.
 
 .. rst-class:: classref-item-separator
 
@@ -582,15 +582,15 @@ Joins the game as ``username``. The arguments after ``username`` are passed to t
     Netw.prepare_join(self, &"Dev", &"red")
     multiplayer.multiplayer_peer = peer
 
-\ Call it before or after assigning :godot:`MultiplayerAPI.multiplayer_peer <MultiplayerAPI#class_MultiplayerAPI_property_multiplayer_peer>`. The join can still be refused later, which emits :ref:`NetwSession.join_failed<class_NetwSession_signal_join_failed>`.
+\ Call it before assigning :godot:`MultiplayerAPI.multiplayer_peer <MultiplayerAPI#class_MultiplayerAPI_property_multiplayer_peer>`. The join can still be refused later, which emits :ref:`NetwSession.join_failed<class_NetwSession_signal_join_failed>`.
 
 .. code:: text
 
     Error
     ┠╴OK                     the join will be sent
-    ┠╴ERR_UNAVAILABLE        the join could not be sent
-    ┠╴ERR_ALREADY_IN_USE     a join was already requested
-    ┖╴ERR_INVALID_PARAMETER  username is empty
+    ┠╴ERR_ALREADY_IN_USE     the session is already online
+    ┠╴ERR_INVALID_PARAMETER  username is empty
+    ┖╴ERR_UNCONFIGURED       node is not inside a session
 
 \ **Player request.**
 
@@ -628,7 +628,7 @@ Moves ``node`` under ``new_parent`` like :godot:`Node.reparent() <Node#class_Nod
 
 The promise fails with :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>` when ``node`` has no entity, and :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>` outside a session.
 
-A client can call it when it is the :ref:`NetwEntity.controller<class_NetwEntity_property_controller>` and :ref:`NetwEntity.lifecycle<class_NetwEntity_property_lifecycle>` is :ref:`NetwEntity.LIFECYCLE_CONTROLLER<class_NetwEntity_constant_LIFECYCLE_CONTROLLER>`. The node moves on that client at once, and moves back if the server refuses.
+A client can call it when its player is the :ref:`NetwEntity.controller<class_NetwEntity_property_controller>` and :ref:`NetwEntity.lifecycle<class_NetwEntity_property_lifecycle>` is :ref:`NetwEntity.LIFECYCLE_CONTROLLER<class_NetwEntity_constant_LIFECYCLE_CONTROLLER>`. The node moves on that client at once, and moves back if the server refuses.
 
 .. rst-class:: classref-item-separator
 
@@ -649,7 +649,7 @@ Spawns ``node`` on every peer from its :godot:`Node.scene_file_path <Node#class_
     avatar.position = spawn_point
     scene.add_child(avatar)
 
-\ A client can call it without ``owner`` when ``node`` sets :ref:`NetwEntity.lifecycle<class_NetwEntity_property_lifecycle>` to :ref:`NetwEntity.LIFECYCLE_CONTROLLER<class_NetwEntity_constant_LIFECYCLE_CONTROLLER>`. That client becomes its :ref:`NetwEntity.controller<class_NetwEntity_property_controller>`.
+\ A client can call it without ``owner`` when ``node`` sets :ref:`NetwEntity.lifecycle<class_NetwEntity_property_lifecycle>` to :ref:`NetwEntity.LIFECYCLE_CONTROLLER<class_NetwEntity_constant_LIFECYCLE_CONTROLLER>`. That client's player becomes its :ref:`NetwEntity.controller<class_NetwEntity_property_controller>`.
 
 .. rst-class:: classref-item-separator
 
@@ -691,7 +691,7 @@ Calls ``callable`` on every peer that can see the node, and returns a :ref:`Netw
 
 :ref:`NetwPromise<class_NetwPromise>` **request_controller**\ (\ callable\: :godot:`Callable`, ...\ ) |vararg| |static| :ref:`🔗<class_Netw_method_request_controller>`
 
-Calls ``callable`` on the peer driving the node, its :ref:`NetwEntity.controller<class_NetwEntity_property_controller>`.
+Calls ``callable`` on the peer of the node's :ref:`NetwEntity.controller<class_NetwEntity_property_controller>`.
 
 .. rst-class:: classref-item-separator
 
@@ -758,7 +758,7 @@ Calls ``callable`` on every peer that can see the node.
 
 |void| **rpc_controller**\ (\ callable\: :godot:`Callable`, ...\ ) |vararg| |static| :ref:`🔗<class_Netw_method_rpc_controller>`
 
-Calls ``callable`` on the peer driving the node, its :ref:`NetwEntity.controller<class_NetwEntity_property_controller>`.
+Calls ``callable`` on the peer of the node's :ref:`NetwEntity.controller<class_NetwEntity_property_controller>`.
 
 .. rst-class:: classref-item-separator
 
@@ -802,7 +802,7 @@ Returns a copy of the state of ``entity`` at ``tick``. It is empty when nothing 
 
 :ref:`NetwScene<class_NetwScene>` **scene**\ (\ node\: :godot:`Node`\ ) |static| :ref:`🔗<class_Netw_method_scene>`
 
-Returns the multiplayer scene ``node`` is in. Use :ref:`NetwSession.find_scene()<class_NetwSession_method_find_scene>` to find one by name.
+Returns the multiplayer scene ``node`` is in, or ``null`` when no scene was found. Use :ref:`NetwSession.find_scene()<class_NetwSession_method_find_scene>` to find one by name.
 
 ::
 
@@ -819,7 +819,7 @@ Returns the multiplayer scene ``node`` is in. Use :ref:`NetwSession.find_scene()
 
 :ref:`NetwSession<class_NetwSession>` **session**\ (\ node\: :godot:`Node`\ ) |static| :ref:`🔗<class_Netw_method_session>`
 
-The :ref:`NetwSession<class_NetwSession>` of the :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>`. It holds the players, the signals and :ref:`NetwSession.connection<class_NetwSession_property_connection>`, which finds servers and joins or hosts one.
+The :ref:`NetwSession<class_NetwSession>` of the :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>`, or ``null`` before ``node`` enters the tree. It holds the players, the signals and :ref:`NetwSession.connection<class_NetwSession_property_connection>`, which finds servers and joins or hosts one.
 
 ::
 
@@ -845,7 +845,7 @@ Calls ``fn`` with the arguments after it on every peer, and returns the node it 
 
 \ Register ``fn`` with :ref:`configure_spawn()<class_Netw_method_configure_spawn>` first, and add the node to the tree before the next tick.
 
-A client can call it when the node sets :ref:`NetwEntity.lifecycle<class_NetwEntity_property_lifecycle>` to :ref:`NetwEntity.LIFECYCLE_CONTROLLER<class_NetwEntity_constant_LIFECYCLE_CONTROLLER>`. That client becomes its :ref:`NetwEntity.controller<class_NetwEntity_property_controller>`, sees it at once, and loses it if the server refuses.
+A client can call it when the node sets :ref:`NetwEntity.lifecycle<class_NetwEntity_property_lifecycle>` to :ref:`NetwEntity.LIFECYCLE_CONTROLLER<class_NetwEntity_constant_LIFECYCLE_CONTROLLER>`. That client's player becomes its :ref:`NetwEntity.controller<class_NetwEntity_property_controller>`. The client sees it at once and loses it if the server refuses.
 
 .. rst-class:: classref-item-separator
 
@@ -857,15 +857,20 @@ A client can call it when the node sets :ref:`NetwEntity.lifecycle<class_NetwEnt
 
 :godot:`Node` **spawn_player**\ (\ player\: :ref:`NetwPlayer<class_NetwPlayer>`, fn\: :godot:`Callable`, ...\ ) |vararg| |static| :ref:`🔗<class_Netw_method_spawn_player>`
 
-Like :ref:`spawn()<class_Netw_method_spawn>`, for the node ``player`` controls.
+Like :ref:`spawn()<class_Netw_method_spawn>`, and writes :ref:`NetwEntity.player<class_NetwEntity_property_player>` on the node ``fn`` returns. The two lines below spawn the same entity.
 
 ::
 
-    players.add_child(
-        Netw.spawn_player(player, make_avatar, character_class)
-    )
+    players.add_child(Netw.spawn_player(player, make_avatar))
+    players.add_child(Netw.spawn(make_avatar_of, player.peer_id))
 
-\ The node is despawned when ``player`` leaves. With :ref:`NetwPersistenceConfig.load_on_spawn()<class_NetwPersistenceConfig_method_load_on_spawn>`, other peers receive it once its save is loaded.
+    func make_avatar_of(peer_id: int) -> Node:
+        var avatar := make_avatar()
+        var who := Netw.session(self).player_of(peer_id)
+        NetwEntity.of(avatar).player = who
+        return avatar
+
+\ Returns ``null`` and spawns nothing when the session does not hold ``player``. The node is despawned when ``player`` leaves. With :ref:`NetwPersistenceConfig.load_on_spawn()<class_NetwPersistenceConfig_method_load_on_spawn>`, other peers receive it once its save is loaded.
 
 \ **Server Only.**
 

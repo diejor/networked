@@ -107,7 +107,7 @@ TEST_CASE(
     netw_test::FaultWatch expected_faults;
     expected_faults.expect_error(
         "[error][session] Condition \"!edge_is_legal(state, next)\" "
-        "is true. The session cannot move from state 2 to state 0.",
+        "is true. The session cannot move from state 3 to state 0.",
         1
     );
 

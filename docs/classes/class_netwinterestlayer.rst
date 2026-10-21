@@ -31,7 +31,7 @@ The server adds :ref:`entities<class_NetwInterestLayer_property_entities>` and :
     # client
     var sight := Netw.session(self).interest_layer(&"sight")
     sight.visibility_changed.connect(func(entity: NetwEntity, visible: bool):
-        marker_of(entity.owner).visible = visible
+        marker_of(entity.root).visible = visible
     )
 
 \ Changes apply at the end of the frame, or at :ref:`NetwMultiplayer.interest_flush_now()<class_NetwMultiplayer_method_interest_flush_now>`. On the server, use :ref:`interest_entered<class_NetwInterestLayer_signal_interest_entered>` and :ref:`interest_exited<class_NetwInterestLayer_signal_interest_exited>`. On a client, use :ref:`visibility_changed<class_NetwInterestLayer_signal_visibility_changed>`.
@@ -410,7 +410,7 @@ Called when a peer starts or stops seeing an entity through this layer. On a cli
 ::
 
     sight.monitor = func(entity: NetwEntity, peer_id: int, visible: bool) -> void:
-        print(entity.owner.name, " ", peer_id, " ", visible)
+        print(entity.root.name," ", peer_id, " ", visible)
 
 .. rst-class:: classref-item-separator
 

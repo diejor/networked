@@ -84,8 +84,6 @@ var skin := 0
 
 func _init():
 	var e := Netw.configure_entity(self)
-	e.initial_controller = NetwEntity.INITIAL_PLAYER
-	e.on_controller_disconnect = NetwEntity.DISCONNECT_DESPAWN
 	e.display.visual_root = ^"Visual"
 	Netw.configure_property(self, &"position").broadcast().on_spawn() \
 			.interpolate(NetwInterpolate.new().lerp())

@@ -19,7 +19,7 @@ One :ref:`NetwEntity<class_NetwEntity>`'s saved record, reached as :ref:`NetwEnt
 Description
 -----------
 
-The server reads the :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` and saved properties when the root is ready. Wait for :ref:`loaded<class_NetwPersistence_signal_loaded>` before using stored values.
+The server reads the :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` and saved properties when :ref:`Netw.spawn()<class_Netw_method_spawn>` returns the root, or when a root that was not spawned is ready. Wait for :ref:`loaded<class_NetwPersistence_signal_loaded>` before using stored values.
 
 ::
 
@@ -31,7 +31,7 @@ The server reads the :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>` a
     func on_loaded(_found: bool) -> void:
         show_contents()
 
-\ :ref:`NetwPersistenceConfig.interval()<class_NetwPersistenceConfig_method_interval>` saves changed values automatically. Freeing the root saves one last time. Failed loads and saves emit :ref:`NetwDatabase.failed<class_NetwDatabase_signal_failed>`.
+\ :ref:`NetwPersistenceConfig.interval()<class_NetwPersistenceConfig_method_interval>` saves changed values automatically. Freeing the root saves one last time, unless it never entered the tree. Failed loads and saves emit :ref:`NetwDatabase.failed<class_NetwDatabase_signal_failed>`.
 
 .. rst-class:: classref-reftable-group
 
@@ -184,7 +184,7 @@ Method Descriptions
 
 :ref:`NetwPromise<class_NetwPromise>` **load**\ (\ ) :ref:`🔗<class_NetwPersistence_method_load>`
 
-Reads the stored record and applies it to the configured properties. The promise returns ``true`` when a record was found, and ``false`` when none was stored and the properties keep their values. A failed load fails the promise, and :ref:`NetwPromise.wait()<class_NetwPromise_method_wait>` returns the code.
+Reads the stored record and applies it to the configured properties. The promise returns ``true`` when a record was found, and ``false`` when none was stored and the properties keep their values. A failed load fails the promise, and :ref:`NetwPromise.wait()<class_NetwPromise_method_wait>` returns the code. On a node from :ref:`Netw.spawn()<class_Netw_method_spawn>`, awaiting it before :godot:`Node.add_child() <Node#class_Node_method_add_child>` adds the node with its stored values.
 
 .. code:: text
 

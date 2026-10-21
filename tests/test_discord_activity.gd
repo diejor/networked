@@ -83,7 +83,7 @@ func test_connect_activity_joins_what_the_rendezvous_finds() -> void:
 	var err: Error = await service.connect_activity(&"valeria")
 
 	assert_int(err).is_equal(OK)
-	assert_int(session.connection.state).is_equal(NetwConnection.STATE_ONLINE)
+	assert_int(session.state).is_equal(NetwSession.STATE_ONLINE)
 	assert_int(rendezvous.claims).is_equal(0)
 	await EnetTestSupport.stop_tree(host.tree)
 
@@ -97,7 +97,7 @@ func test_connect_activity_hosts_when_nothing_is_found() -> void:
 	var err: Error = await service.connect_activity(&"valeria")
 
 	assert_int(err).is_equal(OK)
-	assert_int(session.connection.state).is_equal(NetwConnection.STATE_ONLINE)
+	assert_int(session.state).is_equal(NetwSession.STATE_ONLINE)
 	assert_int(session.role).is_not_equal(NetwSession.ROLE_CLIENT)
 	assert_int(rendezvous.claims).is_equal(1)
 
@@ -116,7 +116,7 @@ func test_connect_activity_joins_the_winner_of_a_claim() -> void:
 	var err: Error = await service.connect_activity(&"valeria")
 
 	assert_int(err).is_equal(OK)
-	assert_int(session.connection.state).is_equal(NetwConnection.STATE_ONLINE)
+	assert_int(session.state).is_equal(NetwSession.STATE_ONLINE)
 	assert_int(session.role).is_equal(NetwSession.ROLE_CLIENT)
 	await EnetTestSupport.stop_tree(host.tree)
 

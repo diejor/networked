@@ -24,7 +24,7 @@ TEST_CASE("[Networked][Interest] L-MIRROR binds and stamps a declared mirror") {
 
     REQUIRE(node != nullptr);
     REQUIRE(entity.is_valid());
-    Object *stamped = entity->get("multiplayer");
+    Object *stamped = entity->get_multiplayer().ptr();
     REQUIRE(stamped != nullptr);
     CHECK(netw_test::LoopbackRig::core_of(stamped) == rig.client(0));
     NETW_CHECK_EQ(int(entity->get_route()), 73);
@@ -41,7 +41,7 @@ TEST_CASE(
     Ref<netw::NetwEntity> entity
         = entity_of(rig.node_of(rig.entity_of("Player", 0), 0));
     REQUIRE(entity.is_valid());
-    NETW_CHECK_EQ(int(entity->get("controller")), rig.peer_id(0));
+    NETW_CHECK_EQ(int(entity->get_controller()), rig.peer_id(0));
     CHECK(bool(entity->get("is_controlled_locally")));
 }
 

@@ -9,7 +9,7 @@
 		var player := session.player_of(peer_id)
 		greet(player.username)
 		for entity: NetwEntity in player.entities:
-		    follow(entity.owner)
+		    follow(entity.root)
 		[/codeblock]
 		A player is not a peer. After the player leaves, [member is_active] is [code]false[/code], even if a new player connects with the same [member peer_id].
 		Every join is a new player, including a join with an [member account] that joined before. A game that wants to recognise a returning player keys its own data by [member account] on the server, which is empty for a guest.
@@ -45,7 +45,7 @@
 			A client only knows about the scenes it receives.
 		</member>
 		<member name="username" type="StringName" setter="" getter="get_username">
-			The username from [method Netw.prepare_join]. It is kept after the player leaves. Two players may join with the same name, unless [method Netw.configure_admission] refuses it.
+			The username from [method Netw.prepare_join]. It is empty for a peer that never called [method Netw.prepare_join]. It is kept after the player leaves. Two players may join with the same name, unless [method Netw.configure_admission] refuses it.
 		</member>
 	</members>
 	<signals>

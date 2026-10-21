@@ -74,7 +74,7 @@ func _ready() -> void:
 		connection.set_defaults(config.peer_class(), config.settings())
 	connection.endpoint_added.connect(on_endpoint_added)
 	connection.endpoint_removed.connect(on_endpoint_removed)
-	connection.state_changed.connect(on_state_changed)
+	session.state_changed.connect(on_state_changed)
 	connection.progressed.connect(on_progressed)
 	connection.failed.connect(on_failed, CONNECT_DEFERRED)
 	connection.join_address_changed.connect(on_join_address_changed)
@@ -83,7 +83,7 @@ func _ready() -> void:
 	for endpoint in connection.endpoints:
 		on_endpoint_added(endpoint)
 	connection.browsing = server_list.is_visible_in_tree()
-	on_state_changed(connection.state)
+	on_state_changed(session.state)
 	on_endpoint_changed()
 	banner.hide()
 
@@ -131,15 +131,15 @@ func on_endpoint_removed(endpoint: NetwEndpoint) -> void:
 		on_row_selected(null)
 
 
-func on_state_changed(state: NetwConnection.State) -> void:
+func on_state_changed(state: NetwSession.State) -> void:
 	match state:
-		NetwConnection.STATE_OFFLINE:
+		NetwSession.STATE_OFFLINE:
 			connecting_popup.hide()
 			server_list.show()
-		NetwConnection.STATE_CREATING, NetwConnection.STATE_CONNECTING:
+		NetwSession.STATE_CREATING, NetwSession.STATE_CONNECTING:
 			banner.hide()
 			connecting_popup.open()
-		NetwConnection.STATE_ONLINE:
+		NetwSession.STATE_ONLINE, NetwSession.STATE_DISCONNECTING:
 			connecting_popup.hide()
 			server_list.visible = not hide_when_session_active
 

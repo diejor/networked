@@ -29,7 +29,6 @@ public:
 
     godot::RID get_rid() const;
     godot::Ref<NetwEntity> get_entity() const;
-    bool get_is_declared() const;
     godot::Node *get_root() const;
     godot::Node *get_world() const;
 

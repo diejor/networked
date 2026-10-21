@@ -211,7 +211,7 @@ void NetwMultiplayer::_bind_methods() {
     );
     ClassDB::bind_method(
         D_METHOD("session_get_state"),
-        &NetwMultiplayer::session_get_state
+        &NetwMultiplayer::session_get_computed_state
     );
     ClassDB::bind_method(
         D_METHOD("session_get_role"),
@@ -348,10 +348,6 @@ void NetwMultiplayer::_bind_methods() {
     ClassDB::bind_method(
         D_METHOD("transport_cancel_attempt"),
         &NetwMultiplayer::transport_cancel_attempt
-    );
-    ClassDB::bind_method(
-        D_METHOD("transport_get_attempt_state"),
-        &NetwMultiplayer::transport_get_attempt_state
     );
     ClassDB::bind_method(
         D_METHOD("transport_set_defaults", "transport", "settings"),
@@ -1048,7 +1044,6 @@ void NetwMultiplayer::_bind_methods() {
     BIND_ENUM_CONSTANT(PLAYER_LOCAL_JOINED);
     BIND_ENUM_CONSTANT(PLAYER_LEFT);
     BIND_ENUM_CONSTANT(SCENE_LIVE);
-    BIND_ENUM_CONSTANT(CONNECTION_STATE_CHANGED);
     BIND_ENUM_CONSTANT(CONNECTION_PROGRESSED);
     BIND_ENUM_CONSTANT(CONNECTION_FAILED);
     BIND_ENUM_CONSTANT(CONNECTION_JOIN_ADDRESS_CHANGED);
@@ -1991,11 +1986,6 @@ void NetwMultiplayer::_bind_methods() {
     ClassDB::bind_method(
         D_METHOD("session_set_role", "role"),
         &NetwMultiplayer::session_set_role
-    );
-    ClassDB::bind_method(
-        D_METHOD("session_submit_join", "username", "args"),
-        &NetwMultiplayer::session_submit_join,
-        DEFVAL(Array())
     );
     ClassDB::bind_method(
         D_METHOD("session_transition", "state"),

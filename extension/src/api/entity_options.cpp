@@ -46,7 +46,7 @@ void NetwControlRequest::_bind_methods() {
             Variant::INT,
             "hold",
             PROPERTY_HINT_ENUM,
-            "None,Yieldable,Exclusive",
+            "None,Soft,Exclusive",
             PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
             "NetwEntity.Hold"
         ),

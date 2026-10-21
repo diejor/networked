@@ -59,14 +59,16 @@ class LoopbackRig {
     godot::Vector<godot::HashMap<godot::StringName, godot::RID>>
         client_state_sets;
     double tick_period_ms = 1000.0 / 30.0;
+    bool joins_by_default = false;
 
-    static godot::Ref<netw::NetwMultiplayer> make_api(
+    godot::Ref<netw::NetwMultiplayer> make_api(
         const godot::Ref<netw::LocalMultiplayerPeer> &p_peer
-    ) {
+    ) const {
         godot::Ref<netw::NetwMultiplayer> api
             = netw::NetwMultiplayer::create(godot::Ref<godot::Script>());
         REQUIRE_MESSAGE(api.is_valid(), "the session did not instantiate");
         if (api.is_valid()) {
+            api->session_default_join_held = !joins_by_default;
             api->session_get_inner()->set_root_path(godot::NodePath("/"));
             api->set("multiplayer_peer", p_peer);
         }
@@ -372,7 +374,12 @@ class LoopbackRig {
     }
 
 public:
-    explicit LoopbackRig(int p_clients = 1, bool p_migrates = false) {
+    explicit LoopbackRig(
+        int p_clients = 1,
+        bool p_migrates = false,
+        bool p_joins_by_default = false
+    )
+        : joins_by_default(p_joins_by_default) {
         link.instantiate();
         if (p_migrates) {
             link->enable_server_transfer();

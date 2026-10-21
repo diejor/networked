@@ -7,6 +7,7 @@ const BROWSER := preload(
 )
 
 var tree: MultiplayerViewport
+var session: NetwSession
 var connection: NetwConnection
 var browser: ConnectBrowser
 
@@ -55,7 +56,8 @@ class TeamGame:
 func before_test() -> void:
 	tree = MultiplayerViewport.new()
 	add_child(tree)
-	connection = Netw.session(tree).connection
+	session = Netw.session(tree)
+	connection = session.connection
 	browser = BROWSER.instantiate()
 	tree.add_child(browser)
 
@@ -121,7 +123,7 @@ func test_the_details_panel_follows_the_selected_endpoint() -> void:
 
 	assert_str(browser.details_status_label.text).is_equal("Online")
 	assert_str(browser.details_ping_label.text).ends_with(" ms")
-	assert_str(browser.details_players_label.text).is_equal("0/8")
+	assert_str(browser.details_players_label.text).is_equal("1/8")
 
 	server.max_players = 4
 	endpoint.probe()
@@ -130,7 +132,7 @@ func test_the_details_panel_follows_the_selected_endpoint() -> void:
 		func() -> bool: return endpoint.info.max_players == 4,
 	)
 
-	assert_str(browser.details_players_label.text).is_equal("0/4")
+	assert_str(browser.details_players_label.text).is_equal("1/4")
 	await EnetTestSupport.stop_tree(host.tree)
 
 
@@ -143,16 +145,16 @@ func test_browsing_follows_the_server_list_visibility() -> void:
 	browser.show()
 	assert_bool(connection.browsing).is_true()
 
-	connection.state_changed.emit(NetwConnection.STATE_ONLINE)
+	session.state_changed.emit(NetwSession.STATE_ONLINE)
 	assert_bool(browser.visible).is_true()
 	assert_bool(connection.browsing).is_false()
 
-	connection.state_changed.emit(NetwConnection.STATE_OFFLINE)
+	session.state_changed.emit(NetwSession.STATE_OFFLINE)
 	assert_bool(connection.browsing).is_true()
 
 
 func test_the_connecting_popup_follows_state_and_progress() -> void:
-	connection.state_changed.emit(NetwConnection.STATE_CREATING)
+	session.state_changed.emit(NetwSession.STATE_CREATING)
 	assert_bool(browser.connecting_popup.visible).is_true()
 
 	connection.progressed.emit("Asking the tracker", 0.5)
@@ -160,14 +162,14 @@ func test_the_connecting_popup_follows_state_and_progress() -> void:
 			.is_equal("Asking the tracker")
 	assert_float(browser.connecting_popup.progress_bar.value).is_equal(0.5)
 
-	connection.state_changed.emit(NetwConnection.STATE_ONLINE)
+	session.state_changed.emit(NetwSession.STATE_ONLINE)
 	assert_bool(browser.connecting_popup.visible).is_false()
 
 
 func test_a_failure_reaches_the_banner_and_the_popup() -> void:
-	connection.state_changed.emit(NetwConnection.STATE_CONNECTING)
+	session.state_changed.emit(NetwSession.STATE_CONNECTING)
 	connection.failed.emit(ERR_CANT_CONNECT, "The server could not be reached.")
-	connection.state_changed.emit(NetwConnection.STATE_OFFLINE)
+	session.state_changed.emit(NetwSession.STATE_OFFLINE)
 	await get_tree().process_frame
 
 	assert_bool(browser.banner.visible).is_true()
@@ -176,7 +178,7 @@ func test_a_failure_reaches_the_banner_and_the_popup() -> void:
 	assert_bool(browser.connecting_popup.visible).is_true()
 	assert_str(browser.connecting_popup.cancel_button.text).is_equal("Close")
 
-	connection.state_changed.emit(NetwConnection.STATE_CREATING)
+	session.state_changed.emit(NetwSession.STATE_CREATING)
 	assert_bool(browser.banner.visible).is_false()
 
 
@@ -226,7 +228,7 @@ func test_a_join_through_the_browser_goes_online_and_hides_the_list() -> void:
 	browser.join(endpoint, { }, [])
 
 	assert_int(await EnetTestSupport.await_online(tree)).is_equal(OK)
-	assert_int(connection.state).is_equal(NetwConnection.STATE_ONLINE)
+	assert_int(session.state).is_equal(NetwSession.STATE_ONLINE)
 	assert_bool(browser.server_list.visible).is_false()
 	assert_bool(browser.connecting_popup.visible).is_false()
 	await EnetTestSupport.stop_tree(host.tree)
@@ -265,7 +267,7 @@ func test_an_invite_requests_declared_join_inputs() -> void:
 
 	assert_object(browser.selected).is_same(endpoint)
 	assert_bool(browser.join_popup.visible).is_true()
-	assert_int(connection.state).is_equal(NetwConnection.STATE_OFFLINE)
+	assert_int(session.state).is_equal(NetwSession.STATE_OFFLINE)
 	assert_int(browser.join_popup.join_args.controls.size()).is_equal(1)
 	(browser.join_popup.join_args.controls[0] as SpinBox).value = 2
 	browser.join_popup.confirm_button.pressed.emit()
@@ -314,7 +316,7 @@ func test_an_invite_leaves_the_current_lobby_only_after_confirmation() -> void:
 						and browser.session.local_player != null,
 		),
 	).is_equal(OK)
-	assert_int(connection.state).is_equal(NetwConnection.STATE_ONLINE)
+	assert_int(session.state).is_equal(NetwSession.STATE_ONLINE)
 	assert_bool(browser.server_list.visible).is_false()
 	await EnetTestSupport.stop_tree(host.tree)
 
@@ -324,7 +326,7 @@ func test_an_invite_waits_for_the_game_while_join_invites_is_off() -> void:
 
 	connection.invite(&"ENetMultiplayerPeer", "127.0.0.1", "Host")
 
-	assert_int(connection.state).is_equal(NetwConnection.STATE_OFFLINE)
+	assert_int(session.state).is_equal(NetwSession.STATE_OFFLINE)
 	assert_object(browser.selected).is_null()
 	assert_bool(browser.join_popup.visible).is_false()
 

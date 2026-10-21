@@ -87,10 +87,7 @@
 			Every entity in this scene.
 		</member>
 		<member name="entity" type="NetwEntity" setter="" getter="get_entity">
-			The [NetwEntity] on [member root], or [code]null[/code] when no scene was found.
-		</member>
-		<member name="is_declared" type="bool" setter="" getter="get_is_declared">
-			Whether a scene was found. [code]false[/code] for an entity outside every scene or not in the tree, and every other member is empty.
+			The [NetwEntity] on [member root], or [code]null[/code] once the scene is freed.
 		</member>
 		<member name="label" type="StringName" setter="" getter="get_label">
 			The name [method Netw.scene] finds this scene by. See [method NetwSceneConfig.labeled].

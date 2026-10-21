@@ -65,7 +65,7 @@ func make_unmanaged_game_harness(scene: PackedScene) -> NetwGameHarness:
 func make_test_entity(
 		parent: Node,
 		entity_name: String = "Ent",
-		controller: int = 1,
+		controller: NetwPlayer = null,
 		with_sync: bool = true,
 ) -> Node:
 	var root := Node.new()

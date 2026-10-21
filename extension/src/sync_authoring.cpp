@@ -49,7 +49,6 @@ const char *KEY_MAX_CONSUME_LAG_TICKS = "netw_max_consume_lag_ticks";
 const char *KEY_CONSUME_BUFFER_TICKS = "netw_consume_buffer_ticks";
 const char *KEY_REPLAY_BUFFER_DEPTH = "netw_replay_buffer_depth";
 
-const char *KEY_INITIAL_CONTROLLER = "netw_initial_controller";
 const char *KEY_TRANSFER = "netw_control_transfer";
 const char *KEY_ON_DISCONNECT = "netw_on_controller_disconnect";
 
@@ -274,13 +273,6 @@ void apply_interpolators(Object *p_sync, Node *p_owner) {
 }
 
 void apply_control(Object *p_spawner, const Ref<NetwEntity> &p_entity) {
-    if (declared(p_spawner, KEY_INITIAL_CONTROLLER)) {
-        p_entity->set_initial_controller(
-            NetwEntity::InitialController(
-                whole(p_spawner, KEY_INITIAL_CONTROLLER)
-            )
-        );
-    }
     if (declared(p_spawner, KEY_TRANSFER)) {
         p_entity->set_transfer(
             NetwEntity::Transfer(whole(p_spawner, KEY_TRANSFER))

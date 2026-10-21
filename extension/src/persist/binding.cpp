@@ -246,6 +246,7 @@ void Bindings::clear() {
     }
     by_root.clear();
     withheld.clear();
+    refused.clear();
     order.clear();
 }
 
@@ -263,6 +264,7 @@ void Bindings::publish(Node *p_root) {
 
 void Bindings::unwithhold(ObjectID p_root) {
     withheld.erase(uint64_t(p_root));
+    refused.erase(uint64_t(p_root));
 }
 
 bool Bindings::withholds(Node *p_root) const {
@@ -272,7 +274,41 @@ bool Bindings::withholds(Node *p_root) const {
 bool Bindings::awaits_load(const RID &p_binding) const {
     const Binding *held = book.get_or_null(p_binding);
     return held != nullptr
-        && (held->loading.is_valid() || withheld.has(uint64_t(held->root)));
+        && (held->loading.is_valid() || withheld.has(uint64_t(held->root))
+            || (held->unmounted && held->load_on_spawn && !held->loaded));
+}
+
+void Bindings::refuse(Node *p_root) {
+    if (p_root != nullptr) {
+        refused.insert(uint64_t(gd::instance_id(p_root)));
+    }
+}
+
+bool Bindings::refuses(Node *p_root) const {
+    return p_root != nullptr && refused.has(uint64_t(gd::instance_id(p_root)));
+}
+
+void Bindings::sweep_unmounted() {
+    LocalVector<RID> gone;
+    for (uint32_t at = 0; at < order.size(); ++at) {
+        const Binding *held = book.get_or_null(order[at]);
+        if (held != nullptr && held->unmounted
+            && node_of(held->root) == nullptr) {
+            gone.push_back(order[at]);
+        }
+    }
+    for (uint32_t at = 0; at < gone.size(); ++at) {
+        release(gone[at]);
+    }
+    LocalVector<uint64_t> forgotten;
+    for (const uint64_t root : refused) {
+        if (node_of(ObjectID(root)) == nullptr) {
+            forgotten.push_back(root);
+        }
+    }
+    for (uint32_t at = 0; at < forgotten.size(); ++at) {
+        refused.erase(forgotten[at]);
+    }
 }
 
 RID Bindings::compile(Node *p_root) {
@@ -549,7 +585,7 @@ LocalVector<RID> Bindings::due(double p_delta) {
     for (uint32_t at = 0; at < order.size(); ++at) {
         Binding *held = book.get_or_null(order[at]);
         if (held == nullptr || held->interval <= 0.0 || held->in_flight
-            || (held->departed && !held->final_save)
+            || held->unmounted || (held->departed && !held->final_save)
             || awaits_load(order[at])) {
             continue;
         }

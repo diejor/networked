@@ -668,7 +668,7 @@ void ConnectCore::move_attempt(int p_state) {
     }
     attempt.state = p_state;
     if (session != nullptr) {
-        session->connection_emit_state_changed(p_state);
+        session->connection_attempt_moved(p_state);
     }
 }
 
@@ -695,7 +695,7 @@ void ConnectCore::announce_end(
         && p_error != ERR_SKIP
         && session->connection_emit_failed(p_error, p_reason);
     if (session != nullptr && p_ended.state != ATTEMPT_OFFLINE) {
-        session->connection_emit_state_changed(ATTEMPT_OFFLINE);
+        session->connection_attempt_moved(ATTEMPT_OFFLINE);
     }
     if (p_ended.promise.is_valid()) {
         if (heard) {

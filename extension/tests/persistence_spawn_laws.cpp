@@ -20,7 +20,12 @@
 #include "support/netw_call_log.h"
 
 #if defined(NETW_TIER_HOSTED)
+#include "netw/api/entity.hpp"
+#include "netw/api/participant.hpp"
+#include "netw/api/persistence.hpp"
+#include "support/loopback_rig.h"
 #include "support/minted_script.h"
+#include "support/value_flow_stand.h"
 #endif
 
 namespace TestPersistenceSpawn {
@@ -382,6 +387,266 @@ TEST_CASE(
     CHECK(shared->get_is_failed());
     CHECK(world.session->persist_withholds(world.root));
     NETW_CHECK_EQ(world.published(log), 0);
+}
+
+const char *SAVED_SOURCE = R"(extends Node2D
+
+var seen := []
+var where := Vector2(1, 1):
+	set(value):
+		where = value
+		seen.append(value)
+
+
+func _init() -> void:
+	Netw.configure_property(self, &"where").on_spawn().persisted(&"where")
+	Netw.configure_persistence(self).database(&"saves").table(&"players") \
+			.record_id(account)
+
+
+func account() -> StringName:
+	return NetwEntity.of(self).name
+)";
+
+const Vector2 START(1, 1);
+const Vector2 STORED(9, 9);
+
+Node *build_saved(
+    const Variant &p_name,
+    const Variant &p_script,
+    const Variant &p_loads_at_spawn
+) {
+    const Ref<Script> script = p_script;
+    Node *made
+        = Object::cast_to<Node>(netw::gd::live_object(script->call("new")));
+    made->set_name(String(p_name));
+    netw::Netw::configure_persistence(made)->load_on_spawn(
+        bool(p_loads_at_spawn)
+    );
+    return made;
+}
+
+struct Saved {
+    netw_test::LoopbackRig rig;
+    NetwMultiplayer *server = nullptr;
+    Ref<Script> script;
+    Ref<MemoryConnection> connection;
+    RID database;
+
+    Saved(const String &p_store, bool p_loads_at_spawn = true) : rig(1) {
+        schema_model::clear();
+        netw::persist::forget_stores();
+        rig.mount();
+        netw_test::flow_clocks(rig, 30);
+        server = rig.server();
+        script = netw_test::minted_script(SAVED_SOURCE);
+        REQUIRE(script.is_valid());
+        database = server->get_databases()->create("saves");
+        connection = MemoryConnection::opened(p_store, "slot1");
+        server->get_databases()
+            ->open(database, "slot1", NetwPromise::resolved(connection));
+        const Callable build
+            = callable_mp_static(&build_saved).bind(script, p_loads_at_spawn);
+        Array types;
+        types.push_back(int(Variant::STRING));
+        rig.register_constructor(server, "saved", build, types);
+        rig.register_constructor(rig.client(0), "saved", build, types);
+        rig.join(0, StringName("hero"));
+        rig.step_ticks(4);
+    }
+
+    ~Saved() {
+        schema_model::clear();
+        netw::persist::forget_stores();
+    }
+
+    Node2D *spawn(bool p_for_player) {
+        const Ref<netw::NetwPlayer> hero = rig.player(0);
+        REQUIRE(hero.is_valid());
+        Array named;
+        named.push_back(String("Body"));
+        const RID entity = server->spawn_registered(
+            StringName("saved"),
+            named,
+            p_for_player ? hero.ptr() : nullptr
+        );
+        Node2D *body = Object::cast_to<Node2D>(server->entity_get_node(entity));
+        REQUIRE(body != nullptr);
+        REQUIRE_FALSE(body->is_inside_tree());
+        return body;
+    }
+
+    static Ref<netw::NetwPersistence> persistence(Node *p_body) {
+        return netw::NetwEntity::of(p_body)->get_persistence();
+    }
+
+    void store(const StringName &p_id, const Vector2 &p_where) {
+        Dictionary row;
+        row["where"] = p_where;
+        const Ref<NetwPromise> wrote = server->database_write(
+            database,
+            server->schema_find("players"),
+            p_id,
+            row
+        );
+        REQUIRE(wrote->get_is_completed());
+    }
+
+    Vector2 stored(const StringName &p_id) {
+        const Ref<NetwPromise> read = server->database_read(
+            database,
+            server->schema_find("players"),
+            p_id
+        );
+        const Dictionary row = read->get_result();
+        if (!bool(row.get("found", false))) {
+            return Vector2(-1, -1);
+        }
+        return Vector2(Dictionary(row["values"])["where"]);
+    }
+
+    void mount(Node *p_body) {
+        rig.branch(-1)->add_child(p_body);
+    }
+};
+
+TEST_CASE(
+    "[Networked][Persistence][Spawn][SceneTree] SL9 a spawned node not yet in "
+    "the tree loads its stored record, and answers false when none is stored"
+) {
+    struct Row {
+        const char *label;
+        bool for_player;
+        bool stored;
+    };
+    const Row rows[] = {
+        {"Netw.spawn, stored", false, true},
+        {"Netw.spawn, not stored", false, false},
+        {"Netw.spawn_player, stored", true, true},
+        {"Netw.spawn_player, not stored", true, false},
+    };
+    for (const Row &row : rows) {
+        NETW_FORMAT_TEXT(netw_row, row.label);
+        CAPTURE(netw_row);
+        Saved stand(String("sl9 ") + row.label);
+        Node2D *body = stand.spawn(row.for_player);
+        const Ref<netw::NetwPersistence> saved = Saved::persistence(body);
+        const StringName id = saved->get_record_id();
+        CHECK(id == netw::NetwEntity::of(body)->get_name());
+        if (row.for_player) {
+            CHECK(id == StringName("hero"));
+        }
+        if (row.stored) {
+            stand.store(id, STORED);
+        }
+
+        const Ref<NetwPromise> loading = saved->load();
+
+        REQUIRE(loading->get_is_completed());
+        CHECK(bool(loading->get_result()) == row.stored);
+        const Vector2 held = body->get("where");
+        CHECK(bool(held == (row.stored ? STORED : START)));
+        stand.mount(body);
+        stand.rig.step_ticks(4);
+    }
+}
+
+TEST_CASE(
+    "[Networked][Persistence][Spawn][SceneTree] SL10 a node mounted after its "
+    "load reaches the client with the stored values, and mounting neither "
+    "loads again nor binds the client"
+) {
+    struct Row {
+        const char *label;
+        bool loads_at_spawn;
+        bool in_flight;
+    };
+    const Row rows[] = {
+        {"loaded, load_on_spawn", true, false},
+        {"loaded, no load_on_spawn", false, false},
+        {"in flight, load_on_spawn", true, true},
+        {"in flight, no load_on_spawn", false, true},
+    };
+    for (const Row &row : rows) {
+        NETW_FORMAT_TEXT(netw_row, row.label);
+        CAPTURE(netw_row);
+        Saved stand(String("sl10 ") + row.label, row.loads_at_spawn);
+        Node2D *body = stand.spawn(true);
+        const Ref<netw::NetwPersistence> saved = Saved::persistence(body);
+        CallLog log;
+        saved->connect("loaded", log.callable("loaded"));
+        stand.store(saved->get_record_id(), STORED);
+        stand.connection->defer(row.in_flight);
+        const Ref<NetwPromise> loading = saved->load();
+        const int route = int(netw::NetwEntity::of(body)->get_route());
+
+        stand.mount(body);
+        stand.rig.step_ticks(4);
+        if (row.in_flight) {
+            CHECK(stand.rig.route_node(route, 0) == nullptr);
+            stand.connection->release();
+            stand.connection->defer(false);
+            stand.rig.step_ticks(4);
+        }
+
+        CHECK(loading->get_is_completed());
+        NETW_CHECK_EQ(log.count("loaded"), 1);
+        CHECK(bool(Vector2(body->get("where")) == STORED));
+        Node *view = stand.rig.route_node(route, 0);
+        REQUIRE(view != nullptr);
+        const Array seen = view->get("seen");
+        CHECK_FALSE(seen.has(START));
+        CHECK(bool(Vector2(view->get("where")) == STORED));
+        CHECK(stand.rig.client(0)->get_bindings()->enrolled().is_empty());
+    }
+}
+
+TEST_CASE(
+    "[Networked][Persistence][Spawn][SceneTree] SL11 a spawned node freed "
+    "before it is added to the tree leaves no binding, writes nothing and "
+    "reports nothing"
+) {
+    struct Row {
+        const char *label;
+        bool loads;
+        bool changes;
+        bool in_flight;
+    };
+    const Row rows[] = {
+        {"never loaded", false, false, false},
+        {"loaded", true, false, false},
+        {"loaded and changed", true, true, false},
+        {"freed while loading", true, false, true},
+    };
+    for (const Row &row : rows) {
+        NETW_FORMAT_TEXT(netw_row, row.label);
+        CAPTURE(netw_row);
+        netw_test::FaultWatch watch;
+        Saved stand(String("sl11 ") + row.label);
+        Node2D *body = stand.spawn(true);
+        const StringName id = Saved::persistence(body)->get_record_id();
+        stand.store(id, STORED);
+        stand.connection->defer(row.in_flight);
+        CallLog log;
+        if (row.loads) {
+            Saved::persistence(body)->load()->when_settled(
+                log.callable("settled")
+            );
+        }
+        if (row.changes) {
+            body->set("where", Vector2(2, 2));
+        }
+
+        memdelete(body);
+        stand.connection->release();
+        stand.connection->defer(false);
+        stand.rig.step_ticks(4);
+        stand.server->persist_flush_all();
+
+        CHECK(stand.server->get_bindings()->enrolled().is_empty());
+        CHECK(bool(stand.stored(id) == STORED));
+        NETW_CHECK_EQ(watch.errors(), 0);
+    }
 }
 
 #endif

@@ -170,8 +170,10 @@ public sealed class NetwPersistenceConfig : NetwRefCounted
         NetwApi.MethodBind("NetwPersistenceConfig", "record_id", 2383254644UL);
 
     /// <summary>
-    /// Calls <paramref name="provider"/> once when the root is ready. Its
-    /// nonempty <see cref="StringName"/> identifies the record across sessions.
+    /// Calls <paramref name="provider"/> once on the server, when
+    /// <see cref="Netw.Spawn"/> returns the root or, for a root that was not
+    /// spawned, when it is ready. Its nonempty <see cref="StringName"/>
+    /// identifies the record across sessions.
     /// </summary>
     public NetwPersistenceConfig RecordId(Callable provider)
     {
@@ -214,7 +216,9 @@ public sealed class NetwPersistenceConfig : NetwRefCounted
 
     /// <summary>
     /// Whether the server loads the stored record when the
-    /// <see cref="NetwEntity"/>'s node is ready. Clients do not receive the
+    /// <see cref="NetwEntity"/>'s node is ready. A
+    /// <see cref="NetwPersistence.Load"/> called before the node enters the
+    /// tree takes the place of this load. Clients do not receive the
     /// <see cref="NetwEntity"/> until the load succeeds or finds no record.
     /// Call <see cref="NetwPersistence.Load"/> to retry a failed load.
     /// </summary>

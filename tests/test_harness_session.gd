@@ -143,9 +143,7 @@ func test_disconnect_tree_closes_peer_and_releases_held_packets() -> void:
 	var closed_id := session.disconnect_tree(client)
 
 	assert_that(closed_id).is_equal(peer_id)
-	assert_that(client.api.state).is_equal(
-		NetwSession.SESSION_STATE_DISCONNECTING,
-	)
+	assert_that(client.api.state).is_equal(NetwSession.STATE_DISCONNECTING)
 	assert_that(peer.get_unique_id()).is_equal(0)
 	assert_that(session.session().is_holding_inbound(peer)).is_false()
 	assert_that(session.session().in_flight_count(peer)).is_equal(0)

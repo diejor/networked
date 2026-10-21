@@ -26,7 +26,7 @@ The session creates one **NetwPlayer** when it accepts a join and keeps that obj
     var player := session.player_of(peer_id)
     greet(player.username)
     for entity: NetwEntity in player.entities:
-        follow(entity.owner)
+        follow(entity.root)
 
 \ A player is not a peer. After the player leaves, :ref:`is_active<class_NetwPlayer_property_is_active>` is ``false``, even if a new player connects with the same :ref:`peer_id<class_NetwPlayer_property_peer_id>`.
 
@@ -211,7 +211,7 @@ A client only knows about the scenes it receives.
 
 - :godot:`StringName` **get_username**\ (\ )
 
-The username from :ref:`Netw.prepare_join()<class_Netw_method_prepare_join>`. It is kept after the player leaves. Two players may join with the same name, unless :ref:`Netw.configure_admission()<class_Netw_method_configure_admission>` refuses it.
+The username from :ref:`Netw.prepare_join()<class_Netw_method_prepare_join>`. It is empty for a peer that never called :ref:`Netw.prepare_join()<class_Netw_method_prepare_join>`. It is kept after the player leaves. Two players may join with the same name, unless :ref:`Netw.configure_admission()<class_Netw_method_configure_admission>` refuses it.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

@@ -39,16 +39,6 @@ class NetwEntity : public godot::RefCounted {
     GDCLASS(NetwEntity, godot::RefCounted)
 
 public:
-    enum ControlKind {
-        CONTROL_PEER_CONTROLLED = 0,
-        CONTROL_SERVER_CONTROLLED = 1,
-    };
-
-    enum InitialController {
-        INITIAL_SERVER = int(entity::Control::InitialController::SERVER),
-        INITIAL_PLAYER = int(entity::Control::InitialController::PLAYER),
-    };
-
     enum Authority {
         AUTHORITY_SERVER = int(entity::Control::Authority::SERVER),
         AUTHORITY_CONTROLLER = int(entity::Control::Authority::CONTROLLER),
@@ -73,13 +63,12 @@ public:
     };
 
     enum Lifecycle {
-        LIFECYCLE_SESSION = int(entity::Control::Lifecycle::SESSION),
+        LIFECYCLE_SERVER =int(entity::Control::Lifecycle::SESSION),
         LIFECYCLE_CONTROLLER = int(entity::Control::Lifecycle::CONTROLLER),
     };
 
     enum Stage {
         STAGE_UNBOUND = int(entity::Stage::UNBOUND),
-        STAGE_TEMPLATE = int(entity::Stage::TEMPLATE),
         STAGE_ARMED = int(entity::Stage::ARMED),
         STAGE_LIVE = int(entity::Stage::LIVE),
         STAGE_DESPAWNING = int(entity::Stage::DESPAWNING),
@@ -115,6 +104,7 @@ private:
     godot::LocalVector<StructureOp> structure_ops;
     godot::ObjectID owner_id;
     godot::ObjectID session_id;
+    godot::Ref<NetwPlayer> written_player;
     godot::TypedArray<godot::MultiplayerSynchronizer> synchronizers_cache;
     bool synchronizers_dirty = true;
     bool synchronizers_absent = false;
@@ -137,7 +127,7 @@ private:
     int64_t local_peer() const;
     ReplicationCore *get_replication_plane() const;
     void announce_control(int64_t p_was, int64_t p_peer);
-    int64_t resolve_initial_controller() const;
+    int64_t resolve_default_controller() const;
     void project_control(godot::Object *p_announcer);
     void adopt_controller(int64_t p_peer);
     void apply_control_change(int64_t p_peer);
@@ -253,8 +243,6 @@ public:
 
     void stamp_multiplayer(const godot::Ref<NetwMultiplayer> &p_api);
 
-    InitialController get_initial_controller() const;
-    void set_initial_controller(InitialController p_value);
     Transfer get_transfer() const;
     void set_transfer(Transfer p_value);
     Authority get_authority() const;
@@ -297,7 +285,6 @@ public:
     int64_t steering() const;
     void set_controller(int64_t p_value);
     void record_controller(int64_t p_value);
-    ControlKind get_control_kind() const;
     bool get_is_controlled_locally() const;
     godot::Ref<NetwPlayer> get_controller_player() const;
     void set_controller_player(const godot::Ref<NetwPlayer> &p_player);
@@ -343,10 +330,12 @@ public:
 
     bool is_on_server() const;
     godot::Ref<NetwPlayer> get_player() const;
+    void set_player(const godot::Ref<NetwPlayer> &p_player);
+    const godot::Ref<NetwPlayer> &unbound_player() const {
+        return written_player;
+    }
     bool get_is_player() const;
 
-    bool get_is_template() const;
-    void set_is_template(bool p_value);
     Stage get_stage() const;
     godot::Ref<NetwDespawnOpts> get_active_despawn_opts() const;
 
@@ -411,8 +400,6 @@ public:
     }
     godot::Ref<NetwEntity> parent_entity() const;
 
-    godot::Ref<NetwScene> own_scene();
-
     void hydrate_components();
     int64_t comp_structure_hash(const godot::PackedStringArray &p_paths) const;
     void _handle_control_request(
@@ -444,9 +431,7 @@ public:
 
 } // namespace netw
 
-VARIANT_ENUM_CAST(netw::NetwEntity::ControlKind);
 VARIANT_ENUM_CAST(netw::NetwEntity::Hold);
-VARIANT_ENUM_CAST(netw::NetwEntity::InitialController);
 VARIANT_ENUM_CAST(netw::NetwEntity::Transfer);
 VARIANT_ENUM_CAST(netw::NetwEntity::Authority);
 VARIANT_ENUM_CAST(netw::NetwEntity::DisconnectRule);

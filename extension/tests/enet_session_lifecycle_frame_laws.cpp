@@ -9,6 +9,7 @@
 #include "godot/scene_tree.hpp"
 #include "godot/time.hpp"
 #include "netw/api/netw_multiplayer.hpp"
+#include "netw/api/promise.hpp"
 #include "netw/api/session.hpp"
 
 using namespace godot;
@@ -43,16 +44,45 @@ struct LifecycleEvidence {
     std::vector<Exit> leaving_exits;
     int host_players_left = 0;
     int host_exits = -1;
+    bool staying_seated = false;
+    bool host_left = false;
+    bool host_leave_settled = false;
+    std::vector<Exit> staying_exits;
+    std::vector<Exit> host_leave_exits;
+    int state_at_exited[4] = {-1, -1, -1, -1};
 };
+
+enum Seat {
+    SEAT_HOST,
+    SEAT_KICKED,
+    SEAT_LEAVING,
+    SEAT_STAYING,
+};
+
+LifecycleEvidence &lifecycle_evidence();
+
+void note_state_at_exited(
+    int64_t,
+    const String &,
+    const Ref<netw::NetwSession> &p_door,
+    int64_t p_seat
+) {
+    lifecycle_evidence().state_at_exited[p_seat] = int(p_door->get_state());
+}
 
 struct ExitTrace {
     netw_test::CallLog log;
 
-    void listen(const Ref<netw::NetwMultiplayer> &p_session) {
+    void listen(const Ref<netw::NetwMultiplayer> &p_session, Seat p_seat) {
         const Ref<netw::NetwSession> door = p_session->get_session();
         door->connect(StringName("exiting"), log.callable("exiting"));
         door->connect(StringName("exited"), log.callable("exited"));
         door->connect(StringName("player_left"), log.callable("player_left"));
+        door->connect(
+            StringName("exited"),
+            callable_mp_static(&note_state_at_exited)
+                .bind(door, int64_t(p_seat))
+        );
     }
 
     bool exited() const {
@@ -95,9 +125,12 @@ class EnetLifecycleScenario final : public netw_test::FrameScenario {
     Ref<netw::NetwMultiplayer> host;
     Ref<netw::NetwMultiplayer> kicked;
     Ref<netw::NetwMultiplayer> leaving;
+    Ref<netw::NetwMultiplayer> staying;
+    Ref<netw::NetwPromise> host_leave;
     std::unique_ptr<ExitTrace> host_trace;
     std::unique_ptr<ExitTrace> kicked_trace;
     std::unique_ptr<ExitTrace> leaving_trace;
+    std::unique_ptr<ExitTrace> staying_trace;
 
     static int64_t now_msec() {
         return int64_t(Time::get_singleton()->get_ticks_msec());
@@ -175,6 +208,9 @@ class EnetLifecycleScenario final : public netw_test::FrameScenario {
         if (leaving.is_valid()) {
             leaving->NETW_API_VIRTUAL(poll)();
         }
+        if (staying.is_valid()) {
+            staying->NETW_API_VIRTUAL(poll)();
+        }
     }
 
     void close(const Ref<netw::NetwMultiplayer> &p_session) {
@@ -205,11 +241,11 @@ public:
                     evidence.host_online = true;
                     evidence.host_scene_free = host->scene_list().is_empty();
                     host_trace = std::make_unique<ExitTrace>();
-                    host_trace->listen(host);
+                    host_trace->listen(host, SEAT_HOST);
                     kicked = open_client(StringName("kicked"), evidence.port);
                     if (kicked.is_valid()) {
                         kicked_trace = std::make_unique<ExitTrace>();
-                        kicked_trace->listen(kicked);
+                        kicked_trace->listen(kicked, SEAT_KICKED);
                     }
                     enter(2);
                 } else if (over_budget()) {
@@ -249,7 +285,7 @@ public:
                     leaving = open_client(StringName("leaving"), evidence.port);
                     if (leaving.is_valid()) {
                         leaving_trace = std::make_unique<ExitTrace>();
-                        leaving_trace->listen(leaving);
+                        leaving_trace->listen(leaving, SEAT_LEAVING);
                     }
                     enter(4);
                 } else if (over_budget()) {
@@ -290,7 +326,49 @@ public:
             }
             case 6: {
                 close(leaving);
-                enter(99);
+                leaving.unref();
+                evidence.host_players_left
+                    = host_trace->log.count(StringName("player_left"));
+                evidence.host_exits = int(host_trace->exits().size());
+                staying = open_client(StringName("staying"), evidence.port);
+                if (staying.is_valid()) {
+                    staying_trace = std::make_unique<ExitTrace>();
+                    staying_trace->listen(staying, SEAT_STAYING);
+                }
+                enter(7);
+                return true;
+            }
+            case 7: {
+                if (staying.is_null()) {
+                    enter(99);
+                    return true;
+                }
+                const int seated = staying->NETW_API_VIRTUAL(get_unique_id)();
+                if (seated > 1 && seats(host, seated)) {
+                    evidence.staying_seated = true;
+                    host_leave = host->session_leave();
+                    enter(8);
+                } else if (over_budget()) {
+                    enter(99);
+                }
+                return true;
+            }
+            case 8: {
+                if (host_trace->exited() && staying_trace->exited()) {
+                    evidence.host_left = true;
+                    enter(9);
+                } else if (over_budget()) {
+                    enter(99);
+                }
+                return true;
+            }
+            case 9: {
+                if (host_leave->get_is_settled()) {
+                    evidence.host_leave_settled = true;
+                    enter(99);
+                } else if (over_budget()) {
+                    enter(99);
+                }
                 return true;
             }
             default: {
@@ -300,19 +378,24 @@ public:
                 if (leaving_trace) {
                     evidence.leaving_exits = leaving_trace->exits();
                 }
+                if (staying_trace) {
+                    evidence.staying_exits = staying_trace->exits();
+                }
                 if (host_trace) {
-                    evidence.host_players_left
-                        = host_trace->log.count(StringName("player_left"));
-                    evidence.host_exits = int(host_trace->exits().size());
+                    evidence.host_leave_exits = host_trace->exits();
                 }
                 host_trace.reset();
                 kicked_trace.reset();
                 leaving_trace.reset();
+                staying_trace.reset();
+                host_leave.unref();
                 close(leaving);
                 close(kicked);
+                close(staying);
                 close(host);
                 leaving.unref();
                 kicked.unref();
+                staying.unref();
                 host.unref();
                 evidence.driven = true;
                 return false;
@@ -410,6 +493,10 @@ TEST_CASE(
         evidence.kicked_exits[1].reason,
         int(netw::NetwSession::KICKED)
     );
+    NETW_CHECK_EQ(
+        evidence.state_at_exited[SEAT_KICKED],
+        int(netw::NetwSession::STATE_OFFLINE)
+    );
     NETW_CHECK_GE(evidence.host_players_left, 1);
     NETW_CHECK_EQ(evidence.host_exits, 0);
 }
@@ -432,6 +519,42 @@ TEST_CASE(
         evidence.leaving_exits[1].reason,
         int(netw::NetwSession::LOCAL_LEAVE)
     );
+    NETW_CHECK_EQ(
+        evidence.state_at_exited[SEAT_LEAVING],
+        int(netw::NetwSession::STATE_OFFLINE)
+    );
+}
+
+TEST_CASE(
+    "[Networked][Connect][Frame] EL9 a host that leaves exits with "
+    "LOCAL_LEAVE, a client still seated exits with SERVER_SHUTDOWN rather "
+    "than CONNECTION_LOST, and the host's leave settles"
+) {
+    const LifecycleEvidence &evidence = lifecycle_evidence();
+    REQUIRE(evidence.driven);
+    REQUIRE(evidence.staying_seated);
+    CHECK(evidence.host_left);
+    CHECK(evidence.host_leave_settled);
+    NETW_REQUIRE_EQ(int(evidence.host_leave_exits.size()), 2);
+    NETW_REQUIRE_EQ(int(evidence.staying_exits.size()), 2);
+    NETW_CHECK_EQ(
+        evidence.state_at_exited[SEAT_HOST],
+        int(netw::NetwSession::STATE_OFFLINE)
+    );
+    NETW_CHECK_EQ(
+        evidence.state_at_exited[SEAT_STAYING],
+        int(netw::NetwSession::STATE_OFFLINE)
+    );
+    for (int at = 0; at < 2; at++) {
+        NETW_CHECK_EQ(
+            evidence.host_leave_exits[at].reason,
+            int(netw::NetwSession::LOCAL_LEAVE)
+        );
+        NETW_CHECK_EQ(
+            evidence.staying_exits[at].reason,
+            int(netw::NetwSession::SERVER_SHUTDOWN)
+        );
+    }
 }
 
 } // namespace NetwTests

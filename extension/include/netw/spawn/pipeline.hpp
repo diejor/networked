@@ -120,7 +120,6 @@ private:
 
     godot::HashMap<godot::StringName, godot::Callable> constructors;
     godot::HashMap<godot::StringName, godot::Array> constructor_schemas;
-    godot::HashMap<int64_t, godot::Ref<NetwPlayer>> armed_owners;
     godot::HashMap<int64_t, int64_t> first_recipients;
 
     int64_t drops_spawn_bad_sender = 0;
@@ -169,8 +168,7 @@ private:
 
     godot::Ref<NetwEntity> arm_authoritative_spawn(
         Record *p_record,
-        godot::Node *p_node,
-        const godot::Ref<NetwPlayer> &p_owner
+        godot::Node *p_node
     );
     godot::Error declare_stage(
         const godot::RID &p_handle,
@@ -188,7 +186,7 @@ private:
     void schedule_armed_flush(int64_t p_route);
     void flush_armed_spawn(int64_t p_route);
     void send_authored_spawn(int64_t p_route);
-    bool armed_owner_survives(int64_t p_route);
+    bool armed_player_left(int64_t p_route);
     void discard_armed_spawn(int64_t p_route);
     static bool roots_published_entity(godot::Node *p_node);
     static void gather_nested_boundaries(
@@ -234,11 +232,11 @@ private:
     );
     SpawnBuild::Outcome unresolved_args(SpawnBuild &r_built);
 
-    bool spawn_admitted(
+    static void write_owner(
         godot::Node *p_node,
-        const godot::Ref<NetwPlayer> &p_owner,
-        const char *p_verb
+        const godot::Ref<NetwPlayer> &p_owner
     );
+    bool spawn_admitted(godot::Node *p_node, const char *p_verb);
     godot::Node *run_construct_stage(const godot::Callable &p_constructor);
     godot::Node *build_adopt(
         godot::Object *p_parent,
@@ -483,6 +481,7 @@ public:
         int64_t p_sender
     );
 
+    void free_session_nodes();
     void clear_session();
     void clear_parks();
     godot::PackedInt64Array promote_received();

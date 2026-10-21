@@ -24,7 +24,7 @@ namespace Networked;
 /// # client
 /// var sight := Netw.session(self).interest_layer(&amp;"sight")
 /// sight.visibility_changed.connect(func(entity: NetwEntity, visible: bool):
-///     marker_of(entity.owner).visible = visible
+///     marker_of(entity.root).visible = visible
 /// )
 /// </code>
 /// <para>
@@ -452,7 +452,7 @@ public sealed class NetwInterestLayer : NetwRefCounted
     /// On a client, the peer is always this one.
     /// <code>
     /// sight.monitor = func(entity: NetwEntity, peer_id: int, visible: bool) -&gt; void:
-    ///     print(entity.owner.name, " ", peer_id, " ", visible)
+    ///     print(entity.root.name," ", peer_id, " ", visible)
     /// </code>
     /// </summary>
     public Callable Monitor

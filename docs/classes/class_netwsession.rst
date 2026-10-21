@@ -79,6 +79,8 @@ Properties
    +-------------------------------------------------------+--------------------------------------------------------------------+
    | :godot:`Array`\[:ref:`NetwScene<class_NetwScene>`\]   | :ref:`scenes<class_NetwSession_property_scenes>`                   |
    +-------------------------------------------------------+--------------------------------------------------------------------+
+   | :ref:`State<enum_NetwSession_State>`                  | :ref:`state<class_NetwSession_property_state>`                     |
+   +-------------------------------------------------------+--------------------------------------------------------------------+
    | :godot:`Dictionary`                                   | :ref:`stats<class_NetwSession_property_stats>`                     |
    +-------------------------------------------------------+--------------------------------------------------------------------+
 
@@ -281,6 +283,18 @@ Emitted on every peer once the peer that was ``successor_was`` has become the se
 
 What each client keeps of its world follows its own :ref:`NetwSessionConfig.transfer_mode<class_NetwSessionConfig_property_transfer_mode>`.
 
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwSession_signal_state_changed:
+
+.. rst-class:: classref-signal
+
+**state_changed**\ (\ state\: :ref:`State<enum_NetwSession_State>`\ ) :ref:`🔗<class_NetwSession_signal_state_changed>`
+
+Emitted when :ref:`state<class_NetwSession_property_state>` changes. A server transfer does not change it.
+
 .. rst-class:: classref-section-separator
 
 ----
@@ -290,43 +304,51 @@ What each client keeps of its world follows its own :ref:`NetwSessionConfig.tran
 Enumerations
 ------------
 
-.. _enum_NetwSession_SessionState:
+.. _enum_NetwSession_State:
 
 .. rst-class:: classref-enumeration
 
-enum **SessionState**: :ref:`🔗<enum_NetwSession_SessionState>`
+enum **State**: :ref:`🔗<enum_NetwSession_State>`
 
-.. _class_NetwSession_constant_SESSION_STATE_OFFLINE:
+.. _class_NetwSession_constant_STATE_OFFLINE:
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`SessionState<enum_NetwSession_SessionState>` **SESSION_STATE_OFFLINE** = ``0``
+:ref:`State<enum_NetwSession_State>` **STATE_OFFLINE** = ``0``
 
 Not connected.
 
-.. _class_NetwSession_constant_SESSION_STATE_CONNECTING:
+.. _class_NetwSession_constant_STATE_CREATING:
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`SessionState<enum_NetwSession_SessionState>` **SESSION_STATE_CONNECTING** = ``1``
+:ref:`State<enum_NetwSession_State>` **STATE_CREATING** = ``1``
 
-Hosting or joining, and may still fail.
+:ref:`NetwConnection.join()<class_NetwConnection_method_join>` or :ref:`NetwConnection.host()<class_NetwConnection_method_host>` is creating the :godot:`MultiplayerPeer`.
 
-.. _class_NetwSession_constant_SESSION_STATE_ONLINE:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`SessionState<enum_NetwSession_SessionState>` **SESSION_STATE_ONLINE** = ``2``
-
-Connected.
-
-.. _class_NetwSession_constant_SESSION_STATE_DISCONNECTING:
+.. _class_NetwSession_constant_STATE_CONNECTING:
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`SessionState<enum_NetwSession_SessionState>` **SESSION_STATE_DISCONNECTING** = ``3``
+:ref:`State<enum_NetwSession_State>` **STATE_CONNECTING** = ``2``
 
-Disconnecting.
+A :godot:`MultiplayerPeer` is assigned and connecting, and may still fail.
+
+.. _class_NetwSession_constant_STATE_ONLINE:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`State<enum_NetwSession_State>` **STATE_ONLINE** = ``3``
+
+Connected, and :ref:`entered<class_NetwSession_signal_entered>` has fired. This peer's player is admitted later, at :ref:`local_joined<class_NetwSession_signal_local_joined>`.
+
+.. _class_NetwSession_constant_STATE_DISCONNECTING:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`State<enum_NetwSession_State>` **STATE_DISCONNECTING** = ``4``
+
+:ref:`exiting<class_NetwSession_signal_exiting>` has fired and :ref:`exited<class_NetwSession_signal_exited>` has not.
 
 .. rst-class:: classref-item-separator
 
@@ -610,6 +632,31 @@ The :godot:`Node` replicated nodes are under, ``null`` when the session is not i
 - :godot:`Array`\[:ref:`NetwScene<class_NetwScene>`\] **get_scenes**\ (\ )
 
 Every live scene. Use :ref:`find_scene()<class_NetwSession_method_find_scene>` to find one by name.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwSession_property_state:
+
+.. rst-class:: classref-property
+
+:ref:`State<enum_NetwSession_State>` **state** :ref:`🔗<class_NetwSession_property_state>`
+
+.. rst-class:: classref-property-setget
+
+- :ref:`State<enum_NetwSession_State>` **get_state**\ (\ )
+
+Where this peer is in connecting, playing and leaving, reported by :ref:`state_changed<class_NetwSession_signal_state_changed>`. The values only rise while connecting, so ``state >= STATE_ONLINE`` reads as connected or leaving.
+
+::
+
+    func on_state_changed(state: NetwSession.State) -> void:
+        match state:
+            NetwSession.STATE_CREATING, NetwSession.STATE_CONNECTING:
+                connecting_popup.show()
+            _:
+                connecting_popup.hide()
 
 .. rst-class:: classref-item-separator
 

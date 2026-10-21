@@ -231,7 +231,7 @@ TEST_CASE(
     Node *owner = memnew(Node);
     const Ref<netw::NetwEntity> entity = netw::NetwEntity::ensure(owner);
     REQUIRE(entity.is_valid());
-    entity->seed_control(300, 7, netw::entity::Control::HOLD_YIELDABLE);
+    entity->seed_control(300, 7, netw::entity::Control::HOLD_SOFT);
 
     Record record;
     record.set_route(1);
@@ -242,7 +242,7 @@ TEST_CASE(
     NETW_CHECK_EQ(int64_t(header[StringName("control_tenure")]), 7);
     NETW_CHECK_EQ(
         int64_t(header[StringName("control_hold")]),
-        int64_t(netw::entity::Control::HOLD_YIELDABLE)
+        int64_t(netw::entity::Control::HOLD_SOFT)
     );
 
     const Dictionary bare = round_trip_header(record, nullptr);

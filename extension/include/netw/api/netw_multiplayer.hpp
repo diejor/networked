@@ -115,28 +115,25 @@ class ReplicationCore;
 class NetwMultiplayer;
 struct PeerRename;
 
-int64_t session_missing_local_join_warnings(const NetwMultiplayer *p_session);
-
 class NetwMultiplayer : public MultiplayerApiBase,
                         public enums::NetwMultiplayer {
     GDCLASS(NetwMultiplayer, MultiplayerApiBase)
 
     friend class NetwInterest;
     friend class NetwNativeTests;
-    friend int64_t session_missing_local_join_warnings(
-        const NetwMultiplayer *p_session
-    );
 
 public:
-    using SessionState = enums::NetwSession::SessionState;
+    using SessionState = enums::NetwSession::State;
     static constexpr SessionState SESSION_STATE_OFFLINE
-        = enums::NetwSession::SESSION_STATE_OFFLINE;
+        = enums::NetwSession::STATE_OFFLINE;
+    static constexpr SessionState SESSION_STATE_CREATING
+        = enums::NetwSession::STATE_CREATING;
     static constexpr SessionState SESSION_STATE_CONNECTING
-        = enums::NetwSession::SESSION_STATE_CONNECTING;
+        = enums::NetwSession::STATE_CONNECTING;
     static constexpr SessionState SESSION_STATE_ONLINE
-        = enums::NetwSession::SESSION_STATE_ONLINE;
+        = enums::NetwSession::STATE_ONLINE;
     static constexpr SessionState SESSION_STATE_DISCONNECTING
-        = enums::NetwSession::SESSION_STATE_DISCONNECTING;
+        = enums::NetwSession::STATE_DISCONNECTING;
     using Role = enums::NetwSession::Role;
     static constexpr Role ROLE_NONE = enums::NetwSession::ROLE_NONE;
     static constexpr Role ROLE_CLIENT = enums::NetwSession::ROLE_CLIENT;
@@ -575,7 +572,12 @@ private:
     void persist_flush_judge(const godot::Ref<NetwPromise> &p_answer);
     void persist_dispose();
     godot::Ref<NetwPromise> session_leaving;
+    godot::Ref<NetwPromise> session_shutting_down;
+    godot::Ref<godot::MultiplayerPeer> session_shutdown_peer;
+    int session_shutdown_polls = 0;
     godot::Ref<NetwPromise> session_close_peer();
+    godot::Ref<NetwPromise> session_close_now();
+    void session_poll_shutdown();
     void session_leave_drained(
         const godot::Ref<NetwPromise> &p_drained,
         const godot::Ref<NetwPromise> &p_left
@@ -685,6 +687,9 @@ private:
     bool host_join_waits_startup = false;
     int session_exit_reason = -1;
     godot::String session_exit_detail;
+    int session_exited_awaits_offline = -1;
+    godot::String session_exited_detail;
+    SessionState session_published_state = SESSION_STATE_OFFLINE;
     void session_announce_exited(int p_reason, const godot::String &p_detail);
     bool scene_admits_on_join = false;
     bool is_observing(
@@ -860,7 +865,6 @@ private:
     std::optional<JoinRequest> resubmit_join;
     std::optional<JoinRequest> submitted_join;
     bool join_awaiting_admission = false;
-    int64_t missing_local_join_warnings = 0;
     display::Hooks display_hooks;
     int64_t display_last_frame = -1;
     bool display_session_bound = false;
@@ -1129,7 +1133,6 @@ private:
 
     void session_after_entered();
     void session_after_edge(int64_t p_old, int64_t p_new);
-    void session_warn_missing_local_join();
     void session_transport_connected();
     void session_transport_failed();
     void session_transport_dropped();
@@ -1355,6 +1358,7 @@ public:
         const godot::String &p_detail
     );
     void session_announce_edge(int p_old, int p_new);
+    void session_publish_state();
     godot::Ref<display::Book> get_display_book() const;
     NetwLagCompCore *get_lagcomp_core();
     NetwPredictionEngine *get_prediction_engine();
@@ -1591,7 +1595,6 @@ public:
     godot::Ref<NetwEntity> spawn_arm_identity(
         spawn::Record *p_record,
         godot::Node *p_node,
-        const godot::Ref<NetwPlayer> &p_owner,
         const godot::Callable &p_declare
     );
     godot::PackedInt32Array rpc_get_recipients(
@@ -3008,6 +3011,7 @@ public:
     }
 
     SessionState session_get_state() const;
+    SessionState session_get_computed_state() const;
     Role session_get_role() const;
     bool is_online() const;
     bool is_host() const;
@@ -3703,6 +3707,7 @@ public:
     persist::Bindings *get_bindings();
 
     godot::RID persist_bind(godot::Node *p_root);
+    void persist_bind_spawned(godot::Node *p_root);
     bool persist_enroll(godot::Node *p_root);
     bool persist_withholds(godot::Node *p_root) const;
     godot::RID persist_binding_of_entity(const godot::RID &p_entity) const;
@@ -4194,13 +4199,12 @@ public:
         const godot::Dictionary &p_settings
     );
     void transport_cancel_attempt();
-    int64_t transport_get_attempt_state() const;
     godot::Error transport_set_defaults(
         const godot::RID &p_transport,
         const godot::Dictionary &p_settings
     );
     godot::Dictionary transport_get_defaults(const godot::RID &p_transport);
-    void connection_emit_state_changed(int64_t p_state);
+    void connection_attempt_moved(int64_t p_state);
     void connection_emit_progressed(
         const godot::String &p_message,
         double p_ratio
@@ -4289,6 +4293,9 @@ public:
         const godot::Array &p_args
     );
     void session_clear_prepared_join();
+#if defined(NETW_TESTS)
+    bool session_default_join_held = false;
+#endif
     void session_dispose();
     void session_submit_prepared_join();
     void session_resubmit_join_on_authority_peer(int64_t p_peer);
@@ -4654,7 +4661,7 @@ public:
         int64_t p_pumps
     );
 
-    void entity_free_owner(godot::Node *p_owner);
+    void entity_free_owner(uint64_t p_owner_id);
 
     godot::Dictionary entity_describe(int64_t p_route) const;
 

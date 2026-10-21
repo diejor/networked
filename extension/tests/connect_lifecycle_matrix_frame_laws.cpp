@@ -3,6 +3,7 @@
 #include "support/lan_directory_probe.h"
 #include "support/netw_cells.h"
 #include "support/netw_test.h"
+#include "support/session_state_walk.h"
 
 #include <memory>
 #include <vector>
@@ -26,6 +27,7 @@ using netw_test::law_broken;
 using netw_test::law_held;
 using netw_test::LawRowFor;
 using netw_test::LawVerdict;
+using netw_test::StateHeard;
 
 constexpr int GAMEPLAY_PORT_START = 30700;
 constexpr int GAMEPLAY_PORT_END = 30800;
@@ -172,6 +174,7 @@ struct SideRecord {
     int failed = 0;
     std::vector<RowSeen> rows;
     std::vector<RowSeen> shown;
+    std::vector<StateHeard> heard;
 };
 
 enum Audit {
@@ -213,6 +216,8 @@ struct Browser {
     int failed = 0;
     bool list_visible = true;
     Ref<netw::NetwConnection> connection;
+    Ref<netw::NetwSession> door;
+    std::vector<StateHeard> heard;
 };
 
 Browser &browser(int64_t p_side) {
@@ -226,7 +231,7 @@ void apply_browsing(int64_t p_side) {
         return;
     }
     const bool online
-        = held.connection->get_state() == netw::NetwConnection::STATE_ONLINE;
+        = held.door->get_state() >= netw::NetwSession::STATE_ONLINE;
     held.connection->set_browsing(held.list_visible && !online);
 }
 
@@ -246,7 +251,9 @@ void on_endpoint_removed(const Variant &p_endpoint, int64_t p_side) {
     }
 }
 
-void on_state_changed(int64_t, int64_t p_side) {
+void on_state_changed(int64_t p_state, int64_t p_side) {
+    Browser &held = browser(p_side);
+    held.heard.push_back({p_state, int64_t(held.door->get_state())});
     apply_browsing(p_side);
 }
 
@@ -280,6 +287,7 @@ String describe(const RowSeen &p_row) {
 
 struct Side {
     Ref<netw::NetwMultiplayer> session;
+    Ref<netw::NetwSession> door;
     Ref<netw::NetwConnection> connection;
     netw::LANLobbyDirectory *directory = nullptr;
     int joined_id = 0;
@@ -327,7 +335,7 @@ class ConnectLifecycleMatrix final : public netw_test::FrameScenario {
     }
 
     int state_of(int p_side) const {
-        return int(sides[p_side].connection->get_state());
+        return int(sides[p_side].door->get_state());
     }
 
     void mark_faults() {
@@ -370,6 +378,7 @@ class ConnectLifecycleMatrix final : public netw_test::FrameScenario {
         for (int at = 0; at < SIDES; at++) {
             Side &side = sides[at];
             side.session.instantiate();
+            side.door = side.session->get_session();
             side.connection = side.session->get_connection();
             side.directory = memnew(netw::LANLobbyDirectory);
             side.directory->set_port(DISCOVERY_PORT);
@@ -381,6 +390,7 @@ class ConnectLifecycleMatrix final : public netw_test::FrameScenario {
             Browser &held = browser(at);
             held = Browser();
             held.connection = side.connection;
+            held.door = side.door;
             side.connection->connect(
                 StringName("endpoint_added"),
                 callable_mp_static(&on_endpoint_added).bind(int64_t(at))
@@ -389,7 +399,7 @@ class ConnectLifecycleMatrix final : public netw_test::FrameScenario {
                 StringName("endpoint_removed"),
                 callable_mp_static(&on_endpoint_removed).bind(int64_t(at))
             );
-            side.connection->connect(
+            side.door->connect(
                 StringName("state_changed"),
                 callable_mp_static(&on_state_changed).bind(int64_t(at))
             );
@@ -419,6 +429,7 @@ class ConnectLifecycleMatrix final : public netw_test::FrameScenario {
             );
             side.session->embed_dispose();
             browser(at) = Browser();
+            side.door.unref();
             side.connection.unref();
             side.session.unref();
             side.joined_id = 0;
@@ -599,7 +610,7 @@ class ConnectLifecycleMatrix final : public netw_test::FrameScenario {
 
     bool views_settled() const {
         const bool hosting
-            = state_of(HOST) == netw::NetwConnection::STATE_ONLINE;
+            = state_of(HOST) == netw::NetwSession::STATE_ONLINE;
         for (int at = 0; at < SIDES; at++) {
             if (at == HOST || !sides[at].connection->is_browsing()) {
                 continue;
@@ -614,8 +625,8 @@ class ConnectLifecycleMatrix final : public netw_test::FrameScenario {
     bool step_settled() {
         const Step &now = step();
         const Side &side = sides[now.side];
-        const int online = netw::NetwConnection::STATE_ONLINE;
-        const int offline = netw::NetwConnection::STATE_OFFLINE;
+        const int online = netw::NetwSession::STATE_ONLINE;
+        const int offline = netw::NetwSession::STATE_OFFLINE;
         switch (now.act) {
             case ACT_HOST:
                 return state_of(HOST) == online
@@ -645,7 +656,7 @@ class ConnectLifecycleMatrix final : public netw_test::FrameScenario {
                 return state_of(now.side) == offline
                     && browser(now.side).failed > failed_at_act;
             case ACT_CANCEL: {
-                const int connecting = netw::NetwConnection::STATE_CONNECTING;
+                const int connecting = netw::NetwSession::STATE_CONNECTING;
                 if (!cancelled && state_of(now.side) == connecting) {
                     side.connection->cancel();
                     cancelled = true;
@@ -724,6 +735,8 @@ class ConnectLifecycleMatrix final : public netw_test::FrameScenario {
             for (const Ref<netw::NetwEndpoint> &held : browser(at).shown) {
                 out.shown.push_back(seen(held));
             }
+            out.heard = browser(at).heard;
+            browser(at).heard.clear();
         }
         r_step.errors = errors_since_mark();
         r_step.warnings = warnings_since_mark();
@@ -903,8 +916,8 @@ LawVerdict law_no_engine_error(const ScenarioRecord &p_run) {
 }
 
 int expected_state(const StepRecord &p_step, int p_side) {
-    const int online = netw::NetwConnection::STATE_ONLINE;
-    const int offline = netw::NetwConnection::STATE_OFFLINE;
+    const int online = netw::NetwSession::STATE_ONLINE;
+    const int offline = netw::NetwSession::STATE_OFFLINE;
     const int actor = p_step.step.side;
     switch (p_step.step.act) {
         case ACT_HOST:
@@ -958,7 +971,7 @@ LawVerdict law_join_address(const ScenarioRecord &p_run) {
         const StepRecord &now = p_run.steps[at];
         for (int side = 0; side < SIDES; side++) {
             const SideRecord &held = now.sides[side];
-            if (held.state == netw::NetwConnection::STATE_OFFLINE
+            if (held.state == netw::NetwSession::STATE_OFFLINE
                 && !held.join_address.is_empty()) {
                 return broken_at(
                     now,
@@ -970,7 +983,7 @@ LawVerdict law_join_address(const ScenarioRecord &p_run) {
                     )
                 );
             }
-            if (held.state == netw::NetwConnection::STATE_ONLINE
+            if (held.state == netw::NetwSession::STATE_ONLINE
                 && held.server_role && held.join_address.is_empty()) {
                 return broken_at(
                     now,
@@ -979,9 +992,9 @@ LawVerdict law_join_address(const ScenarioRecord &p_run) {
                 );
             }
             const SideRecord &host = now.sides[HOST];
-            if (held.state == netw::NetwConnection::STATE_ONLINE
+            if (held.state == netw::NetwSession::STATE_ONLINE
                 && !held.server_role && held.admitted
-                && host.state == netw::NetwConnection::STATE_ONLINE
+                && host.state == netw::NetwSession::STATE_ONLINE
                 && held.join_address != host.join_address) {
                 return broken_at(
                     now,
@@ -1005,7 +1018,7 @@ LawVerdict law_current_endpoint(const ScenarioRecord &p_run) {
         for (int side = 0; side < SIDES; side++) {
             const SideRecord &held = now.sides[side];
             const bool online
-                = held.state == netw::NetwConnection::STATE_ONLINE;
+                = held.state == netw::NetwSession::STATE_ONLINE;
             if (held.has_current != online) {
                 return broken_at(now, at, vformat(
                     "%s current endpoint disagrees with connection state",
@@ -1097,6 +1110,45 @@ LawVerdict law_added_online_rows_report_ping(const ScenarioRecord &p_run) {
     return law_held();
 }
 
+LawVerdict law_state_changed_walks(const ScenarioRecord &p_run) {
+    int64_t settled[SIDES] = {
+        netw::NetwSession::STATE_OFFLINE,
+        netw::NetwSession::STATE_OFFLINE,
+        netw::NetwSession::STATE_OFFLINE,
+    };
+    for (size_t at = 0; at < p_run.steps.size(); at++) {
+        const StepRecord &now = p_run.steps[at];
+        for (int side = 0; side < SIDES; side++) {
+            const std::vector<StateHeard> &heard = now.sides[side].heard;
+            const LawVerdict walk
+                = netw_test::law_state_walk(heard, settled[side]);
+            if (!walk.held) {
+                return broken_at(
+                    now,
+                    at,
+                    String(side_name(side)) + " " + String(walk.detail)
+                );
+            }
+            const int64_t last
+                = heard.empty() ? settled[side] : heard.back().emitted;
+            if (last != now.sides[side].state) {
+                return broken_at(
+                    now,
+                    at,
+                    vformat(
+                        "%s last heard %d but reads %d",
+                        side_name(side),
+                        last,
+                        now.sides[side].state
+                    )
+                );
+            }
+            settled[side] = now.sides[side].state;
+        }
+    }
+    return law_held();
+}
+
 typedef LawRowFor<ScenarioRecord> MatrixLaw;
 
 const MatrixLaw V0 = {
@@ -1150,7 +1202,13 @@ const MatrixLaw V9 = {
     "a host or client holds one current endpoint while online",
     &law_current_endpoint,
 };
-const MatrixLaw LAWS[] = {V0, V1, V2, V3, V4, V5, V6, V7, V8, V9};
+const MatrixLaw V10 = {
+    "V10",
+    "every state_changed carries the state read at that moment, and the "
+    "values climb and then return to STATE_OFFLINE with no repeat",
+    &law_state_changed_walks,
+};
+const MatrixLaw LAWS[] = {V0, V1, V2, V3, V4, V5, V6, V7, V8, V9, V10};
 
 } // namespace
 

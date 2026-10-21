@@ -2,6 +2,7 @@
 
 #include <cstdint>
 
+#include "godot/local_vector.hpp"
 #include "godot/node.hpp"
 #include "godot/object.hpp"
 #include "godot/rid.hpp"
@@ -83,6 +84,9 @@ public:
     godot::PackedInt64Array authored_routes() const;
     int recv_count() const;
     int64_t held_bytes() const;
+
+    godot::LocalVector<godot::ObjectID> session_nodes() const;
+    bool armed_scene_path(godot::ObjectID p_node, godot::String &r_path) const;
 
     void clear();
 };

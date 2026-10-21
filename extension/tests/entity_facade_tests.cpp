@@ -90,36 +90,6 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Entity][Hosted] F5 is_template is written once, from an "
-    "unbound record, and a template cannot be cleared back"
-) {
-    netw_test::FaultWatch expected_faults;
-    expected_faults.expect_error(
-        "[error][entity] Condition \"get_is_template()\" is true. "
-        "NetwEntity.is_template cannot be cleared once it is set. "
-        "Create another node to replicate.",
-        1
-    );
-
-    Node *root = memnew(Node);
-    const Ref<NetwEntity> entity = NetwEntity::ensure(root);
-    REQUIRE(entity.is_valid());
-    CHECK_FALSE(entity->get_is_template());
-
-    entity->set_is_template(false);
-    NETW_CHECK_EQ(int64_t(entity->get_stage()), NetwEntity::STAGE_UNBOUND);
-
-    entity->set_is_template(true);
-    CHECK(entity->get_is_template());
-    entity->set_is_template(true);
-    CHECK(entity->get_is_template());
-    entity->set_is_template(false);
-    CHECK(entity->get_is_template());
-
-    memdelete(root);
-}
-
-TEST_CASE(
     "[Networked][Entity][Hosted][SceneTree] IT3 a mounted child cannot "
     "declare its ancestor as its own entity root"
 ) {

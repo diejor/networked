@@ -35,22 +35,6 @@ Ref<netw::NetwPlayer> player_of(NetwMultiplayer *p_api, int p_peer) {
 }
 
 TEST_CASE(
-    "[Networked][Session] a connected peer holds no player until "
-    "it joins"
-) {
-    LoopbackRig rig(1);
-    rig.pump(4);
-
-    CHECK(rig.client(0)->player_local().is_null());
-    CHECK(player_of(rig.server(), rig.peer_id(0)).is_null());
-
-    Ref<netw::NetwPlayer> seated = rig.join(0, StringName("alice"));
-
-    CHECK(seated.is_valid());
-    CHECK(player_of(rig.server(), rig.peer_id(0)).is_valid());
-}
-
-TEST_CASE(
     "[Networked][Session] a host joins itself and is seated the same "
     "way a client is"
 ) {
@@ -515,6 +499,77 @@ TEST_CASE(
     core->embed_dispose();
 }
 
+constexpr const char *COUNTING_SEAT = "extends RefCounted\n"
+                                      "var seated := 0\n"
+                                      "func seat(_rj) -> void:\n"
+                                      "\tseated += 1\n"
+                                      "func seat_with(_rj, _where: "
+                                      "StringName) -> void:\n"
+                                      "\tseated += 1\n";
+
+TEST_CASE(
+    "[Networked][Session] a peer that never prepared a join joins with an "
+    "empty username, so a client and a listen server each hold a "
+    "local_player, appear in players and run the join handler"
+) {
+    const Ref<RefCounted> handler = shape_of(COUNTING_SEAT)->call("new");
+    REQUIRE(handler.is_valid());
+
+    LoopbackRig rig(0, false, true);
+    rig.server()->session_set_join_override(
+        Callable(handler.ptr(), StringName("seat")),
+        Array()
+    );
+    rig.server()->scene_announce_startup();
+    const int at = rig.add_client();
+    rig.pump(6);
+
+    for (NetwMultiplayer *api : {rig.server(), rig.client(at)}) {
+        const Ref<netw::NetwPlayer> mine = api->player_local();
+        CHECK(mine.is_valid());
+        const bool unnamed
+            = mine.is_valid() && String(mine->get_username()).is_empty();
+        CHECK(unnamed);
+        NETW_CHECK_EQ(int(api->get_session()->get_players().size()), 2);
+    }
+    CHECK(player_of(rig.server(), rig.peer_id(at)).is_valid());
+    NETW_CHECK_EQ(int(handler->get(StringName("seated"))), 2);
+}
+
+TEST_CASE(
+    "[Networked][Session] a join handler that takes arguments refuses the "
+    "default join, and the client hears join_failed"
+) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][session] Peer * joined with no arguments, but the "
+        "Netw.configure_join handler needs 1. Pass the arguments to "
+        "Netw.prepare_join on the client.",
+        1
+    );
+
+    const Ref<RefCounted> handler = shape_of(COUNTING_SEAT)->call("new");
+    REQUIRE(handler.is_valid());
+
+    LoopbackRig rig(0, false, true);
+    rig.server()->session_set_join_override(
+        Callable(handler.ptr(), StringName("seat_with")),
+        Array()
+    );
+    const int at = rig.add_client();
+    CallLog log;
+    rig.client(at)->get_session()->connect(
+        StringName("join_failed"),
+        log.callable("failed")
+    );
+    rig.pump(6);
+
+    NETW_CHECK_EQ(log.count("failed"), 1);
+    CHECK(rig.client(at)->player_local().is_null());
+    CHECK(player_of(rig.server(), rig.peer_id(at)).is_null());
+    NETW_CHECK_EQ(int(handler->get(StringName("seated"))), 0);
+}
+
 Ref<NetwMultiplayer> branch_session(Node *p_branch) {
     Ref<SceneMultiplayer> inner;
     inner.instantiate();
@@ -592,11 +647,9 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][SceneTree] Netw.prepare_join routes on the state its "
-    "session is already in, so a caller never chooses between preparing "
-    "and submitting "
-    "and cannot choose wrong: offline it prepares, which is what holds the "
-    "join for the authentication phase to carry, and online it submits at once"
+    "[Networked][SceneTree] Netw.prepare_join prepares a join while the "
+    "session is offline and refuses one once it is online, because a join is "
+    "decided before connecting"
 ) {
     netw_test::FaultWatch expected_faults;
 
@@ -621,36 +674,28 @@ TEST_CASE(
         NETW_CHECK_EQ(log.count("submitted"), 0);
     }
 
-    SUBCASE("an online session submits at once and holds nothing back") {
+    SUBCASE("an online session refuses the join and sends nothing") {
+        expected_faults.expect_error(
+            "[error][session] Netw.prepare_join was called after the session "
+            "connected. Call it before assigning multiplayer_peer.",
+            1
+        );
         api->session_set_state(NetwMultiplayer::SESSION_STATE_ONLINE);
         const Ref<netw::NetwPromise> asked
             = netw::Netw::prepare_join(seat, StringName("ana"), Array());
         REQUIRE(asked.is_valid());
-        NETW_CHECK_EQ(int(asked->get_result()), int(OK));
-        NETW_CHECK_EQ(log.count("submitted"), 1);
+        NETW_CHECK_EQ(int(asked->get_result()), int(ERR_ALREADY_IN_USE));
+        NETW_CHECK_EQ(log.count("submitted"), 0);
         CHECK_FALSE(api->session_prepared_join().has_value());
     }
 
-    SUBCASE("an empty username joins nothing on either route") {
+    SUBCASE("an empty username prepares nothing") {
         expected_faults.expect_error(
             "[error][session] Netw.prepare_join needs a username, "
             "and it was empty.",
             1
         );
-        expected_faults.expect_error(
-            "[error][session] Condition "
-            "\"String(p_username).is_empty()\" is true. Returning: "
-            "NetwPromise::resolved(ERR_INVALID_PARAMETER). "
-            "Netw.prepare_join needs a username, and it was empty.",
-            1
-        );
 
-        NETW_CHECK_EQ(
-            int(netw::Netw::prepare_join(seat, StringName(), Array())
-                    ->get_result()),
-            int(ERR_INVALID_PARAMETER)
-        );
-        api->session_set_state(NetwMultiplayer::SESSION_STATE_ONLINE);
         NETW_CHECK_EQ(
             int(netw::Netw::prepare_join(seat, StringName(), Array())
                     ->get_result()),

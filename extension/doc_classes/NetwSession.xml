@@ -241,6 +241,17 @@
 		<member name="scenes" type="NetwScene[]" setter="" getter="get_scenes">
 			Every live scene. Use [method find_scene] to find one by name.
 		</member>
+		<member name="state" type="int" setter="" getter="get_state" enum="NetwSession.State">
+			Where this peer is in connecting, playing and leaving, reported by [signal state_changed]. The values only rise while connecting, so [code]state &gt;= STATE_ONLINE[/code] reads as connected or leaving.
+			[codeblock]
+			func on_state_changed(state: NetwSession.State) -&gt; void:
+			    match state:
+			        NetwSession.STATE_CREATING, NetwSession.STATE_CONNECTING:
+			            connecting_popup.show()
+			        _:
+			            connecting_popup.hide()
+			[/codeblock]
+		</member>
 		<member name="stats" type="Dictionary" setter="" getter="get_stats">
 			Every counter this session keeps, keyed by [enum NetwMultiplayer.Stat].
 		</member>
@@ -333,19 +344,28 @@
 				What each client keeps of its world follows its own [member NetwSessionConfig.transfer_mode].
 			</description>
 		</signal>
+		<signal name="state_changed">
+			<param index="0" name="state" type="int" enum="NetwSession.State" />
+			<description>
+				Emitted when [member state] changes. A server transfer does not change it.
+			</description>
+		</signal>
 	</signals>
 	<constants>
-		<constant name="SESSION_STATE_OFFLINE" value="0" enum="SessionState">
+		<constant name="STATE_OFFLINE" value="0" enum="State">
 			Not connected.
 		</constant>
-		<constant name="SESSION_STATE_CONNECTING" value="1" enum="SessionState">
-			Hosting or joining, and may still fail.
+		<constant name="STATE_CREATING" value="1" enum="State">
+			[method NetwConnection.join] or [method NetwConnection.host] is creating the [MultiplayerPeer].
 		</constant>
-		<constant name="SESSION_STATE_ONLINE" value="2" enum="SessionState">
-			Connected.
+		<constant name="STATE_CONNECTING" value="2" enum="State">
+			A [MultiplayerPeer] is assigned and connecting, and may still fail.
 		</constant>
-		<constant name="SESSION_STATE_DISCONNECTING" value="3" enum="SessionState">
-			Disconnecting.
+		<constant name="STATE_ONLINE" value="3" enum="State">
+			Connected, and [signal entered] has fired. This peer's player is admitted later, at [signal local_joined].
+		</constant>
+		<constant name="STATE_DISCONNECTING" value="4" enum="State">
+			[signal exiting] has fired and [signal exited] has not.
 		</constant>
 		<constant name="ROLE_NONE" value="0" enum="Role">
 			No session.

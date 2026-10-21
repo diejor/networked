@@ -3,7 +3,10 @@
 
 #include <cstdint>
 
+#include "godot/class_db.hpp"
 #include "godot/node.hpp"
+#include "godot/object.hpp"
+#include "godot/script.hpp"
 #include "godot/scene_tree.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/entity_record.hpp"
@@ -59,7 +62,6 @@ TEST_CASE(
     const Ref<NetwEntity> entity = core->spawn_arm_identity(
         &record,
         node,
-        Ref<NetwPlayer>(),
         log.answering("declare", int64_t(OK))
     );
 
@@ -80,8 +82,8 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Spawn][Hosted] SM2 an owner stamps both the owning peer and "
-    "the controller, and an entity that already has an id keeps it"
+    "[Networked][Spawn][Hosted] SM2 a written player stamps both the owning "
+    "peer and the controller, and an entity that already has an id keeps it"
 ) {
     Ref<NetwMultiplayer> core;
     core.instantiate();
@@ -90,12 +92,12 @@ TEST_CASE(
     node->set_name("Crate");
     const Ref<NetwEntity> pre = NetwEntity::ensure(node);
     pre->set_name(StringName("chosen"));
+    pre->set_player(seated(core, 4));
     Record record;
 
     const Ref<NetwEntity> entity = core->spawn_arm_identity(
         &record,
         node,
-        seated(core, 4),
         log.answering("declare", int64_t(OK))
     );
 
@@ -119,8 +121,10 @@ TEST_CASE(
     Node *node = memnew(Node);
     node->set_name("Crate");
     const Ref<NetwEntity> pre = NetwEntity::ensure(node);
-    pre->set_name(StringName("held"));
-    pre->set_peer_id(2);
+    Ref<NetwPlayer> ada;
+    ada.instantiate();
+    ada->bind_to(core.ptr(), 8, 5, StringName("Ada"));
+    pre->set_player(ada);
     pre->set_controller(3);
     const int64_t held_route = pre->get_route();
 
@@ -128,14 +132,15 @@ TEST_CASE(
     const Ref<NetwEntity> refused = core->spawn_arm_identity(
         &scratch,
         node,
-        seated(core, 8),
         log.answering("declare", int64_t(ERR_UNAUTHORIZED))
     );
 
     CHECK(refused.is_null());
     NETW_CHECK_EQ(log.count("declare"), 1);
-    CHECK(bool(String(pre->get_name()) == String("held")));
-    NETW_CHECK_EQ(pre->get_peer_id(), int64_t(2));
+    CHECK(bool(pre->get_name() == StringName()));
+    CHECK(bool(String(node->get_name()) == String("Crate")));
+    NETW_CHECK_EQ(pre->get_peer_id(), int64_t(8));
+    NETW_CHECK_EQ(pre->get_player_id(), int64_t(5));
     NETW_CHECK_EQ(pre->get_controller(), int64_t(3));
     NETW_CHECK_EQ(pre->get_route(), held_route);
 
@@ -152,71 +157,9 @@ TEST_CASE(
     node->set_name("Crate");
 
     Record scratch;
-    CHECK(core->spawn_arm_identity(nullptr, node, Ref<NetwPlayer>(), Callable())
-              .is_null());
-    CHECK(core->spawn_arm_identity(
-                  &scratch,
-                  nullptr,
-                  Ref<NetwPlayer>(),
-                  Callable()
-    )
-              .is_null());
-    CHECK(
-        core->spawn_arm_identity(&scratch, node, Ref<NetwPlayer>(), Callable())
-            .is_valid()
-    );
-
-    memdelete(node);
-}
-
-TEST_CASE(
-    "[Networked][Spawn][Hosted] SM5 an arm naming a player this session "
-    "does not hold is refused outright, so a stale handle cannot stamp a peer "
-    "that has gone"
-) {
-    netw_test::FaultWatch expected_faults;
-    expected_faults.expect_error(
-        "[error][spawn] Condition \"p_owner.is_valid() && "
-        "!player_holds(p_owner)\" is true. Returning: "
-        "Ref<NetwEntity>(). Nothing was spawned, because owner '*' "
-        "is not in the session. Spawn for a player the session has "
-        "admitted.",
-        1
-    );
-
-    Ref<NetwMultiplayer> core;
-    core.instantiate();
-    CallLog log;
-    Node *node = memnew(Node);
-    node->set_name("Crate");
-    Record record;
-
-    const Ref<NetwPlayer> stranger = a_stranger(core, 9);
-    CHECK_FALSE(core->player_holds(stranger));
-    const Ref<NetwEntity> refused = core->spawn_arm_identity(
-        &record,
-        node,
-        stranger,
-        log.answering("declare", int64_t(OK))
-    );
-
-    CHECK(refused.is_null());
-    NETW_CHECK_EQ(log.count("declare"), 0);
-    NETW_CHECK_EQ(record.get_route(), int64_t(0));
-    const Ref<NetwEntity> held = NetwEntity::of(node);
-    const int64_t stamped = held.is_valid() ? held->get_peer_id() : 0;
-    NETW_CHECK_EQ(stamped, int64_t(0));
-
-    const Ref<NetwPlayer> admitted = seated(core, 9);
-    CHECK(core->player_holds(admitted));
-    const Ref<NetwEntity> armed = core->spawn_arm_identity(
-        &record,
-        node,
-        admitted,
-        log.answering("declare", int64_t(OK))
-    );
-    REQUIRE(armed.is_valid());
-    NETW_CHECK_EQ(armed->get_peer_id(), int64_t(9));
+    CHECK(core->spawn_arm_identity(nullptr, node, Callable()).is_null());
+    CHECK(core->spawn_arm_identity(&scratch, nullptr, Callable()).is_null());
+    CHECK(core->spawn_arm_identity(&scratch, node, Callable()).is_valid());
 
     memdelete(node);
 }
@@ -307,6 +250,171 @@ TEST_CASE(
 
     const bool published = pipeline->owns_spawned_route(route);
     CHECK_FALSE(published);
+}
+
+uint64_t built_crate = 0;
+
+Node *build_crate(int64_t p_slot) {
+    Node *crate = memnew(Node);
+    crate->set_name(vformat("Crate%d", p_slot));
+    built_crate = uint64_t(crate->get_instance_id());
+    return crate;
+}
+
+const char *REFUSES_DECLARE = R"(extends NetwMultiplayer
+
+func _spawn_declare(_entity: RID, _recipe: Variant) -> Error:
+	return ERR_UNAUTHORIZED
+)";
+
+TEST_CASE(
+    "[Networked][Spawn][SceneTree] SM5 a spawn for a player this session "
+    "does not hold, or one whose declaration is refused, answers nothing and "
+    "frees the node it built, and the same spawn for a seated player goes "
+    "through"
+) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][spawn] Nothing was spawned, because player '*' is not in "
+        "the session. Spawn for a player the session has admitted.",
+        1
+    );
+    expected_faults.expect_warning(
+        "[warn][transport] A packet for route * was refused with error *.",
+        1
+    );
+    netw_test::LoopbackRig rig(0);
+    rig.mount();
+    NetwMultiplayer *server = rig.server();
+    Array arg_types;
+    arg_types.push_back(int64_t(Variant::INT));
+    Array slot;
+    slot.push_back(int64_t(0));
+    rig.register_constructor(
+        server,
+        StringName("crate"),
+        callable_mp_static(&build_crate),
+        arg_types
+    );
+
+    const Ref<NetwPlayer> stranger
+        = a_stranger(Ref<NetwMultiplayer>(server), 9);
+    CHECK_FALSE(server->player_holds(stranger));
+    const RID refused
+        = server->spawn_registered(StringName("crate"), slot, stranger.ptr());
+
+    CHECK_FALSE(refused.is_valid());
+    CHECK(netw::gd::object_of(ObjectID(built_crate)) == nullptr);
+
+    const Ref<NetwPlayer> admitted = seated(Ref<NetwMultiplayer>(server), 9);
+    const Ref<Script> refusing
+        = netw::gd::instantiate_class(StringName("GDScript"));
+    refusing->set_source_code(String(REFUSES_DECLARE));
+    refusing->reload();
+    server->set_script(refusing);
+    const RID undeclared
+        = server->spawn_registered(StringName("crate"), slot, admitted.ptr());
+    server->set_script(Variant());
+
+    CHECK_FALSE(undeclared.is_valid());
+    CHECK(netw::gd::object_of(ObjectID(built_crate)) == nullptr);
+
+    const RID armed
+        = server->spawn_registered(StringName("crate"), slot, admitted.ptr());
+    REQUIRE(armed.is_valid());
+    Node *crate = server->entity_get_node(armed);
+    REQUIRE(crate != nullptr);
+    NETW_CHECK_EQ(NetwEntity::of(crate)->get_peer_id(), int64_t(9));
+    rig.branch(-1)->add_child(crate);
+    rig.pump(2);
+}
+
+enum Writes : int64_t {
+    PLAYER_THEN_SERVER = 0,
+    SERVER_THEN_PLAYER = 1,
+    SERVER_ONLY = 2,
+    PLAYER_THEN_NOBODY = 3,
+};
+
+NetwPlayer *written_player = nullptr;
+
+Node *build_server_steered_body(int64_t p_writes) {
+    Node *body = memnew(Node);
+    body->set_name("Body");
+    const Ref<NetwEntity> entity = NetwEntity::ensure(body);
+    const Ref<NetwPlayer> player(written_player);
+    if (p_writes == PLAYER_THEN_NOBODY) {
+        entity->set_player(player);
+        entity->set_player(Ref<NetwPlayer>());
+        return body;
+    }
+    if (p_writes == PLAYER_THEN_SERVER) {
+        entity->set_player(player);
+    }
+    entity->set_controller_player(Ref<NetwPlayer>());
+    if (p_writes == SERVER_THEN_PLAYER) {
+        entity->set_player(player);
+    }
+    return body;
+}
+
+struct SteeringRow {
+    const char *label;
+    Writes writes;
+    bool through_spawn_player;
+    bool represents;
+};
+
+TEST_CASE(
+    "[Networked][Spawn][SceneTree] SM8 a body written for a player and "
+    "then steered by the server keeps the server as controller on every "
+    "peer, whatever the order of the writes"
+) {
+    const SteeringRow rows[] = {
+        { "player then server", PLAYER_THEN_SERVER, false, true },
+        { "server then player", SERVER_THEN_PLAYER, false, true },
+        { "player then server, spawn_player", PLAYER_THEN_SERVER, true, true },
+        { "server then player, spawn_player", SERVER_THEN_PLAYER, true, true },
+        { "server only, spawn_player", SERVER_ONLY, true, true },
+        { "player then no player", PLAYER_THEN_NOBODY, false, false },
+    };
+    for (const SteeringRow &row : rows) {
+        INFO(row.label);
+        netw_test::LoopbackRig rig(1);
+        rig.mount();
+        const Ref<NetwPlayer> player = seated(
+            Ref<NetwMultiplayer>(rig.server()),
+            rig.peer_id(0)
+        );
+        REQUIRE(rig.server()->player_holds(player));
+        written_player = player.ptr();
+        Array arg_types;
+        arg_types.push_back(int64_t(Variant::INT));
+        Array args;
+        args.push_back(int64_t(row.writes));
+
+        const int route = rig.spawn_registered(
+            StringName("server_steered_body"),
+            callable_mp_static(&build_server_steered_body),
+            args,
+            arg_types,
+            nullptr,
+            row.through_spawn_player ? Variant(player) : Variant()
+        );
+        written_player = nullptr;
+
+        for (int peer = -1; peer < rig.count(); ++peer) {
+            CAPTURE(peer);
+            const Ref<NetwEntity> entity
+                = NetwEntity::of(rig.route_node(route, peer));
+            REQUIRE(entity.is_valid());
+            NETW_CHECK_EQ(
+                entity->get_peer_id(),
+                row.represents ? int64_t(rig.peer_id(0)) : int64_t(0)
+            );
+            NETW_CHECK_EQ(entity->get_controller(), int64_t(1));
+        }
+    }
 }
 
 #endif

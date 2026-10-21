@@ -410,7 +410,7 @@ class CostScenario final : public netw_test::FrameScenario {
                 seen.last_requester = stand->peer_id(asker);
             } else if (beat == 1) {
                 entity_at(asker, CONTESTED)
-                    ->claim_control(Hold::HOLD_YIELDABLE);
+                    ->claim_control(Hold::HOLD_SOFT);
             }
         }
         if (p_step == HANDOFF_END + DECIDED_FRAMES) {

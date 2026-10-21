@@ -14,6 +14,7 @@ var join_args := ConnectFieldList.new()
 @onready var cancel_button: Button = %CancelButton
 ## Warns that joining leaves the current lobby.
 @onready var leave_warning: Label = %LeaveWarning
+@onready var session: NetwSession = Netw.session(self)
 
 
 func _ready() -> void:
@@ -27,7 +28,7 @@ func open(
 		endpoint: NetwEndpoint,
 		username: String,
 ) -> void:
-	leave_warning.visible = connection.state == NetwConnection.STATE_ONLINE
+	leave_warning.visible = session.is_online
 	username_edit.text = username
 	settings.render_settings(
 		settings_container,

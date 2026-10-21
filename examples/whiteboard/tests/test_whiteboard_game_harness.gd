@@ -114,7 +114,8 @@ func lines(peer: NetwSceneRunner) -> Array[Node]:
 
 func drawn_by(peer: NetwSceneRunner, drawer: NetwSceneRunner) -> Stroke:
 	var id := board(drawer).multiplayer.get_unique_id()
+	var author := peer.session.player_of(id)
 	for line: Stroke in lines(peer):
-		if line.entity.controller == id:
+		if line.entity.controller == author:
 			return line
 	return null

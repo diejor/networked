@@ -36,8 +36,6 @@ using repl::PropertySet;
 
 namespace {
 
-constexpr const char *SIG_SPAWNING = "spawning";
-constexpr const char *SIG_SPAWNED = "spawned";
 constexpr const char *SIG_DESPAWNING = "despawning";
 constexpr const char *SIG_DESPAWNED = "despawned";
 constexpr const char *SIG_HIDDEN = "hidden";
@@ -350,14 +348,6 @@ void NetwEntity::set_rid_handle(const RID &p_handle) {
     record->adopt_handle(p_handle);
 }
 
-NetwEntity::InitialController NetwEntity::get_initial_controller() const {
-    return InitialController(control()->get_initial());
-}
-
-void NetwEntity::set_initial_controller(InitialController p_value) {
-    control()->set_initial(int64_t(p_value));
-}
-
 NetwEntity::Transfer NetwEntity::get_transfer() const {
     return Transfer(control()->get_transfer());
 }
@@ -503,7 +493,7 @@ int64_t NetwEntity::get_controller() const {
 }
 
 int64_t NetwEntity::steering() const {
-    return control()->resolve(get_peer_id());
+    return control()->resolve();
 }
 
 void NetwEntity::set_controller(int64_t p_value) {
@@ -522,17 +512,12 @@ void NetwEntity::set_controller(int64_t p_value) {
     record_controller(entity::Control::from_public(p_value));
 }
 
-NetwEntity::ControlKind NetwEntity::get_control_kind() const {
-    return steering() != entity::Control::SERVER ? CONTROL_PEER_CONTROLLED
-                                                 : CONTROL_SERVER_CONTROLLED;
-}
-
 bool NetwEntity::get_is_controlled_locally() const {
     return is_controller_here() || is_claim_running_ahead();
 }
 
 bool NetwEntity::is_controller_here() const {
-    return control()->controlled_by(local_peer(), get_peer_id());
+    return control()->controlled_by(local_peer());
 }
 
 bool NetwEntity::is_claim_running_ahead() const {
@@ -716,8 +701,8 @@ void NetwEntity::adopt_controller(int64_t p_peer) {
     announce_control(was, p_peer);
 }
 
-int64_t NetwEntity::resolve_initial_controller() const {
-    const int64_t resolved = control()->resolve(get_peer_id());
+int64_t NetwEntity::resolve_default_controller() const {
+    const int64_t resolved = control()->resolve();
     if (resolved != entity::Control::SERVER
         || !control()->authority_follows_controller()) {
         return resolved;
@@ -859,7 +844,7 @@ Ref<NetwPromise> NetwEntity::claim_by_contact(const Ref<NetwEntity> &p_source) {
     }
     const int64_t live = core->liveness_route_of(p_source.ptr());
     return issue_claim(
-        entity::Control::HOLD_YIELDABLE,
+        entity::Control::HOLD_SOFT,
         live > 0 ? live : p_source->get_route()
     );
 }
@@ -1669,6 +1654,9 @@ bool NetwEntity::is_on_server() const {
 }
 
 Ref<NetwPlayer> NetwEntity::get_player() const {
+    if (written_player.is_valid()) {
+        return written_player;
+    }
     NetwMultiplayer *core = session_core();
     const int64_t represented = get_peer_id();
     if (core == nullptr || represented == 0) {
@@ -1677,12 +1665,30 @@ Ref<NetwPlayer> NetwEntity::get_player() const {
     return core->player_of(represented);
 }
 
-bool NetwEntity::get_is_player() const {
-    return get_peer_id() != 0;
+void NetwEntity::set_player(const Ref<NetwPlayer> &p_player) {
+    NETW_ERR_COND(
+        get_stage() != int64_t(entity::Stage::UNBOUND),
+        sys::ENTITY,
+        "'%s' set NetwEntity.player after it was spawned, so the change was "
+        "ignored. Set it in the spawn function.",
+        String(get_name())
+    );
+    const int64_t previous = get_peer_id();
+    const bool steers_previous = previous != 0 && steering() == previous;
+    const int64_t peer = p_player.is_valid() ? p_player->get_peer_id() : 0;
+    written_player = p_player;
+    set_peer_id(peer);
+    set_player_id(p_player.is_valid() ? p_player->player_id() : 0);
+    if (peer > 0 && (!control()->get_configured() || steers_previous)) {
+        record_controller(peer);
+    } else if (peer == 0 && steers_previous) {
+        control()->clear_controller();
+        announce_control(previous, entity::Control::SERVER);
+    }
 }
 
-bool NetwEntity::get_is_template() const {
-    return get_stage() == int64_t(entity::Stage::TEMPLATE);
+bool NetwEntity::get_is_player() const {
+    return get_peer_id() != 0;
 }
 
 NetwEntity::Stage NetwEntity::get_stage() const {
@@ -1709,7 +1715,11 @@ bool NetwEntity::publish_stage(int64_t p_from, int64_t p_to) {
     if (core.is_valid()) {
         core->entity_note_stage(record, p_from, p_to);
     }
-    emit_signal("stage_changed", p_from, p_to);
+#if defined(NETW_TESTS)
+    if (has_signal("stage_changed")) {
+        emit_signal("stage_changed", p_from, p_to);
+    }
+#endif
     Node *const remaining = get_owner();
     return record == captured && owner_id == owner && session_id == session
         && remaining == node && session_core() == core.ptr()
@@ -1730,9 +1740,10 @@ void NetwEntity::reject_claims(const char *p_detail) {
     for (uint32_t at = 0; at < control_claims.size(); ++at) {
         held.push_back(control_claims[at]);
     }
+    const bool was_ahead = is_claim_running_ahead();
     control_claims.clear();
     control()->pending.clear();
-    control_moved();
+    follow_claim(was_ahead);
     for (uint32_t at = 0; at < held.size(); ++at) {
         held[at].promise->reject(
             ERR_UNAVAILABLE,
@@ -1748,20 +1759,6 @@ void NetwEntity::transition(int64_t p_stage) {
     }
 }
 
-void NetwEntity::set_is_template(bool p_value) {
-    if (!p_value) {
-        NETW_ERR_COND(
-            get_is_template(),
-            sys::ENTITY,
-            "NetwEntity.is_template cannot be cleared once it is set. "
-            "Create another node to replicate."
-        );
-        return;
-    }
-    const Ref<NetwEntity> keep(this);
-    record->mark_template(get_owner(), this);
-}
-
 void NetwEntity::arm(const Ref<NetwMultiplayer> &p_api) {
     const Ref<NetwEntity> keep(this);
     NETW_ERR_COND(
@@ -1769,10 +1766,14 @@ void NetwEntity::arm(const Ref<NetwMultiplayer> &p_api) {
         sys::ENTITY,
         "An entity was set up for a session twice."
     );
+    written_player.unref();
     stamp_multiplayer(p_api);
     Node *claimed = get_owner();
     if (claimed != nullptr && !control()->get_configured()
         && claimed->get_multiplayer_authority() != SERVER_PEER) {
+        control()->infer_authority(int64_t(AUTHORITY_CONTROLLER));
+    }
+    if (get_transfer() == TRANSFER_IMMEDIATE) {
         control()->infer_authority(int64_t(AUTHORITY_CONTROLLER));
     }
     if (get_transfer() == TRANSFER_IMMEDIATE
@@ -1788,7 +1789,7 @@ void NetwEntity::arm(const Ref<NetwMultiplayer> &p_api) {
         control()->set_transfer(int64_t(TRANSFER_REQUESTABLE));
     }
     if (!control()->get_configured()) {
-        adopt_controller(resolve_initial_controller());
+        adopt_controller(resolve_default_controller());
     } else {
         apply_control();
     }
@@ -1975,9 +1976,9 @@ void NetwEntity::_on_owner_ready() {
         NETW_ZONE_NC("NetwEntity sim declare", colors::LIVENESS);
         core->sim_declare(this);
     }
-    {
-        NETW_ZONE_NC("NetwEntity emit spawned", colors::LIVENESS);
-        emit_signal(SIG_SPAWNED);
+    if (core != nullptr) {
+        NETW_ZONE_NC("NetwEntity adopt effects", colors::LIVENESS);
+        core->observe_entity_spawned(int64_t(get_instance_id()));
     }
 }
 
@@ -2192,17 +2193,12 @@ Ref<NetwInterest> NetwEntity::held_interest() const {
     return record->minted_part(NetwEntityRecord::PART_INTEREST);
 }
 
-Ref<NetwScene> NetwEntity::own_scene() {
-    return record->part(NetwEntityRecord::PART_SCENE, this);
-}
-
 Ref<NetwScene> NetwEntity::get_scene() const {
-    NetwEntity *self = const_cast<NetwEntity *>(this);
     NetwMultiplayer *core = session_core();
     if (core == nullptr || get_owner() == nullptr) {
-        return self->own_scene();
+        return Ref<NetwScene>();
     }
-    return core->entity_scene_facet(record, self);
+    return core->entity_scene_facet(record, const_cast<NetwEntity *>(this));
 }
 
 Ref<NetwPrediction> NetwEntity::get_prediction() const {
@@ -2303,18 +2299,18 @@ void NetwEntity::_bind_methods() {
         &NetwEntity::of
     );
 
-    ClassDB::bind_method(D_METHOD("get_owner"), &NetwEntity::get_owner);
+    ClassDB::bind_method(D_METHOD("get_root"), &NetwEntity::get_owner);
     ADD_PROPERTY(
         PropertyInfo(
             Variant::OBJECT,
-            "owner",
+            "root",
             PROPERTY_HINT_NODE_TYPE,
             "Node",
             PROPERTY_USAGE_DEFAULT,
             "Node"
         ),
         "",
-        "get_owner"
+        "get_root"
     );
 
     ClassDB::bind_method(D_METHOD("get_name"), &NetwEntity::get_name);
@@ -2339,43 +2335,6 @@ void NetwEntity::_bind_methods() {
         ),
         "",
         "get_rid"
-    );
-
-    ClassDB::bind_method(
-        D_METHOD("get_multiplayer"),
-        &NetwEntity::get_multiplayer
-    );
-    ADD_PROPERTY(
-        PropertyInfo(
-            Variant::OBJECT,
-            "multiplayer",
-            PROPERTY_HINT_RESOURCE_TYPE,
-            "MultiplayerAPI",
-            PROPERTY_USAGE_NONE
-        ),
-        "",
-        "get_multiplayer"
-    );
-
-    ClassDB::bind_method(
-        D_METHOD("get_initial_controller"),
-        &NetwEntity::get_initial_controller
-    );
-    ClassDB::bind_method(
-        D_METHOD("set_initial_controller", "value"),
-        &NetwEntity::set_initial_controller
-    );
-    ADD_PROPERTY(
-        PropertyInfo(
-            Variant::INT,
-            "initial_controller",
-            PROPERTY_HINT_ENUM,
-            "Server,Player",
-            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
-            "NetwEntity.InitialController"
-        ),
-        "set_initial_controller",
-        "get_initial_controller"
     );
 
     ClassDB::bind_method(D_METHOD("get_transfer"), &NetwEntity::get_transfer);
@@ -2475,40 +2434,23 @@ void NetwEntity::_bind_methods() {
     );
 
     ClassDB::bind_method(
-        D_METHOD("get_is_scene"),
-        &NetwEntity::get_declares_scene
-    );
-    ADD_PROPERTY(PropertyInfo(Variant::BOOL, "is_scene"), "", "get_is_scene");
-
-    ClassDB::bind_method(
         D_METHOD("get_controller"),
-        &NetwEntity::get_controller
+        &NetwEntity::get_controller_player
     );
     ClassDB::bind_method(
-        D_METHOD("set_controller", "value"),
-        &NetwEntity::set_controller
-    );
-    ADD_PROPERTY(
-        PropertyInfo(Variant::INT, "controller"),
-        "set_controller",
-        "get_controller"
-    );
-
-    ClassDB::bind_method(
-        D_METHOD("get_control_kind"),
-        &NetwEntity::get_control_kind
+        D_METHOD("set_controller", "player"),
+        &NetwEntity::set_controller_player
     );
     ADD_PROPERTY(
         PropertyInfo(
-            Variant::INT,
-            "control_kind",
-            PROPERTY_HINT_ENUM,
-            "Peer Controlled,Server Controlled",
-            PROPERTY_USAGE_NONE | PROPERTY_USAGE_CLASS_IS_ENUM,
-            "NetwEntity.ControlKind"
+            Variant::OBJECT,
+            "controller",
+            PROPERTY_HINT_RESOURCE_TYPE,
+            "NetwPlayer",
+            PROPERTY_USAGE_NONE
         ),
-        "",
-        "get_control_kind"
+        "set_controller",
+        "get_controller"
     );
 
     ClassDB::bind_method(
@@ -2528,46 +2470,6 @@ void NetwEntity::_bind_methods() {
     );
 
     ClassDB::bind_method(
-        D_METHOD("get_controller_player"),
-        &NetwEntity::get_controller_player
-    );
-    ClassDB::bind_method(
-        D_METHOD("set_controller_player", "player"),
-        &NetwEntity::set_controller_player
-    );
-    ADD_PROPERTY(
-        PropertyInfo(
-            Variant::OBJECT,
-            "controller_player",
-            PROPERTY_HINT_RESOURCE_TYPE,
-            "NetwPlayer",
-            PROPERTY_USAGE_NONE
-        ),
-        "set_controller_player",
-        "get_controller_player"
-    );
-
-    ClassDB::bind_method(
-        D_METHOD("get_action_spawn_tick"),
-        &NetwEntity::get_action_spawn_tick
-    );
-    ADD_PROPERTY(
-        PropertyInfo(Variant::INT, "action_spawn_tick"),
-        "",
-        "get_action_spawn_tick"
-    );
-
-    ClassDB::bind_method(
-        D_METHOD("get_action_requester"),
-        &NetwEntity::get_action_requester
-    );
-    ADD_PROPERTY(
-        PropertyInfo(Variant::INT, "action_requester"),
-        "",
-        "get_action_requester"
-    );
-
-    ClassDB::bind_method(
         D_METHOD("claim_control", "hold"),
         &NetwEntity::claim_control,
         DEFVAL(entity::Control::HOLD_EXCLUSIVE)
@@ -2583,7 +2485,7 @@ void NetwEntity::_bind_methods() {
             Variant::INT,
             "hold",
             PROPERTY_HINT_ENUM,
-            "None,Yieldable,Exclusive",
+            "None,Soft,Exclusive",
             PROPERTY_USAGE_NONE | PROPERTY_USAGE_CLASS_IS_ENUM,
             "NetwEntity.Hold"
         ),
@@ -2626,6 +2528,10 @@ void NetwEntity::_bind_methods() {
     );
 
     ClassDB::bind_method(D_METHOD("get_player"), &NetwEntity::get_player);
+    ClassDB::bind_method(
+        D_METHOD("set_player", "player"),
+        &NetwEntity::set_player
+    );
     ADD_PROPERTY(
         PropertyInfo(
             Variant::OBJECT,
@@ -2633,71 +2539,8 @@ void NetwEntity::_bind_methods() {
             PROPERTY_HINT_RESOURCE_TYPE,
             "NetwPlayer"
         ),
-        "",
+        "set_player",
         "get_player"
-    );
-
-    ClassDB::bind_method(D_METHOD("get_is_player"), &NetwEntity::get_is_player);
-    ADD_PROPERTY(
-        PropertyInfo(
-            Variant::BOOL,
-            "is_player",
-            PROPERTY_HINT_NONE,
-            "",
-            PROPERTY_USAGE_NONE
-        ),
-        "",
-        "get_is_player"
-    );
-
-    ClassDB::bind_method(
-        D_METHOD("get_is_template"),
-        &NetwEntity::get_is_template
-    );
-    ClassDB::bind_method(
-        D_METHOD("set_is_template", "value"),
-        &NetwEntity::set_is_template
-    );
-    ADD_PROPERTY(
-        PropertyInfo(
-            Variant::BOOL,
-            "is_template",
-            PROPERTY_HINT_NONE,
-            "",
-            PROPERTY_USAGE_NONE
-        ),
-        "set_is_template",
-        "get_is_template"
-    );
-
-    ClassDB::bind_method(D_METHOD("get_stage"), &NetwEntity::get_stage);
-    ADD_PROPERTY(
-        PropertyInfo(
-            Variant::INT,
-            "stage",
-            PROPERTY_HINT_ENUM,
-            "Unbound,Template,Armed,Live,Despawning,Lingering,Freed",
-            PROPERTY_USAGE_NONE | PROPERTY_USAGE_CLASS_IS_ENUM,
-            "NetwEntity.Stage"
-        ),
-        "",
-        "get_stage"
-    );
-
-    ClassDB::bind_method(
-        D_METHOD("get_active_despawn_opts"),
-        &NetwEntity::get_active_despawn_opts
-    );
-    ADD_PROPERTY(
-        PropertyInfo(
-            Variant::OBJECT,
-            "active_despawn_opts",
-            PROPERTY_HINT_RESOURCE_TYPE,
-            "NetwDespawnOpts",
-            PROPERTY_USAGE_NONE
-        ),
-        "",
-        "get_active_despawn_opts"
     );
 
     ClassDB::bind_method(
@@ -2803,29 +2646,6 @@ void NetwEntity::_bind_methods() {
         "get_display"
     );
 
-    ClassDB::bind_method(D_METHOD("parent_entity"), &NetwEntity::parent_entity);
-
-    ADD_SIGNAL(MethodInfo(
-        "stage_changed",
-        PropertyInfo(
-            Variant::INT,
-            "previous",
-            PROPERTY_HINT_NONE,
-            "",
-            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
-            "NetwEntity.Stage"
-        ),
-        PropertyInfo(
-            Variant::INT,
-            "current",
-            PROPERTY_HINT_NONE,
-            "",
-            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
-            "NetwEntity.Stage"
-        )
-    ));
-    ADD_SIGNAL(MethodInfo(SIG_SPAWNING));
-    ADD_SIGNAL(MethodInfo(SIG_SPAWNED));
     ADD_SIGNAL(
         MethodInfo(SIG_DESPAWNING, PropertyInfo(Variant::STRING_NAME, "reason"))
     );
@@ -2869,30 +2689,6 @@ void NetwEntity::_bind_methods() {
 
     ClassDB::bind_integer_constant(
         get_class_static(),
-        "ControlKind",
-        "CONTROL_PEER_CONTROLLED",
-        CONTROL_PEER_CONTROLLED
-    );
-    ClassDB::bind_integer_constant(
-        get_class_static(),
-        "ControlKind",
-        "CONTROL_SERVER_CONTROLLED",
-        CONTROL_SERVER_CONTROLLED
-    );
-    ClassDB::bind_integer_constant(
-        get_class_static(),
-        "InitialController",
-        "INITIAL_SERVER",
-        int(entity::Control::InitialController::SERVER)
-    );
-    ClassDB::bind_integer_constant(
-        get_class_static(),
-        "InitialController",
-        "INITIAL_PLAYER",
-        int(entity::Control::InitialController::PLAYER)
-    );
-    ClassDB::bind_integer_constant(
-        get_class_static(),
         "Authority",
         "AUTHORITY_SERVER",
         int(entity::Control::Authority::SERVER)
@@ -2930,8 +2726,8 @@ void NetwEntity::_bind_methods() {
     ClassDB::bind_integer_constant(
         get_class_static(),
         "Hold",
-        "HOLD_YIELDABLE",
-        entity::Control::HOLD_YIELDABLE
+        "HOLD_SOFT",
+        entity::Control::HOLD_SOFT
     );
     ClassDB::bind_integer_constant(
         get_class_static(),
@@ -2966,7 +2762,7 @@ void NetwEntity::_bind_methods() {
     ClassDB::bind_integer_constant(
         get_class_static(),
         "Lifecycle",
-        "LIFECYCLE_SESSION",
+        "LIFECYCLE_SERVER",
         int(entity::Control::Lifecycle::SESSION)
     );
     ClassDB::bind_integer_constant(
@@ -2974,48 +2770,6 @@ void NetwEntity::_bind_methods() {
         "Lifecycle",
         "LIFECYCLE_CONTROLLER",
         int(entity::Control::Lifecycle::CONTROLLER)
-    );
-    ClassDB::bind_integer_constant(
-        get_class_static(),
-        "Stage",
-        "STAGE_UNBOUND",
-        int(entity::Stage::UNBOUND)
-    );
-    ClassDB::bind_integer_constant(
-        get_class_static(),
-        "Stage",
-        "STAGE_TEMPLATE",
-        int(entity::Stage::TEMPLATE)
-    );
-    ClassDB::bind_integer_constant(
-        get_class_static(),
-        "Stage",
-        "STAGE_ARMED",
-        int(entity::Stage::ARMED)
-    );
-    ClassDB::bind_integer_constant(
-        get_class_static(),
-        "Stage",
-        "STAGE_LIVE",
-        int(entity::Stage::LIVE)
-    );
-    ClassDB::bind_integer_constant(
-        get_class_static(),
-        "Stage",
-        "STAGE_DESPAWNING",
-        int(entity::Stage::DESPAWNING)
-    );
-    ClassDB::bind_integer_constant(
-        get_class_static(),
-        "Stage",
-        "STAGE_LINGERING",
-        int(entity::Stage::LINGERING)
-    );
-    ClassDB::bind_integer_constant(
-        get_class_static(),
-        "Stage",
-        "STAGE_FREED",
-        int(entity::Stage::FREED)
     );
 }
 

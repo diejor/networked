@@ -72,7 +72,7 @@ netw::connect::Transport *make_silent() {
     return new SilentTransport();
 }
 
-void record_state(int64_t p_state) {
+void record_state(int64_t, int64_t p_state) {
     attempt_log().states.push_back(p_state);
 }
 
@@ -99,7 +99,7 @@ struct Bench {
         );
         core.instantiate();
         core->observe(
-            NetwMultiplayer::CONNECTION_STATE_CHANGED,
+            NetwMultiplayer::SESSION_STATE_CHANGED,
             callable_mp_static(&record_state)
         );
         core->observe(
@@ -156,8 +156,8 @@ TEST_CASE(
     NETW_CHECK_EQ(attempt_log().failed_error, int64_t(ERR_TIMEOUT));
     NETW_CHECK_EQ(attempt_log().cancelled, 1);
     NETW_CHECK_EQ(
-        bench.core->transport_get_attempt_state(),
-        int64_t(netw::connect::ATTEMPT_OFFLINE)
+        bench.core->connect_plane().attempt_state(),
+        int(netw::connect::ATTEMPT_OFFLINE)
     );
     CHECK(outcome->get_is_failed());
     NETW_CHECK_EQ(int64_t(outcome->get_code()), int64_t(ERR_TIMEOUT));
@@ -174,8 +174,8 @@ TEST_CASE(
     Bench bench;
     const Ref<NetwPromise> outcome = bench.join();
     NETW_CHECK_EQ(
-        bench.core->transport_get_attempt_state(),
-        int64_t(netw::connect::ATTEMPT_CREATING)
+        bench.core->connect_plane().attempt_state(),
+        int(netw::connect::ATTEMPT_CREATING)
     );
 
     bench.core->transport_cancel_attempt();
@@ -184,11 +184,11 @@ TEST_CASE(
     NETW_REQUIRE_EQ(int(attempt_log().states.size()), 2);
     NETW_CHECK_EQ(
         attempt_log().states[0],
-        int64_t(netw::connect::ATTEMPT_CREATING)
+        int64_t(NetwMultiplayer::SESSION_STATE_CREATING)
     );
     NETW_CHECK_EQ(
         attempt_log().states[1],
-        int64_t(netw::connect::ATTEMPT_OFFLINE)
+        int64_t(NetwMultiplayer::SESSION_STATE_OFFLINE)
     );
     CHECK(outcome->get_is_failed());
     NETW_CHECK_EQ(int64_t(outcome->get_code()), int64_t(ERR_SKIP));
@@ -220,8 +220,8 @@ TEST_CASE(
     NETW_CHECK_EQ(attempt_log().failed, 0);
     NETW_CHECK_EQ(attempt_log().built, 0);
     NETW_CHECK_EQ(
-        bench.core->transport_get_attempt_state(),
-        int64_t(netw::connect::ATTEMPT_ONLINE)
+        bench.core->connect_plane().attempt_state(),
+        int(netw::connect::ATTEMPT_ONLINE)
     );
     const bool kept = bench.core->get_multiplayer_peer() == hosting;
     CHECK(kept);

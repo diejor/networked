@@ -6,12 +6,11 @@ namespace netw::entity {
 
 enum class Stage : int {
     UNBOUND = 0,
-    TEMPLATE = 1,
-    ARMED = 2,
-    LIVE = 3,
-    DESPAWNING = 4,
-    LINGERING = 5,
-    FREED = 6,
+    ARMED = 1,
+    LIVE = 2,
+    DESPAWNING = 3,
+    LINGERING = 4,
+    FREED = 5,
 };
 
 bool stage_edge_is_legal(int64_t p_from, int64_t p_to);

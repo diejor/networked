@@ -76,10 +76,6 @@ Ref<NetwEntity> NetwScene::get_entity() const {
     return NetwEntity::of(scene_node());
 }
 
-bool NetwScene::get_is_declared() const {
-    return get_rid().is_valid() || scene_node() != nullptr;
-}
-
 Node *NetwScene::get_root() const {
     return scene_node();
 }
@@ -250,15 +246,6 @@ void NetwScene::_bind_methods() {
         ),
         "",
         "get_entity"
-    );
-    ClassDB::bind_method(
-        D_METHOD("get_is_declared"),
-        &NetwScene::get_is_declared
-    );
-    ADD_PROPERTY(
-        PropertyInfo(Variant::BOOL, "is_declared"),
-        "",
-        "get_is_declared"
     );
     ClassDB::bind_method(D_METHOD("get_root"), &NetwScene::get_root);
     ADD_PROPERTY(

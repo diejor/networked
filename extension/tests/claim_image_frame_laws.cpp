@@ -65,7 +65,7 @@ func _init() -> void:
 	Netw.configure_property(self, &"sphere_linear_velocity").broadcast()
 )";
 
-constexpr auto YIELDABLE = netw::entity::Control::HOLD_YIELDABLE;
+constexpr auto YIELDABLE = netw::entity::Control::HOLD_SOFT;
 const Vector3 PUSH(0.0, 0.0, 4.0);
 const Vector3 SIDE(4.0, 0.0, 0.0);
 constexpr int CLIENTS = 2;

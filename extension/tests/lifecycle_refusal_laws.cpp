@@ -103,7 +103,7 @@ Array body_args(const char *p_name, bool p_declared, bool p_requestable) {
     out.push_back(String(p_name));
     out.push_back(
         int(p_declared ? NetwEntity::LIFECYCLE_CONTROLLER
-                       : NetwEntity::LIFECYCLE_SESSION)
+                       : NetwEntity::LIFECYCLE_SERVER)
     );
     out.push_back(
         int(p_requestable ? NetwEntity::TRANSFER_REQUESTABLE

@@ -124,7 +124,7 @@ Properties
    +-------------------------------------------------------+--------------------------------------------------------------------------------------+-----------------------+
    | :godot:`bool`                                         | :ref:`server_relay<class_NetwMultiplayer_property_server_relay>`                     | ``true``              |
    +-------------------------------------------------------+--------------------------------------------------------------------------------------+-----------------------+
-   | :ref:`SessionState<enum_NetwSession_SessionState>`    | :ref:`state<class_NetwMultiplayer_property_state>`                                   | ``0``                 |
+   | :ref:`State<enum_NetwSession_State>`                  | :ref:`state<class_NetwMultiplayer_property_state>`                                   | ``0``                 |
    +-------------------------------------------------------+--------------------------------------------------------------------------------------+-----------------------+
 
 .. rst-class:: classref-reftable-group
@@ -726,11 +726,9 @@ Methods
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | |void|                                                              | :ref:`session_set_server_info<class_NetwMultiplayer_method_session_set_server_info>`\ (\ info\: :ref:`NetwServerInfo<class_NetwServerInfo>`\ )                                                                                                                                                                                                                                                                                                                                          |
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                                              | :ref:`session_set_state<class_NetwMultiplayer_method_session_set_state>`\ (\ state\: :ref:`SessionState<enum_NetwSession_SessionState>`\ )                                                                                                                                                                                                                                                                                                                                              |
+   | |void|                                                              | :ref:`session_set_state<class_NetwMultiplayer_method_session_set_state>`\ (\ state\: :ref:`State<enum_NetwSession_State>`\ )                                                                                                                                                                                                                                                                                                                                                            |
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                                              | :ref:`session_submit_join<class_NetwMultiplayer_method_session_submit_join>`\ (\ username\: :godot:`StringName`, args\: :godot:`Array` = []\ )                                                                                                                                                                                                                                                                                                                                          |
-   +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                                              | :ref:`session_transition<class_NetwMultiplayer_method_session_transition>`\ (\ state\: :ref:`SessionState<enum_NetwSession_SessionState>`\ )                                                                                                                                                                                                                                                                                                                                            |
+   | |void|                                                              | :ref:`session_transition<class_NetwMultiplayer_method_session_transition>`\ (\ state\: :ref:`State<enum_NetwSession_State>`\ )                                                                                                                                                                                                                                                                                                                                                          |
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | |void|                                                              | :ref:`session_unpause<class_NetwMultiplayer_method_session_unpause>`\ (\ )                                                                                                                                                                                                                                                                                                                                                                                                              |
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -817,8 +815,6 @@ Methods
    | :godot:`RID`                                                        | :ref:`transport_create_peer<class_NetwMultiplayer_method_transport_create_peer>`\ (\ transport\: :godot:`RID`, mode\: :ref:`TransportMode<enum_NetwConnection_TransportMode>`, address\: :godot:`String`, settings\: :godot:`Dictionary`, completed\: :godot:`Callable`\ )                                                                                                                                                                                                              |
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`RID`                                                        | :ref:`transport_find<class_NetwMultiplayer_method_transport_find>`\ (\ peer_class\: :godot:`StringName`\ )                                                                                                                                                                                                                                                                                                                                                                              |
-   +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`int`                                                        | :ref:`transport_get_attempt_state<class_NetwMultiplayer_method_transport_get_attempt_state>`\ (\ ) |const|                                                                                                                                                                                                                                                                                                                                                                              |
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Dictionary`                                                 | :ref:`transport_get_defaults<class_NetwMultiplayer_method_transport_get_defaults>`\ (\ transport\: :godot:`RID`\ )                                                                                                                                                                                                                                                                                                                                                                      |
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -941,7 +937,7 @@ An entity was reparented. ``detail`` has ``reason`` and ``moved``, which is ``tr
 
 :ref:`Event<enum_NetwMultiplayer_Event>` **EVENT_STAGE_TRANSITION** = ``5``
 
-An entity's :ref:`Stage<enum_NetwEntity_Stage>` changed. ``detail`` has ``from`` and ``to``.
+An entity's internal lifecycle stage changed, for debugging. ``detail`` has ``from`` and ``to``.
 
 .. _class_NetwMultiplayer_constant_EVENT_CONTROL_CHANGED:
 
@@ -3312,7 +3308,7 @@ The server answered a :ref:`clock_send_ping()<class_NetwMultiplayer_method_clock
 
 :ref:`Notification<enum_NetwMultiplayer_Notification>` **SESSION_STATE_CHANGED** = ``20``
 
-:ref:`state<class_NetwMultiplayer_property_state>` changed. The callback receives ``(old_state: int, new_state: int)``.
+The notification form of :ref:`NetwSession.state_changed<class_NetwSession_signal_state_changed>`. The callback receives ``(old_state: int, new_state: int)``.
 
 .. _class_NetwMultiplayer_constant_SESSION_JOIN_SUBMITTED:
 
@@ -3328,7 +3324,7 @@ This peer sent its join request. It does not mean the join was accepted. The cal
 
 :ref:`Notification<enum_NetwMultiplayer_Notification>` **SESSION_ENTERED** = ``22``
 
-The session became :ref:`NetwSession.SESSION_STATE_ONLINE<class_NetwSession_constant_SESSION_STATE_ONLINE>`. The callback receives no arguments.
+The session became :ref:`NetwSession.STATE_ONLINE<class_NetwSession_constant_STATE_ONLINE>`. The callback receives no arguments.
 
 .. _class_NetwMultiplayer_constant_SESSION_JOIN_FAILED:
 
@@ -3344,7 +3340,7 @@ This peer's join was rejected. Games usually use :ref:`NetwSession.join_failed<c
 
 :ref:`Notification<enum_NetwMultiplayer_Notification>` **SESSION_ENDED** = ``24``
 
-The session stopped being :ref:`NetwSession.SESSION_STATE_ONLINE<class_NetwSession_constant_SESSION_STATE_ONLINE>`. The callback receives no arguments.
+The session stopped being :ref:`NetwSession.STATE_ONLINE<class_NetwSession_constant_STATE_ONLINE>`. The callback receives no arguments.
 
 .. _class_NetwMultiplayer_constant_SESSION_RECLAIMED:
 
@@ -3546,19 +3542,11 @@ A player left or was kicked. :ref:`NetwPlayer.is_active<class_NetwPlayer_propert
 
 A scene is ready on this peer, and every node in it is in the tree and ready. The callback receives ``(scene: NetwScene)``.
 
-.. _class_NetwMultiplayer_constant_CONNECTION_STATE_CHANGED:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **CONNECTION_STATE_CHANGED** = ``50``
-
-The notification form of :ref:`NetwConnection.state_changed<class_NetwConnection_signal_state_changed>`.
-
 .. _class_NetwMultiplayer_constant_CONNECTION_PROGRESSED:
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **CONNECTION_PROGRESSED** = ``51``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **CONNECTION_PROGRESSED** = ``50``
 
 The notification form of :ref:`NetwConnection.progressed<class_NetwConnection_signal_progressed>`.
 
@@ -3566,7 +3554,7 @@ The notification form of :ref:`NetwConnection.progressed<class_NetwConnection_si
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **CONNECTION_FAILED** = ``52``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **CONNECTION_FAILED** = ``51``
 
 The notification form of :ref:`NetwConnection.failed<class_NetwConnection_signal_failed>`.
 
@@ -3574,7 +3562,7 @@ The notification form of :ref:`NetwConnection.failed<class_NetwConnection_signal
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **CONNECTION_JOIN_ADDRESS_CHANGED** = ``53``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **CONNECTION_JOIN_ADDRESS_CHANGED** = ``52``
 
 The notification form of :ref:`NetwConnection.join_address_changed<class_NetwConnection_signal_join_address_changed>`.
 
@@ -3582,7 +3570,7 @@ The notification form of :ref:`NetwConnection.join_address_changed<class_NetwCon
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **CONNECTION_INVITED** = ``54``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **CONNECTION_INVITED** = ``53``
 
 The notification form of :ref:`NetwConnection.invited<class_NetwConnection_signal_invited>`. The callback receives ``(endpoint: RID)``.
 
@@ -3754,7 +3742,7 @@ The :godot:`SceneMultiplayer` this session wraps. It owns the :godot:`Multiplaye
 
 - :godot:`bool` **get_is_online**\ (\ )
 
-``true`` when :ref:`state<class_NetwMultiplayer_property_state>` is :ref:`NetwSession.SESSION_STATE_ONLINE<class_NetwSession_constant_SESSION_STATE_ONLINE>`.
+``true`` when :ref:`state<class_NetwMultiplayer_property_state>` is :ref:`NetwSession.STATE_ONLINE<class_NetwSession_constant_STATE_ONLINE>`.
 
 .. rst-class:: classref-item-separator
 
@@ -3953,21 +3941,13 @@ Same as :godot:`SceneMultiplayer.server_relay <SceneMultiplayer#class_SceneMulti
 
 .. rst-class:: classref-property
 
-:ref:`SessionState<enum_NetwSession_SessionState>` **state** = ``0`` :ref:`🔗<class_NetwMultiplayer_property_state>`
+:ref:`State<enum_NetwSession_State>` **state** = ``0`` :ref:`🔗<class_NetwMultiplayer_property_state>`
 
 .. rst-class:: classref-property-setget
 
-- :ref:`SessionState<enum_NetwSession_SessionState>` **session_get_state**\ (\ )
+- :ref:`State<enum_NetwSession_State>` **session_get_state**\ (\ )
 
-Whether the session is connected.
-
-- :ref:`NetwSession.SESSION_STATE_OFFLINE<class_NetwSession_constant_SESSION_STATE_OFFLINE>` not connected
-
-- :ref:`NetwSession.SESSION_STATE_CONNECTING<class_NetwSession_constant_SESSION_STATE_CONNECTING>` connecting, may fail
-
-- :ref:`NetwSession.SESSION_STATE_ONLINE<class_NetwSession_constant_SESSION_STATE_ONLINE>` connected
-
-- :ref:`NetwSession.SESSION_STATE_DISCONNECTING<class_NetwSession_constant_SESSION_STATE_DISCONNECTING>` disconnecting
+Same as :ref:`NetwSession.state<class_NetwSession_property_state>`.
 
 .. rst-class:: classref-section-separator
 
@@ -5327,7 +5307,7 @@ Creates an empty entity. Give it a route with :ref:`entity_admit()<class_NetwMul
 
 :godot:`Dictionary` **entity_describe**\ (\ route\: :godot:`int`\ ) |const| :ref:`🔗<class_NetwMultiplayer_method_entity_describe>`
 
-Returns what this peer knows about the entity at ``route``, or an empty :godot:`Dictionary`. ``stage`` is a :ref:`Stage<enum_NetwEntity_Stage>` and ``liveness`` is an :ref:`EntityState<enum_NetwMultiplayer_EntityState>`.
+Returns what this peer knows about the entity at ``route``, or an empty :godot:`Dictionary`. ``stage`` is an internal lifecycle number for debugging and ``liveness`` is an :ref:`EntityState<enum_NetwMultiplayer_EntityState>`.
 
 .. code:: text
 
@@ -5467,7 +5447,7 @@ Returns the :ref:`NetwEntity<class_NetwEntity>` of ``entity``, or ``null`` once 
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **entity_grant_control**\ (\ entity\: :godot:`RID`, peer\: :godot:`int`\ ) :ref:`🔗<class_NetwMultiplayer_method_entity_grant_control>`
 
-Assigns :ref:`NetwEntity.controller<class_NetwEntity_property_controller>` on ``entity``. Returns :godot:`@GlobalScope.ERR_UNAUTHORIZED <@GlobalScope#class_@GlobalScope_constant_ERR_UNAUTHORIZED>` on a client, or :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>` when ``entity`` has no bound node.
+Gives control of ``entity`` to ``peer``. Returns :godot:`@GlobalScope.ERR_UNAUTHORIZED <@GlobalScope#class_@GlobalScope_constant_ERR_UNAUTHORIZED>` on a client, or :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>` when ``entity`` has no bound node.
 
 .. rst-class:: classref-item-separator
 
@@ -7886,7 +7866,7 @@ Returns ``true`` when :godot:`SceneTree.get_multiplayer() <SceneTree#class_Scene
 
 :ref:`NetwPromise<class_NetwPromise>` **session_leave**\ (\ ) :ref:`🔗<class_NetwMultiplayer_method_session_leave>`
 
-Disconnects and returns to :ref:`NetwSession.SESSION_STATE_OFFLINE<class_NetwSession_constant_SESSION_STATE_OFFLINE>`. On the server, it saves every persistent entity first, and a failed save keeps the session online. The promise resolves with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>` within three seconds.
+Disconnects and returns to :ref:`NetwSession.STATE_OFFLINE<class_NetwSession_constant_STATE_OFFLINE>`. On the server, it saves every persistent entity first, and a failed save keeps the session online. The promise resolves with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>` once the peer is closed.
 
 ::
 
@@ -7930,7 +7910,7 @@ Pauses the game on every peer, which notifies :ref:`SESSION_TREE_PAUSED<class_Ne
 
 :ref:`NetwPromise<class_NetwPromise>` **session_prepare_join**\ (\ username\: :godot:`StringName`, args\: :godot:`Array` = []\ ) :ref:`🔗<class_NetwMultiplayer_method_session_prepare_join>`
 
-Sets the join request sent when :godot:`MultiplayerAPI.multiplayer_peer <MultiplayerAPI#class_MultiplayerAPI_property_multiplayer_peer>` connects. A server sends it at :ref:`session_submit_join()<class_NetwMultiplayer_method_session_submit_join>`. The promise result is an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`.
+Sets the join request sent when :godot:`MultiplayerAPI.multiplayer_peer <MultiplayerAPI#class_MultiplayerAPI_property_multiplayer_peer>` connects. The promise result is an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>`.
 
 ::
 
@@ -8014,23 +7994,9 @@ Sets the :ref:`NetwServerInfo<class_NetwServerInfo>` this host shows in server b
 
 .. rst-class:: classref-method
 
-|void| **session_set_state**\ (\ state\: :ref:`SessionState<enum_NetwSession_SessionState>`\ ) :ref:`🔗<class_NetwMultiplayer_method_session_set_state>`
+|void| **session_set_state**\ (\ state\: :ref:`State<enum_NetwSession_State>`\ ) :ref:`🔗<class_NetwMultiplayer_method_session_set_state>`
 
-Sets :ref:`state<class_NetwMultiplayer_property_state>` without checking the change is allowed, and notifies :ref:`SESSION_STATE_CHANGED<class_NetwMultiplayer_constant_SESSION_STATE_CHANGED>`. Prefer :ref:`session_transition()<class_NetwMultiplayer_method_session_transition>`.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwMultiplayer_method_session_submit_join:
-
-.. rst-class:: classref-method
-
-|void| **session_submit_join**\ (\ username\: :godot:`StringName`, args\: :godot:`Array` = []\ ) :ref:`🔗<class_NetwMultiplayer_method_session_submit_join>`
-
-Sends the local player's join request now. It replaces one from :ref:`session_prepare_join()<class_NetwMultiplayer_method_session_prepare_join>`. An empty ``username`` sends nothing.
-
-\ **Player request.**
+Sets :ref:`state<class_NetwMultiplayer_property_state>` without checking the change is allowed, and notifies :ref:`SESSION_STATE_CHANGED<class_NetwMultiplayer_constant_SESSION_STATE_CHANGED>`. Prefer :ref:`session_transition()<class_NetwMultiplayer_method_session_transition>`. :ref:`NetwSession.STATE_CREATING<class_NetwSession_constant_STATE_CREATING>` is refused with an error.
 
 .. rst-class:: classref-item-separator
 
@@ -8040,9 +8006,9 @@ Sends the local player's join request now. It replaces one from :ref:`session_pr
 
 .. rst-class:: classref-method
 
-|void| **session_transition**\ (\ state\: :ref:`SessionState<enum_NetwSession_SessionState>`\ ) :ref:`🔗<class_NetwMultiplayer_method_session_transition>`
+|void| **session_transition**\ (\ state\: :ref:`State<enum_NetwSession_State>`\ ) :ref:`🔗<class_NetwMultiplayer_method_session_transition>`
 
-Changes :ref:`state<class_NetwMultiplayer_property_state>` and notifies :ref:`SESSION_STATE_CHANGED<class_NetwMultiplayer_constant_SESSION_STATE_CHANGED>`. A change that is not allowed pushes an error and does nothing.
+Changes :ref:`state<class_NetwMultiplayer_property_state>` and notifies :ref:`SESSION_STATE_CHANGED<class_NetwMultiplayer_constant_SESSION_STATE_CHANGED>`. A change that is not allowed, or :ref:`NetwSession.STATE_CREATING<class_NetwSession_constant_STATE_CREATING>`, pushes an error and does nothing.
 
 .. rst-class:: classref-item-separator
 
@@ -8677,18 +8643,6 @@ Returns the transport that creates ``peer_class`` peers, or an invalid :godot:`R
 
     var enet := api.transport_find(&"ENetMultiplayerPeer")
     api.transport_host(enet, {port = 21253})
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwMultiplayer_method_transport_get_attempt_state:
-
-.. rst-class:: classref-method
-
-:godot:`int` **transport_get_attempt_state**\ (\ ) |const| :ref:`🔗<class_NetwMultiplayer_method_transport_get_attempt_state>`
-
-The flat form of :ref:`NetwConnection.state<class_NetwConnection_property_state>`.
 
 .. rst-class:: classref-item-separator
 

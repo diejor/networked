@@ -121,7 +121,7 @@ Methods
    +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | |void| | :ref:`on_endpoint_removed<class_ConnectBrowser_method_on_endpoint_removed>`\ (\ endpoint\: :ref:`NetwEndpoint<class_NetwEndpoint>`\ )                                                                                                                                     |
    +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void| | :ref:`on_state_changed<class_ConnectBrowser_method_on_state_changed>`\ (\ state\: :ref:`State<enum_NetwConnection_State>`\ )                                                                                                                                              |
+   | |void| | :ref:`on_state_changed<class_ConnectBrowser_method_on_state_changed>`\ (\ state\: :ref:`State<enum_NetwSession_State>`\ )                                                                                                                                                 |
    +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | |void| | :ref:`on_progressed<class_ConnectBrowser_method_on_progressed>`\ (\ message\: :godot:`String`, ratio\: :godot:`float`\ )                                                                                                                                                  |
    +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -591,7 +591,7 @@ Method Descriptions
 
 .. rst-class:: classref-method
 
-|void| **on_state_changed**\ (\ state\: :ref:`State<enum_NetwConnection_State>`\ ) :ref:`🔗<class_ConnectBrowser_method_on_state_changed>`
+|void| **on_state_changed**\ (\ state\: :ref:`State<enum_NetwSession_State>`\ ) :ref:`🔗<class_ConnectBrowser_method_on_state_changed>`
 
 .. container:: contribute
 

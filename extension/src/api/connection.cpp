@@ -16,7 +16,6 @@ namespace {
 const char *SIG_ENDPOINT_ADDED = "endpoint_added";
 const char *SIG_ENDPOINT_REMOVED = "endpoint_removed";
 const char *SIG_ENDPOINT_CHANGED = "changed";
-const char *SIG_STATE_CHANGED = "state_changed";
 const char *SIG_PROGRESSED = "progressed";
 const char *SIG_FAILED = "failed";
 const char *SIG_JOIN_ADDRESS_CHANGED = "join_address_changed";
@@ -38,11 +37,10 @@ void NetwConnection::bind_session(NetwMultiplayer *p_session) {
     }
 }
 
-void NetwConnection::announce_state_changed(int64_t p_state) {
-    if (p_state != STATE_ONLINE) {
+void NetwConnection::announce_attempt_moved(int64_t p_state) {
+    if (p_state != connect::ATTEMPT_ONLINE) {
         current_endpoint.unref();
     }
-    emit_signal(StringName(SIG_STATE_CHANGED), p_state);
 }
 
 void NetwConnection::announce_progressed(
@@ -151,11 +149,6 @@ void NetwConnection::cancel_peer_creation(const RID &p_ticket) {
     }
 }
 
-NetwConnection::State NetwConnection::get_state() const {
-    NetwMultiplayer *api = session();
-    return api != nullptr ? State(api->transport_get_attempt_state())
-                          : STATE_OFFLINE;
-}
 
 Ref<NetwPromise> NetwConnection::join(
     const Ref<NetwEndpoint> &p_endpoint,
@@ -478,10 +471,6 @@ double NetwConnection::get_probe_interval() const {
 }
 
 void NetwConnection::_bind_methods() {
-    BIND_ENUM_CONSTANT(STATE_OFFLINE);
-    BIND_ENUM_CONSTANT(STATE_CREATING);
-    BIND_ENUM_CONSTANT(STATE_CONNECTING);
-    BIND_ENUM_CONSTANT(STATE_ONLINE);
     BIND_ENUM_CONSTANT(TRANSPORT_MODE_HOST);
     BIND_ENUM_CONSTANT(TRANSPORT_MODE_CLIENT);
     BIND_ENUM_CONSTANT(TRANSPORT_AVAILABLE);
@@ -504,7 +493,6 @@ void NetwConnection::_bind_methods() {
         D_METHOD("cancel_peer_creation", "ticket"),
         &NetwConnection::cancel_peer_creation
     );
-    ClassDB::bind_method(D_METHOD("get_state"), &NetwConnection::get_state);
     ClassDB::bind_method(
         D_METHOD("join", "endpoint", "settings"),
         &NetwConnection::join,
@@ -590,17 +578,6 @@ void NetwConnection::_bind_methods() {
     );
 
     ADD_SIGNAL(MethodInfo(
-        SIG_STATE_CHANGED,
-        PropertyInfo(
-            Variant::INT,
-            "state",
-            PROPERTY_HINT_NONE,
-            "",
-            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
-            "NetwConnection.State"
-        )
-    ));
-    ADD_SIGNAL(MethodInfo(
         SIG_PROGRESSED,
         PropertyInfo(Variant::STRING, "message"),
         PropertyInfo(Variant::FLOAT, "ratio")
@@ -630,18 +607,6 @@ void NetwConnection::_bind_methods() {
             "NetwEndpoint"
         )
     ));
-    ADD_PROPERTY(
-        PropertyInfo(
-            Variant::INT,
-            "state",
-            PROPERTY_HINT_NONE,
-            "",
-            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
-            "NetwConnection.State"
-        ),
-        "",
-        "get_state"
-    );
     ADD_SIGNAL(MethodInfo(
         SIG_ENDPOINT_ADDED,
         PropertyInfo(
