@@ -1,4 +1,4 @@
-name: Deploy Bomber Discord Activity
+name: Deploy Discord Activity Smoke
 
 on:
   workflow_run:
@@ -50,7 +50,7 @@ jobs:
 
       - uses: ./.github/actions/export-web-demo
         with:
-          scene: uid://3a3852p4fypv
+          scene: uid://njuj0gh6v1ku
           out: build/web
           run-id: ${{ needs.resolve.outputs.run-id }}
           expect-sha: ${{ needs.resolve.outputs.sha }}

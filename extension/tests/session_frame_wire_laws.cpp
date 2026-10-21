@@ -21,7 +21,7 @@ AcceptFrame row_of(int64_t p_peer, const char *p_name) {
 }
 
 TEST_CASE(
-    "[Networked][Session][Hosted] SW1 the join transcribed from WIRE.md 9.11 "
+    "[Networked][Session][Hosted] SW1 the join transcribed from WIRE.md 16 "
     "packs to the bytes tools/wire_decode.py holds it to"
 ) {
     JoinFrame frame;
@@ -29,10 +29,10 @@ TEST_CASE(
     frame.peer_id = 4;
     const PackedByteArray bytes = netw::session::frame_write(frame);
 
-    REQUIRE(bytes.size() == 40);
+    REQUIRE(bytes.size() == 42);
     NETW_CHECK_EQ(bytes[0], 0x03);
     NETW_CHECK_EQ(bytes[2], uint8_t('a'));
-    NETW_CHECK_EQ(bytes[15], 0x08);
+    NETW_CHECK_EQ(bytes[17], 0x08);
 }
 
 TEST_CASE(
@@ -97,14 +97,14 @@ TEST_CASE(
         = table.find_channel_by_name(StringName("SESSION_ROSTER"));
     REQUIRE(accept != nullptr);
     REQUIRE(roster != nullptr);
-    NETW_CHECK_EQ(int(accept->payload_revision), 1);
-    NETW_CHECK_EQ(int(roster->payload_revision), 1);
+    NETW_CHECK_EQ(int(accept->payload_revision), 3);
+    NETW_CHECK_EQ(int(roster->payload_revision), 3);
 
     netw::wire::WireRegistry older = netw::wire::WireRegistry::create_default();
     netw::wire::ChannelDecl unrevised_accept = *accept;
     netw::wire::ChannelDecl unrevised_roster = *roster;
-    unrevised_accept.payload_revision = 0;
-    unrevised_roster.payload_revision = 0;
+    unrevised_accept.payload_revision = 2;
+    unrevised_roster.payload_revision = 2;
     REQUIRE(older.register_channel(unrevised_accept));
     REQUIRE(older.register_channel(unrevised_roster));
 

@@ -83,6 +83,9 @@ public:
         return godot::String();
     }
     virtual godot::Dictionary diagnostics(int64_t p_peer_id) const;
+    virtual godot::String server_identity(int64_t p_peer_id) const {
+        return godot::String();
+    }
     virtual double timeout_hint() const {
         return 5.0;
     }

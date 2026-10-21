@@ -6,8 +6,12 @@
 
 namespace netw::auth {
 
-inline constexpr uint8_t PROTOCOL_VERSION = 4;
+inline constexpr uint8_t PROTOCOL_VERSION = 5;
 inline constexpr int HELLO_HEADER_LEN = 14;
+inline constexpr int HELLO_PROOF_CAPABLE = 1;
+inline constexpr int HELLO_PROOF_CHALLENGE = 2;
+inline constexpr int CHALLENGE_BYTES = 16;
+inline constexpr int CHALLENGE_LENGTH = 32;
 inline constexpr int PROBE_HEADER_LEN = 6;
 
 enum class Kind : int {
@@ -76,5 +80,10 @@ godot::PackedByteArray encode_probe_reply(
 );
 
 ProbeReply decode_probe_reply(const godot::PackedByteArray &p_data);
+
+godot::String bind_challenge(
+    const godot::String &p_challenge,
+    const godot::String &p_server_identity
+);
 
 } // namespace netw::auth

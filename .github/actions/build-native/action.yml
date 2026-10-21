@@ -99,13 +99,26 @@ runs:
         test -d "$ndk/toolchains/llvm/prebuilt"
         echo "ANDROID_NDK_ROOT=$ndk" >> "$GITHUB_ENV"
 
+    # A library built on a newer image can need a newer glibc, so a cache
+    # entry never crosses images.
+    - name: Name The Runner Image
+      id: image
+      shell: bash
+      run: |
+        set -eu
+        image="${ImageOS:-}"
+        if [ -z "$image" ] && [ -r /etc/os-release ]; then
+          image="$(. /etc/os-release && echo "${ID:-}${VERSION_ID:-}")"
+        fi
+        echo "name=${image:-$RUNNER_OS}" >> "$GITHUB_OUTPUT"
+
     - name: Cache Native Dependencies
       uses: actions/cache@v4
       with:
         path: extension/thirdparty
         key: >-
-          extension-thirdparty-${{ runner.os }}-${{ inputs.suffix }}-${{
-            hashFiles('extension/deps.env') }}-${{
+          extension-thirdparty-${{ steps.image.outputs.name }}-${{
+            inputs.suffix }}-${{ hashFiles('extension/deps.env') }}-${{
             hashFiles('ci/platforms.json') }}
 
     - name: Cache SCons Objects
@@ -113,11 +126,11 @@ runs:
       with:
         path: .scons_cache
         key: >-
-          scons-cache-${{ runner.os }}-${{ inputs.suffix }}-${{
+          scons-cache-${{ steps.image.outputs.name }}-${{ inputs.suffix }}-${{
             inputs.scons-args }}-${{ hashFiles('extension/deps.env') }}-${{
             github.sha }}
         restore-keys: >-
-          scons-cache-${{ runner.os }}-${{ inputs.suffix }}-${{
+          scons-cache-${{ steps.image.outputs.name }}-${{ inputs.suffix }}-${{
             inputs.scons-args }}-${{ hashFiles('extension/deps.env') }}-
 
     - name: Build The Cell

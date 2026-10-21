@@ -50,6 +50,10 @@ Properties
    +---------------------------------------------+---------------------------------------------------------------+
    | :ref:`NetwServerInfo<class_NetwServerInfo>` | :ref:`info<class_NetwEndpoint_property_info>`                 |
    +---------------------------------------------+---------------------------------------------------------------+
+   | :godot:`String`                             | :ref:`invited_by<class_NetwEndpoint_property_invited_by>`     |
+   +---------------------------------------------+---------------------------------------------------------------+
+   | :godot:`bool`                               | :ref:`is_invited<class_NetwEndpoint_property_is_invited>`     |
+   +---------------------------------------------+---------------------------------------------------------------+
    | :godot:`bool`                               | :ref:`is_listed<class_NetwEndpoint_property_is_listed>`       |
    +---------------------------------------------+---------------------------------------------------------------+
    | :godot:`StringName`                         | :ref:`peer_class<class_NetwEndpoint_property_peer_class>`     |
@@ -86,7 +90,7 @@ Signals
 
 **changed**\ (\ ) :ref:`🔗<class_NetwEndpoint_signal_changed>`
 
-Emitted after the row is probed or listed again.
+Emitted when server information or the invitation changes.
 
 .. rst-class:: classref-section-separator
 
@@ -203,6 +207,38 @@ The server name shown in a server browser.
 - :ref:`NetwServerInfo<class_NetwServerInfo>` **get_info**\ (\ )
 
 What the server last advertised, or a default :ref:`NetwServerInfo<class_NetwServerInfo>` before it answers.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwEndpoint_property_invited_by:
+
+.. rst-class:: classref-property
+
+:godot:`String` **invited_by** :ref:`🔗<class_NetwEndpoint_property_invited_by>`
+
+.. rst-class:: classref-property-setget
+
+- :godot:`String` **get_invited_by**\ (\ )
+
+The sender's display name while :ref:`is_invited<class_NetwEndpoint_property_is_invited>`, or ``""`` when no name was supplied.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwEndpoint_property_is_invited:
+
+.. rst-class:: classref-property
+
+:godot:`bool` **is_invited** :ref:`🔗<class_NetwEndpoint_property_is_invited>`
+
+.. rst-class:: classref-property-setget
+
+- :godot:`bool` **get_is_invited**\ (\ )
+
+``true`` after :ref:`NetwConnection.invite()<class_NetwConnection_method_invite>`. Cleared when joining this server reaches :ref:`NetwConnection.STATE_ONLINE<class_NetwConnection_constant_STATE_ONLINE>` or the row is removed.
 
 .. rst-class:: classref-item-separator
 

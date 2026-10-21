@@ -144,4 +144,13 @@ ProbeReply decode_probe_reply(const PackedByteArray &p_data) {
     return decoded;
 }
 
+String bind_challenge(
+    const String &p_challenge,
+    const String &p_server_identity
+) {
+    return p_server_identity.is_empty()
+        ? p_challenge
+        : (p_challenge + p_server_identity).sha256_text();
+}
+
 } // namespace netw::auth

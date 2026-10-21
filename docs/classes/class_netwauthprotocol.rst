@@ -19,7 +19,7 @@ Reads and writes the packets Networked sends during :godot:`SceneMultiplayer` au
 Description
 -----------
 
-A packet starts with four bytes that say what it is. A joining player sends ``"NHEL"``, then a version byte, an 8-byte build tag, a flags byte, and the game's own authentication data. A server browser sends ``"NPRB"``, then a version byte and a flags or status byte, and the reply follows.
+A packet starts with four bytes that say what it is. A joining player sends ``"NHEL"``, then a version byte, an 8-byte build tag, a flags byte, and optional authentication data. :ref:`NetwAdmissionConfig<class_NetwAdmissionConfig>` uses a server reply carrying a random challenge. A server browser sends ``"NPRB"``, then a version byte and a flags or status byte, and the reply follows.
 
 A server browser gets its reply and is disconnected, so it never appears in the :godot:`MultiplayerAPI`.
 

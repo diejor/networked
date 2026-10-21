@@ -26,10 +26,6 @@ void NetwService::set_transport_restricted_probe(const Callable &p_probe) {
     restricted_probe() = p_probe;
 }
 
-Callable NetwService::get_transport_restricted_probe() {
-    return restricted_probe();
-}
-
 bool NetwService::is_transport_restricted() {
     const Callable &probe = restricted_probe();
     return probe.is_valid() && bool(probe.call());
@@ -145,11 +141,6 @@ void NetwService::_bind_methods() {
         "NetwService",
         D_METHOD("set_transport_restricted_probe", "probe"),
         &NetwService::set_transport_restricted_probe
-    );
-    ClassDB::bind_static_method(
-        "NetwService",
-        D_METHOD("get_transport_restricted_probe"),
-        &NetwService::get_transport_restricted_probe
     );
     ClassDB::bind_static_method(
         "NetwService",

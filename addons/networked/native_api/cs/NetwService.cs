@@ -76,28 +76,6 @@ public class NetwService : NetwNode
         answered.Dispose();
     }
 
-    private static readonly IntPtr _bindGetTransportRestrictedProbe =
-        NetwApi.MethodBind(
-            "NetwService",
-            "get_transport_restricted_probe",
-            2136241257UL);
-
-    /// <summary>
-    /// Returns the <see cref="Callable"/> from
-    /// <see cref="NetwService.SetTransportRestrictedProbe"/>.
-    /// </summary>
-    public static Callable GetTransportRestrictedProbe()
-    {
-        godot_variant answered = default;
-        NetwThunks.Call0(
-            _bindGetTransportRestrictedProbe,
-            IntPtr.Zero,
-            ref answered);
-        Callable result = VariantUtils.ConvertToCallable(answered);
-        answered.Dispose();
-        return result;
-    }
-
     private static readonly IntPtr _bindIsTransportRestricted =
         NetwApi.MethodBind(
             "NetwService",

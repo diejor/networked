@@ -6,6 +6,7 @@
 [ext_resource type="PackedScene" uid="uid://bqi7mvxdnvgch" path="res://examples/multiple_levels/game/level1.tscn" id="17_level1"]
 [ext_resource type="PackedScene" uid="uid://cthf7wjwb4n77" path="res://examples/multiple_levels/game/level2.tscn" id="18_level2"]
 [ext_resource type="PackedScene" uid="uid://bo5hexvshy77x" path="res://examples/multiple_levels/game/player.tscn" id="19_avatar"]
+[ext_resource type="PackedScene" uid="uid://cdiscordpanel" path="res://examples/shared/discord_panel.tscn" id="20_discord"]
 
 [node name="Main" type="Node2D" unique_id=1724093845]
 script = ExtResource("16_session")
@@ -27,5 +28,7 @@ avatar = ExtResource("19_avatar")
 
 [node name="TitleLabel" parent="CanvasLayer/ConnectBrowser/VBox/PanelContainer/HeaderBar" parent_id_path=PackedInt32Array(802878944, 522198391) index="1" unique_id=1146132509]
 text = "Multiple Levels Demo"
+
+[node name="DiscordPanel" parent="." instance=ExtResource("20_discord")]
 
 [editable path="CanvasLayer/ConnectBrowser"]

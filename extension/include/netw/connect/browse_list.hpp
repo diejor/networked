@@ -22,6 +22,8 @@ struct TargetRow {
     godot::Ref<NetwServerInfo> info;
     bool observed = false;
     bool invited = false;
+    bool invite_pending = false;
+    godot::String invited_by;
     double next_probe = 0.0;
     bool probing = false;
 };

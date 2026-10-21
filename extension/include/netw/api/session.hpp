@@ -55,6 +55,7 @@ public:
     godot::TypedArray<NetwPlayer> get_players() const;
     godot::Ref<NetwPlayer> get_local_player() const;
     godot::Ref<NetwPlayer> player_of(int64_t p_peer) const;
+    godot::Ref<NetwPlayer> find_player(const godot::String &p_account) const;
     godot::Variant bucket_of(
         int64_t p_peer,
         const godot::Variant &p_type

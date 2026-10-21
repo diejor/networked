@@ -1,0 +1,20 @@
+[gd_scene format=3 uid="uid://cdiscordpanel"]
+
+[ext_resource type="Script" path="res://addons/networked_discord/discord_social.gd" id="2_social"]
+[ext_resource type="PackedScene" path="res://addons/networked_discord/ui/discord_panel.tscn" id="3_ui"]
+
+[node name="DiscordPanel" type="CanvasLayer"]
+
+[node name="DiscordSocial" type="NetwService" parent="."]
+script = ExtResource("2_social")
+application_id = 1561180909464592384
+
+[node name="Panel" parent="." instance=ExtResource("3_ui")]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -360.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = 56.0
+grow_horizontal = 0

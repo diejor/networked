@@ -183,25 +183,6 @@ func test_dedicated_rendezvous_finds_its_room() -> void:
 	).is_equal(1)
 
 
-func test_nakama_auth_admits_only_the_attested_username() -> void:
-	var auth := bound_nakama_auth("nk-user-1", "Diego")
-	assert_int(auth.admit(2, &"Diego", [])).is_equal(OK)
-	assert_int(auth.admit(2, &"Mallory", [])).is_equal(ERR_UNAUTHORIZED)
-
-	auth = bound_nakama_auth("", "")
-	assert_int(auth.admit(2, &"Diego", [])).is_equal(ERR_UNAUTHORIZED)
-
-	var tree := MultiplayerViewport.new()
-	auto_free(tree)
-	add_child(tree)
-	var bare := NakamaAuth.new()
-	tree.add_child(bare)
-	assert_int(bare.admit(2, &"Diego", [])).is_equal(ERR_UNAVAILABLE)
-	assert_int(
-		await _ERROR_SCRUBBER.erase_matching(["NakamaAuth refused a join"]),
-	).is_equal(1)
-
-
 func test_nakama_session_configure_flow() -> void:
 	var nakama_session := NakamaSessionService.new()
 	auto_free(nakama_session)
@@ -227,38 +208,3 @@ func build_service(rendezvous: DiscordRendezvous) -> NetwTestDiscordService:
 	auto_free(tree)
 	add_child(tree)
 	return service
-
-
-func bound_nakama_auth(
-		attested_uid: String,
-		attested_username: String,
-) -> NakamaAuth:
-	var tree := MultiplayerViewport.new()
-	var dir := NakamaLobbyDirectory.new()
-	var wrapper := _FakeNakamaWrapper.new()
-	auto_free(tree)
-	auto_free(dir)
-	add_child(tree)
-	tree.add_child(dir)
-	Netw.session(tree).register_service(dir)
-	dir._wrapper = wrapper
-	wrapper.attested_user_id = attested_uid
-	wrapper.attested_username = attested_username
-	var auth := NakamaAuth.new()
-	tree.add_child(auth)
-	return auth
-
-
-class _FakeNakamaWrapper:
-	extends NakamaWrapper
-
-	var attested_user_id := ""
-	var attested_username := ""
-
-
-	func user_id_for_peer(_peer_id: int) -> String:
-		return attested_user_id
-
-
-	func username_for_peer(_peer_id: int) -> String:
-		return attested_username

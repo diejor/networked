@@ -55,6 +55,20 @@
 				The database declared as [param name] with [method Netw.configure_database], or [code]null[/code] when there is none.
 			</description>
 		</method>
+		<method name="find_player" qualifiers="const">
+			<return type="NetwPlayer" />
+			<param index="0" name="account" type="String" />
+			<description>
+				The [NetwPlayer] with [member NetwPlayer.account] equal to [param account], or [code]null[/code]. It answers a player currently in the session, so an admission handler can kick a player already signed in with that account. A client knows only its own account, so on a client it answers the local player or [code]null[/code].
+				[codeblock]
+				func admit(request: NetwJoinRequest) -&gt; Error:
+				    var signed_in := session.find_player(request.account)
+				    if signed_in != null:
+				        session.kick(signed_in, "Signed in somewhere else.")
+				    return OK
+				[/codeblock]
+			</description>
+		</method>
 		<method name="find_scene">
 			<return type="NetwScene" />
 			<param index="0" name="label" type="StringName" />
@@ -216,7 +230,7 @@
 			The [NetwPlayer] of this peer, [code]null[/code] until [signal local_joined].
 		</member>
 		<member name="players" type="NetwPlayer[]" setter="" getter="get_players">
-			Every [NetwPlayer] that has joined, including those whose peer has since disconnected. See [member NetwMultiplayer.connected_players] for only the connected ones.
+			Every [NetwPlayer] whose join was accepted and who has not left, sorted by peer id. A leaving player is already gone from it when [signal player_left] is emitted, while [member NetwMultiplayer.connected_players] still holds that player then.
 		</member>
 		<member name="role" type="int" setter="" getter="get_role" enum="NetwSession.Role">
 			What this peer is in the session.

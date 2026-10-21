@@ -45,6 +45,13 @@
 	<tutorials>
 	</tutorials>
 	<methods>
+		<method name="_account_of" qualifiers="virtual">
+			<return type="String" />
+			<param index="0" name="peer_id" type="int" />
+			<description>
+				Returns the account verified for [param peer_id] by this transport, with a provider prefix such as [code]"steam:"[/code]. Empty when no account is verified. Supplies [member NetwJoinRequest.identities] when this [LobbyDirectory] serves the connected [MultiplayerPeer].
+			</description>
+		</method>
 		<method name="_client_settings" qualifiers="virtual">
 			<return type="Dictionary" />
 			<description>

@@ -100,6 +100,8 @@ Methods
    :widths: auto
 
    +---------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`String`     | :ref:`_account_of<class_LobbyDirectory_private_method__account_of>`\ (\ peer_id\: :godot:`int`\ ) |virtual|                                                                                                                  |
+   +---------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Dictionary` | :ref:`_client_settings<class_LobbyDirectory_private_method__client_settings>`\ (\ ) |virtual|                                                                                                                                |
    +---------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | |void|              | :ref:`_host_lobby<class_LobbyDirectory_private_method__host_lobby>`\ (\ settings\: :godot:`Dictionary`\ ) |virtual|                                                                                                          |
@@ -422,6 +424,18 @@ The :ref:`Capability<enum_LobbyDirectory_Capability>` flags this directory suppo
 
 Method Descriptions
 -------------------
+
+.. _class_LobbyDirectory_private_method__account_of:
+
+.. rst-class:: classref-method
+
+:godot:`String` **_account_of**\ (\ peer_id\: :godot:`int`\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__account_of>`
+
+Returns the account verified for ``peer_id`` by this transport, with a provider prefix such as ``"steam:"``. Empty when no account is verified. Supplies :ref:`NetwJoinRequest.identities<class_NetwJoinRequest_property_identities>` when this **LobbyDirectory** serves the connected :godot:`MultiplayerPeer`.
+
+.. rst-class:: classref-item-separator
+
+----
 
 .. _class_LobbyDirectory_private_method__client_settings:
 

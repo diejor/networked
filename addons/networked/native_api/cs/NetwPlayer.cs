@@ -9,12 +9,12 @@ namespace Networked;
 /// A player whose join was accepted.
 /// </summary>
 /// <remarks>
-/// The session creates one <see cref="NetwPlayer"/> when it accepts a join, and
-/// always returns the same object for it, so it can be compared with <c>==</c>
-/// and used as a <see cref="Godot.Collections.Dictionary"/> key. A connected
-/// peer that has not joined has none.
+/// The session creates one <see cref="NetwPlayer"/> when it accepts a join and
+/// keeps that object until the player leaves, so it can be compared with
+/// <c>==</c> and used as a <see cref="Godot.Collections.Dictionary"/> key. A
+/// connected peer that has not joined has none.
 /// <code>
-/// var player := Netw.of(self).peer_get_player(peer_id)
+/// var player := session.player_of(peer_id)
 /// greet(player.username)
 /// for entity: NetwEntity in player.entities:
 ///     follow(entity.owner)
@@ -22,7 +22,23 @@ namespace Networked;
 /// <para>
 /// A player is not a peer. After the player leaves,
 /// <see cref="NetwPlayer.IsActive"/> is <c>false</c>, even if a new player
-/// connects with the same <see cref="NetwPlayer.PeerId"/>.
+/// connects with the same <see cref="NetwPlayer.PeerId"/>. Every join is a new
+/// player, including a join with an <see cref="NetwPlayer.Account"/> that
+/// joined before. A game that wants to recognise a returning player keys its
+/// own data by <see cref="NetwPlayer.Account"/> on the server, which is empty
+/// for a guest.
+/// <code>
+/// var scores := {}
+///
+/// func on_player_joined(player: NetwPlayer) -&gt; void:
+///     if player.account != "" and not scores.has(player.account):
+///         scores[player.account] = 0
+/// </code>
+/// </para>
+/// <para>
+/// <see cref="NetwPlayer.Account"/> reaches only the server and the player's
+/// own peer. Every other peer reads it empty and still reads
+/// <see cref="NetwPlayer.AccountName"/>.
 /// </para>
 /// </remarks>
 public sealed class NetwPlayer : NetwRefCounted
@@ -119,6 +135,47 @@ public sealed class NetwPlayer : NetwRefCounted
             godot_variant answered = default;
             NetwThunks.Call0(_bindGetUserName, Checked, ref answered);
             StringName result = VariantUtils.ConvertToStringName(answered);
+            answered.Dispose();
+            return result;
+        }
+    }
+
+    private static readonly IntPtr _bindGetAccount =
+        NetwApi.MethodBind("NetwPlayer", "get_account", 201670096UL);
+
+    /// <summary>
+    /// The account <see cref="Netw.ConfigureAdmission"/> assigned to
+    /// <see cref="NetwJoinRequest.Account"/>, such as
+    /// <c>"steam:76561198000000000"</c>. Empty for a guest, and empty for
+    /// another player on a client.
+    /// </summary>
+    public string Account
+    {
+        get
+        {
+            godot_variant answered = default;
+            NetwThunks.Call0(_bindGetAccount, Checked, ref answered);
+            string result = VariantUtils.ConvertToString(answered);
+            answered.Dispose();
+            return result;
+        }
+    }
+
+    private static readonly IntPtr _bindGetAccountName =
+        NetwApi.MethodBind("NetwPlayer", "get_account_name", 201670096UL);
+
+    /// <summary>
+    /// The display name admission verified with
+    /// <see cref="NetwPlayer.Account"/>. Every peer reads it. Empty for a
+    /// guest.
+    /// </summary>
+    public string AccountName
+    {
+        get
+        {
+            godot_variant answered = default;
+            NetwThunks.Call0(_bindGetAccountName, Checked, ref answered);
+            string result = VariantUtils.ConvertToString(answered);
             answered.Dispose();
             return result;
         }

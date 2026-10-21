@@ -72,7 +72,7 @@ public sealed class NetwEndpoint : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted after the row is probed or listed again.
+    /// Emitted when server information or the invitation changes.
     /// </summary>
     public event Action Changed
     {
@@ -209,6 +209,43 @@ public sealed class NetwEndpoint : NetwRefCounted
             byte answered = default;
             NetwThunks.Ptrcall0_Byte(_bindGetIsListed, Checked, ref answered);
             return answered != 0;
+        }
+    }
+
+    private static readonly IntPtr _bindGetIsInvited =
+        NetwApi.MethodBind("NetwEndpoint", "get_is_invited", 36873697UL);
+
+    /// <summary>
+    /// <c>true</c> after <see cref="NetwConnection.Invite"/>. Cleared when
+    /// joining this server reaches
+    /// <see cref="NetwConnection.StateEnum.Online"/> or the row is removed.
+    /// </summary>
+    public bool IsInvited
+    {
+        get
+        {
+            byte answered = default;
+            NetwThunks.Ptrcall0_Byte(_bindGetIsInvited, Checked, ref answered);
+            return answered != 0;
+        }
+    }
+
+    private static readonly IntPtr _bindGetInvitedBy =
+        NetwApi.MethodBind("NetwEndpoint", "get_invited_by", 201670096UL);
+
+    /// <summary>
+    /// The sender's display name while <see cref="NetwEndpoint.IsInvited"/>, or
+    /// <c>""</c> when no name was supplied.
+    /// </summary>
+    public string InvitedBy
+    {
+        get
+        {
+            godot_variant answered = default;
+            NetwThunks.Call0(_bindGetInvitedBy, Checked, ref answered);
+            string result = VariantUtils.ConvertToString(answered);
+            answered.Dispose();
+            return result;
         }
     }
 

@@ -45,7 +45,7 @@ void NetwEndpoint::bind_to(
     row = p_row;
     peer_class = p_peer_class;
     address = p_address;
-    listed = true;
+    listed = row.is_valid();
 }
 
 void NetwEndpoint::unlist() {
@@ -110,6 +110,20 @@ Ref<NetwServerInfo> NetwEndpoint::get_info() {
 
 bool NetwEndpoint::get_is_listed() const {
     return listed_session() != nullptr;
+}
+
+bool NetwEndpoint::get_is_invited() const {
+    NetwMultiplayer *api = listed_session();
+    const connect::TargetRow *held
+        = api != nullptr ? api->connect_plane().list().row(row) : nullptr;
+    return held != nullptr && held->invite_pending;
+}
+
+String NetwEndpoint::get_invited_by() const {
+    NetwMultiplayer *api = listed_session();
+    const connect::TargetRow *held
+        = api != nullptr ? api->connect_plane().list().row(row) : nullptr;
+    return held != nullptr ? held->invited_by : String();
 }
 
 void NetwEndpoint::probe() {
@@ -179,6 +193,18 @@ void NetwEndpoint::_bind_methods() {
         &NetwEndpoint::get_is_listed
     );
     ADD_PROPERTY(PropertyInfo(Variant::BOOL, "is_listed"), "", "get_is_listed");
+    ClassDB::bind_method(
+        D_METHOD("get_is_invited"), &NetwEndpoint::get_is_invited
+    );
+    ADD_PROPERTY(
+        PropertyInfo(Variant::BOOL, "is_invited"), "", "get_is_invited"
+    );
+    ClassDB::bind_method(
+        D_METHOD("get_invited_by"), &NetwEndpoint::get_invited_by
+    );
+    ADD_PROPERTY(
+        PropertyInfo(Variant::STRING, "invited_by"), "", "get_invited_by"
+    );
     ClassDB::bind_method(D_METHOD("probe"), &NetwEndpoint::probe);
 
     ADD_SIGNAL(MethodInfo("changed"));

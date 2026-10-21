@@ -115,6 +115,12 @@ Ref<NetwPlayer> NetwSession::player_of(int64_t p_peer) const {
     return api != nullptr ? api->peer_get_player(p_peer) : Ref<NetwPlayer>();
 }
 
+Ref<NetwPlayer> NetwSession::find_player(const String &p_account) const {
+    NetwMultiplayer *api = session();
+    return api != nullptr ? api->player_find_account(p_account)
+                          : Ref<NetwPlayer>();
+}
+
 Variant NetwSession::bucket_of(int64_t p_peer, const Variant &p_type) const {
     NetwMultiplayer *api = session();
     return api != nullptr ? api->peer_get_bucket(p_peer, p_type) : Variant();
@@ -344,6 +350,10 @@ void NetwSession::_bind_methods() {
     ClassDB::bind_method(
         D_METHOD("player_of", "peer"),
         &NetwSession::player_of
+    );
+    ClassDB::bind_method(
+        D_METHOD("find_player", "account"),
+        &NetwSession::find_player
     );
     ClassDB::bind_method(
         D_METHOD("bucket_of", "peer", "type"),

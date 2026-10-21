@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwAdmissionConfig" inherits="RefCounted" api_type="extension">
+	<brief_description>
+		Settings for a session's admission handler.
+	</brief_description>
+	<description>
+		The server receives a [NetwJoinRequest] and waits for the handler to return [constant @GlobalScope.OK] before admitting its [NetwPlayer]. The handler may [code]await[/code].
+		[codeblock]
+		func _init() -&gt; void:
+		    Netw.configure_admission(admit).proof(prove)
+		[/codeblock]
+	</description>
+	<methods>
+		<method name="proof">
+			<return type="NetwAdmissionConfig" />
+			<param index="0" name="handler" type="Callable" />
+			<description>
+				Set this on both peers. Calls [param handler] on the joining peer with the challenge the server reads as [member NetwJoinRequest.challenge]. Over WebRTC and Steam both peers bind it to the server the peer is connected to, as [member NetwJoinRequest.challenge_bound] reports. Its result becomes [member NetwJoinRequest.proof]. The handler may [code]await[/code] or return a [NetwPromise]. Return a [Variant] that can be sent with [method @GlobalScope.var_to_bytes].
+				[codeblock]
+				func prove(challenge: String) -&gt; Variant:
+				    return await identity.prove(challenge)
+				[/codeblock]
+			</description>
+		</method>
+	</methods>
+</class>

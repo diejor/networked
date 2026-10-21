@@ -56,9 +56,9 @@ TEST_CASE(
     "control and lifecycle decision channels declare the payload revision "
     "their layouts are on, so a build that still speaks the controller-only "
     "apply, an OPEN without a tenure, a move without an anchor revision, an "
-    "anchor revision without its author, an ADOPT without its origin or a "
-    "refusal without its denial answers a different wire identity and is "
-    "refused at the join gate"
+    "anchor revision without its author, an ADOPT without its origin, a spawn "
+    "without its player id or a refusal without its denial answers a "
+    "different wire identity and is refused at the join gate"
 ) {
     const netw::wire::WireRegistry table
         = netw::wire::WireRegistry::create_default();
@@ -69,7 +69,7 @@ TEST_CASE(
     const Revised revised[] = {
         {"CONTROL_REQUEST", 1},
         {"CONTROL_APPLY", 1},
-        {"SPAWN", 4},
+        {"SPAWN", 5},
         {"REPARENT", 2},
         {"ROW_CONTROL", 5},
         {"LIFECYCLE_DECISION", 2},

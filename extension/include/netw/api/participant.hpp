@@ -22,6 +22,8 @@ class NetwPlayer : public godot::RefCounted {
     int64_t peer_id = 0;
     int64_t incarnation = 0;
     godot::StringName username;
+    godot::String account;
+    godot::String account_name;
 
     NetwMultiplayer *core() const;
 
@@ -36,11 +38,17 @@ public:
         const godot::StringName &p_username = godot::StringName()
     );
     void rebind_peer(int64_t p_peer);
+    void bind_account(
+        const godot::String &p_account,
+        const godot::String &p_account_name
+    );
 
     int64_t get_peer_id() const;
     int64_t player_id() const;
     bool get_is_active() const;
     godot::StringName get_username() const;
+    godot::String get_account() const;
+    godot::String get_account_name() const;
     godot::TypedArray<NetwEntity> get_entities() const;
     godot::Ref<NetwScene> get_scene() const;
 };

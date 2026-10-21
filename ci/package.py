@@ -37,7 +37,10 @@ MANIFEST_NAME = "networked.gdextension"
 def tracked_payload() -> list[Path]:
     """Every addon file the repository actually carries, as a closed list."""
     completed = run(
-        ["git", "ls-files", "-z", "--", str(ADDON), "addons/networked_steam"],
+        [
+            "git", "ls-files", "-z", "--", str(ADDON),
+            "addons/networked_steam", "addons/networked_discord",
+        ],
         capture=True,
         timeout=120,
     )

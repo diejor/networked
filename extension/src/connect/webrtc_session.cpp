@@ -21,6 +21,19 @@ SessionBook &sessions() {
     return book;
 }
 
+String fingerprint_of(const String &p_sdp) {
+    const String line = "a=fingerprint:";
+    const int64_t at = p_sdp.find(line);
+    if (at < 0) {
+        return String();
+    }
+    const int64_t from = at + line.length();
+    const int64_t end = p_sdp.find("\n", from);
+    return p_sdp.substr(from, end < 0 ? -1 : end - from)
+        .strip_edges()
+        .to_lower();
+}
+
 } // namespace
 
 String candidate_key(const Dictionary &p_payload) {
@@ -103,6 +116,7 @@ WebRTCSession::Row &WebRTCSession::open_row(
     found->native_msec = 0;
     found->desc_type = String();
     found->desc_sdp = String();
+    found->remote_fingerprint = String();
     found->local_candidates.clear();
     found->pending_candidates.clear();
     found->applied_candidates.clear();
@@ -283,6 +297,7 @@ void WebRTCSession::handle_description(
             return;
         }
         r_row.remote_desc_set = true;
+        r_row.remote_fingerprint = fingerprint_of(sdp);
     }
     apply_bundled(r_row, p_payload);
     flush_pending(r_row);
@@ -519,6 +534,14 @@ bool WebRTCSession::has_peer(int64_t p_id) const {
 bool WebRTCSession::is_connected_to(int64_t p_id) const {
     const Row *row = row_of(p_id);
     return row != nullptr && row->connected;
+}
+
+String WebRTCSession::server_fingerprint(int64_t p_id) const {
+    const Row *row = row_of(p_id);
+    if (row == nullptr) {
+        return String();
+    }
+    return is_server ? fingerprint_of(row->desc_sdp) : row->remote_fingerprint;
 }
 
 CandidateCounts WebRTCSession::candidate_summary(int64_t p_id) const {

@@ -3,6 +3,7 @@
 #include "godot/multiplayer_spawner.hpp"
 #include "godot/node.hpp"
 #include "netw/api/entity.hpp"
+#include "netw/api/netw_multiplayer.hpp"
 #include "netw/spawn/record.hpp"
 #include "netw/wire/stream.hpp"
 
@@ -247,6 +248,37 @@ TEST_CASE(
     const Dictionary bare = round_trip_header(record, nullptr);
     NETW_CHECK_EQ(int64_t(bare[StringName("control_revision")]), 0);
     NETW_CHECK_EQ(int64_t(bare[StringName("control_hold")]), 0);
+    memdelete(owner);
+}
+
+TEST_CASE(
+    "[Networked][Spawn][Hosted] the header carries the player id, so a spawn "
+    "a client decodes before the accept naming its peer still stamps the "
+    "membership it belongs to"
+) {
+    Node *owner = memnew(Node);
+    const Ref<netw::NetwEntity> entity = netw::NetwEntity::ensure(owner);
+    REQUIRE(entity.is_valid());
+    entity->set_peer_id(9);
+    entity->set_player_id(3);
+
+    Record record;
+    record.set_route(1);
+    record.set_peer_id(9);
+    record.set_node_name(String("Avatar"));
+
+    const Dictionary header = round_trip_header(record, entity.ptr());
+
+    Ref<netw::NetwMultiplayer> client;
+    client.instantiate();
+    client->session_set_role(netw::NetwMultiplayer::ROLE_CLIENT);
+    Node *arrived = memnew(Node);
+    const Ref<netw::NetwEntity> stamped
+        = Record::stamp_header(arrived, header, client.ptr());
+    REQUIRE(stamped.is_valid());
+    NETW_CHECK_EQ(stamped->get_peer_id(), int64_t(9));
+    NETW_CHECK_EQ(stamped->get_player_id(), int64_t(3));
+    memdelete(arrived);
     memdelete(owner);
 }
 

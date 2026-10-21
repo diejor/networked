@@ -175,8 +175,10 @@ admission, so a build disagreeing about any cell cannot pair.
 
 A channel also carries a `payload_revision`, folded into identity when
 non-zero. SYNC_ROW, SYNC_ROW_DELTA and SYNC_ROW_WINDOW declare 1 for the v11
-row contract, SESSION_ACCEPT and SESSION_ROSTER declare 1 for the membership
-row of section 16, SPAWN declares 4 for the decision, the anchor revision and
+row contract, SESSION_JOIN declares 1 for its proof, SESSION_ACCEPT and
+SESSION_ROSTER declare 3 for the membership row, its account and the join
+address of section 16,
+SPAWN declares 5 for the player id, the decision, the anchor revision and
 its author the header of section 11 carries and the origin its ADOPT body
 carries, DESPAWN declares 1 for the base a controller's DESPAWN carries,
 REPARENT declares 2 for its anchor revision and its author,
@@ -616,6 +618,7 @@ it reaches the controller's `lifecycle_refused` and the rejected promise.
 SPAWN
 [entity_id string]
 [peer_id varuint 5]
+[player_id varuint 5]             the membership peer_id names, 0 for none
 [controller svarint 5]
 [control_revision varuint 5]
 [control_tenure varuint 5]
@@ -849,6 +852,7 @@ rides route 0.
 SESSION_JOIN
 [username string]
 [args bytes_capped 4095]
+[proof bytes_capped 16383]
 [schema_hash bits 64]
 [peer_id svarint 5]
 [app_tag bits 64]
@@ -858,20 +862,34 @@ SESSION_JOIN
 
 SESSION_ACCEPT   one accepted membership
 [peer_id svarint 5][username string][player_id varuint 5]
+[account string][account_name string]
+[join_address string][max_players varuint 2]
 
 SESSION_ROSTER   the memberships already accepted, sent to a late joiner
 [count varuint 2][SESSION_ACCEPT body] x count
 ```
 
 `app_tag`, `wire_identity` and `schema_identity` ride at their full 64 bits,
-because a masked hash collides. `[args]` is an opaque run.
+because a masked hash collides. `[args]` is an opaque run. `[proof]` holds
+a serialized Godot Variant without objects. It is empty when no proof
+was requested.
 
-Only the server that decoded `[args]` sees those values. The accept is
-broadcast and the roster is handed to a late joiner, so the accept names the
-membership and nothing else the request carried.
+Only the server that decoded `[args]` sees those values. The accept goes to
+every peer and the roster is handed to a late joiner, so the accept names the
+membership, the account admission assigned and nothing else the request
+carried. Both account strings are empty for a guest.
 
-`player_id` names the membership, the incarnation the server issued for this
-acceptance, rising once per acceptance within a session. It is what names a
+The server writes each copy for its destination. `account`, `join_address`
+and `max_players` are filled only in the copy a peer receives about itself,
+and every other copy and every roster row writes them empty and 0.
+`account_name` reaches every peer. `join_address` is the address the server
+advertises and `max_players` its declared limit. The server sends a peer its
+own accept again when it advertises another address, and a client that
+already holds that membership reads only those two fields from it.
+
+`player_id` names the membership the server issued, rising once per
+acceptance within a session. A second accept carrying a known `player_id`
+under a new `peer_id` moves that player to the new peer. It is what names a
 participant, because a transport peer id is reused and a scene row naming an
 old membership cannot be applied to the new player. Nothing persists it and
 nothing outside the session reads it.

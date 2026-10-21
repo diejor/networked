@@ -70,6 +70,7 @@ public:
         double p_ratio
     );
     void on_session_edge(int p_old, int p_new);
+    void on_server_answered();
     void on_session_online();
     void on_transport_failed();
 
@@ -115,11 +116,6 @@ public:
         const godot::String &p_address,
         const godot::String &p_from_name
     );
-    void on_directory_invited(
-        godot::Object *p_directory,
-        const godot::String &p_address,
-        const godot::String &p_from_name
-    );
     void publish_targets(
         const godot::StringName &p_peer_class,
         godot::ObjectID p_source,
@@ -131,6 +127,9 @@ public:
     void watch_directory(godot::Object *p_directory);
 
     godot::String join_address() const;
+    godot::String endpoint_address() const;
+    void advertise(const godot::String &p_address, int64_t p_max_players);
+    int64_t advertised_max_players() const;
     godot::Dictionary diagnostics(int64_t p_peer_id) const;
     bool transport_facts(
         const TransportSlot &p_slot,
@@ -184,6 +183,7 @@ private:
         double elapsed = 0.0;
         double deadline = 0.0;
         bool reported = false;
+        bool answered = false;
         godot::Ref<NetwPromise> promise;
     };
 
@@ -202,6 +202,10 @@ private:
     Attempt attempt;
     godot::HashMap<godot::StringName, godot::Dictionary> defaults;
     godot::String announced_address;
+    godot::RID joined_target;
+    godot::String joined_address;
+    godot::String advertised_address;
+    int64_t advertised_players = 0;
 
     godot::RID open_creation(
         const godot::RID &p_transport,
@@ -239,6 +243,7 @@ private:
     void tick_attempt(double p_delta);
     void announce_join_address();
     void release_live();
+    bool live_online() const;
 
     godot::RID mint_ticket_for(
         Transport *p_made,

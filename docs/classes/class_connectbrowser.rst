@@ -14,6 +14,36 @@ ConnectBrowser
 
 A server browser that lists, joins and hosts games for its session.
 
+.. rst-class:: classref-introduction-group
+
+Description
+-----------
+
+A game that checks an invitation before the player leaves its session turns off :ref:`join_invites<class_ConnectBrowser_property_join_invites>` and calls :ref:`join()<class_ConnectBrowser_method_join>` itself.
+
+::
+
+    @onready var session: NetwSession = Netw.session(self)
+    @onready var browser: ConnectBrowser = %ConnectBrowser
+    @onready var leave_dialog: ConfirmationDialog = %LeaveDialog
+    var invitation: NetwEndpoint
+
+    func _ready() -> void:
+        browser.join_invites = false
+        session.connection.invited.connect(_on_invited)
+        leave_dialog.confirmed.connect(_on_leave_dialog_confirmed)
+
+    func _on_invited(endpoint: NetwEndpoint) -> void:
+        invitation = endpoint
+        if session.is_online:
+            leave_dialog.popup_centered()
+        else:
+            browser.join(endpoint, { }, [])
+
+    func _on_leave_dialog_confirmed() -> void:
+        await session.leave().wait()
+        browser.join(invitation, { }, [])
+
 .. rst-class:: classref-reftable-group
 
 Properties
@@ -22,6 +52,8 @@ Properties
 .. table::
    :widths: auto
 
+   +-------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+---------------+
+   | :godot:`bool`                                                                                                     | :ref:`join_invites<class_ConnectBrowser_property_join_invites>`                         | ``true``      |
    +-------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+---------------+
    | :godot:`bool`                                                                                                     | :ref:`hide_when_session_active<class_ConnectBrowser_property_hide_when_session_active>` | ``true``      |
    +-------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------+---------------+
@@ -151,6 +183,18 @@ Constants
 
 Property Descriptions
 ---------------------
+
+.. _class_ConnectBrowser_property_join_invites:
+
+.. rst-class:: classref-property
+
+:godot:`bool` **join_invites** = ``true`` :ref:`🔗<class_ConnectBrowser_property_join_invites>`
+
+Answers each :ref:`NetwConnection.invited<class_NetwConnection_signal_invited>` by joining that server, or by opening the join form when the session is online or the join needs inputs.
+
+.. rst-class:: classref-item-separator
+
+----
 
 .. _class_ConnectBrowser_property_hide_when_session_active:
 

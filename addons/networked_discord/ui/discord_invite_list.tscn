@@ -1,0 +1,10 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://addons/networked_discord/ui/discord_invite_list.gd" id="1_list"]
+[ext_resource type="Theme" path="res://addons/networked_discord/ui/discord_theme.tres" id="2_theme"]
+
+[node name="InviteList" type="VBoxContainer"]
+custom_minimum_size = Vector2(320, 0)
+theme = ExtResource("2_theme")
+theme_override_constants/separation = 8
+script = ExtResource("1_list")

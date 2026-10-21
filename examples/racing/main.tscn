@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://dw6kyc1wp4pov" path="res://examples/racing/scripts/racing_session.gd" id="1_sess"]
 [ext_resource type="PackedScene" uid="uid://bb2nsfunxlw3a" path="res://addons/networked/gdscript/connect/ui/connect_browser.tscn" id="4_brws"]
+[ext_resource type="PackedScene" uid="uid://cdiscordpanel" path="res://examples/shared/discord_panel.tscn" id="5_discord"]
 
 [node name="Main" type="Node" unique_id=1750324196]
 script = ExtResource("1_sess")
@@ -19,5 +20,7 @@ unique_name_in_owner = true
 
 [node name="TitleLabel" parent="UI/ConnectBrowser/VBox/PanelContainer/HeaderBar" parent_id_path=PackedInt32Array(802878944, 522198391) index="1" unique_id=1146132509]
 text = "Racing Demo"
+
+[node name="DiscordPanel" parent="." instance=ExtResource("5_discord")]
 
 [editable path="UI/ConnectBrowser"]

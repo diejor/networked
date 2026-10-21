@@ -26,6 +26,8 @@
 #include "netw/api/interest.hpp"
 #include "netw/api/interpolate.hpp"
 #include "netw/api/join_config.hpp"
+#include "netw/api/admission_config.hpp"
+#include "netw/api/join_request.hpp"
 #include "netw/api/lag_compensation_config.hpp"
 #include "netw/api/lifecycle_request.hpp"
 #include "netw/api/member_config.hpp"
@@ -208,6 +210,8 @@ void initialize_networked_module(ModuleInitializationLevel level) {
     GDREGISTER_ABSTRACT_CLASS(netw::NetwPersistenceConfig);
     GDREGISTER_ABSTRACT_CLASS(netw::NetwPersistence);
     GDREGISTER_ABSTRACT_CLASS(netw::NetwJoinConfig);
+    GDREGISTER_ABSTRACT_CLASS(netw::NetwAdmissionConfig);
+    GDREGISTER_ABSTRACT_CLASS(netw::NetwJoinRequest);
     GDREGISTER_ABSTRACT_CLASS(netw::NetwMemberConfig);
     GDREGISTER_ABSTRACT_CLASS(netw::NetwPropertyConfig);
     GDREGISTER_ABSTRACT_CLASS(netw::NetwClockConfig);

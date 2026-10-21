@@ -37,10 +37,24 @@ PairedEvidence &paired_evidence() {
     return evidence;
 }
 
+PairedEvidence &tampered_evidence() {
+    static PairedEvidence evidence;
+    return evidence;
+}
+
+String with_tampered_fingerprint(const String &p_sdp) {
+    const int64_t digits = p_sdp.find(" ", p_sdp.find("a=fingerprint:")) + 1;
+    const String first = p_sdp.substr(digits, 2);
+    return p_sdp.substr(0, digits) + (first == "00" ? "11" : "00")
+        + p_sdp.substr(digits + 2);
+}
+
 using netw::connect::SessionSignal;
 using netw::connect::WebRTCSession;
 
 class PairedScenario final : public netw_test::FrameScenario {
+    PairedEvidence &(*evidence_of)();
+    bool tamper = false;
     int step = 0;
     int64_t opened_msec = 0;
     WebRTCSession *host = nullptr;
@@ -54,25 +68,40 @@ class PairedScenario final : public netw_test::FrameScenario {
         LocalVector<SessionSignal> sending;
         p_from->drain_signals(sending);
         for (int64_t at = 0; at < int64_t(sending.size()); at++) {
+            Dictionary payload = sending[at].payload;
             if (sending[at].kind == "offer") {
-                paired_evidence().offers++;
-                paired_evidence().host_saw_offer = true;
+                evidence_of().offers++;
+                evidence_of().host_saw_offer = true;
             } else if (sending[at].kind == "answer") {
-                paired_evidence().answers++;
-                paired_evidence().client_saw_answer = true;
+                evidence_of().answers++;
+                evidence_of().client_saw_answer = true;
+                if (tamper) {
+                    payload = payload.duplicate();
+                    payload["sdp"] = with_tampered_fingerprint(payload["sdp"]);
+                }
             }
             p_to->deliver(
                 p_as,
                 String::num_int64(p_as),
                 sending[at].kind,
-                sending[at].payload,
+                payload,
                 now_msec()
             );
         }
     }
 
+    bool client_failed() const {
+        if (!netw::gd::webrtc_has_peer(client->peer(), HOST_PEER)) {
+            return true;
+        }
+        const Ref<WebRTCPeerConnection> link
+            = netw::gd::webrtc_connection_of(client->peer(), HOST_PEER);
+        return link->get_connection_state()
+            >= WebRTCPeerConnection::STATE_FAILED;
+    }
+
     void close() {
-        PairedEvidence &evidence = paired_evidence();
+        PairedEvidence &evidence = evidence_of();
         evidence.host_linked = host->is_connected_to(CLIENT_PEER);
         evidence.client_linked = client->is_connected_to(HOST_PEER);
 
@@ -92,11 +121,15 @@ class PairedScenario final : public netw_test::FrameScenario {
     }
 
 public:
+    PairedScenario(PairedEvidence &(*p_evidence_of)(), bool p_tamper)
+        : evidence_of(p_evidence_of), tamper(p_tamper) {
+    }
+
     bool advance() override {
         if (netw::gd::scene_root() == nullptr || step < 0) {
             return false;
         }
-        PairedEvidence &evidence = paired_evidence();
+        PairedEvidence &evidence = evidence_of();
 
         if (step == 0) {
             evidence.driven = true;
@@ -134,7 +167,8 @@ public:
         evidence.elapsed_msec = at_msec - opened_msec;
         const bool linked = host->is_connected_to(CLIENT_PEER)
             && client->is_connected_to(HOST_PEER);
-        if (linked || evidence.elapsed_msec >= PAIRED_BUDGET_MSEC) {
+        if (linked || client_failed()
+            || evidence.elapsed_msec >= PAIRED_BUDGET_MSEC) {
             close();
             step = -1;
             return false;
@@ -144,7 +178,10 @@ public:
     }
 };
 
-NETW_FRAME_SCENARIO(PairedScenario, paired_scenario);
+NETW_FRAME_SCENARIO(PairedScenario, paired_scenario, &paired_evidence, false);
+NETW_FRAME_SCENARIO(
+    PairedScenario, tampered_scenario, &tampered_evidence, true
+);
 
 } // namespace
 
@@ -183,6 +220,18 @@ TEST_CASE(
     CHECK(evidence.client_host_candidates > 0);
     CHECK(evidence.client_relay_candidates == 0);
     CHECK(!evidence.relay_used);
+}
+
+TEST_CASE(
+    "[Networked][Connect][Frame] WP5 a client given a server description "
+    "with another certificate fingerprint never links"
+) {
+    const PairedEvidence &evidence = tampered_evidence();
+    REQUIRE(evidence.driven);
+    REQUIRE(evidence.opened);
+    CHECK(evidence.answers >= 1);
+    CHECK_FALSE(evidence.client_linked);
+    CHECK_FALSE(evidence.host_linked);
 }
 
 } // namespace NetwTests

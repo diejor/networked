@@ -1,0 +1,83 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://addons/networked_discord/ui/discord_friend_list.gd" id="1_list"]
+[ext_resource type="Theme" path="res://addons/networked_discord/ui/discord_theme.tres" id="2_theme"]
+[ext_resource type="Texture2D" path="res://addons/networked_discord/ui/icons/search.svg" id="3_search"]
+
+[node name="FriendList" type="VBoxContainer"]
+custom_minimum_size = Vector2(320, 0)
+size_flags_vertical = 3
+theme = ExtResource("2_theme")
+theme_override_constants/separation = 8
+script = ExtResource("1_list")
+
+[node name="SignInButton" type="Button" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"DiscordSignInButton"
+text = "Sign in with Discord"
+
+[node name="SearchEdit" type="LineEdit" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+placeholder_text = "Search"
+clear_button_enabled = true
+right_icon = ExtResource("3_search")
+
+[node name="EmptyLabel" type="Label" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"DiscordMutedLabel"
+text = "No Discord friends yet"
+horizontal_alignment = 1
+
+[node name="Scroll" type="ScrollContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(0, 240)
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="Rows" type="VBoxContainer" parent="Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 0
+
+[node name="PlayingHeader" type="Label" parent="Scroll/Rows"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 2
+theme_type_variation = &"DiscordHeaderLabel"
+vertical_alignment = 1
+
+[node name="Playing" type="VBoxContainer" parent="Scroll/Rows"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="OnlineHeader" type="Label" parent="Scroll/Rows"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+theme_type_variation = &"DiscordHeaderLabel"
+vertical_alignment = 2
+
+[node name="Online" type="VBoxContainer" parent="Scroll/Rows"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="OfflineHeader" type="Label" parent="Scroll/Rows"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+theme_type_variation = &"DiscordHeaderLabel"
+vertical_alignment = 2
+
+[node name="Offline" type="VBoxContainer" parent="Scroll/Rows"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 0

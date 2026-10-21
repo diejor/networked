@@ -40,6 +40,7 @@ protected:
     GDVIRTUAL0R(godot::Dictionary, _client_settings)
     GDVIRTUAL0R(godot::String, _join_address)
     GDVIRTUAL1R(godot::String, _member_name, int64_t)
+    GDVIRTUAL1R(godot::String, _account_of, int64_t)
     GDVIRTUAL0R(godot::String, _local_member_name)
     GDVIRTUAL0(_list_lobbies)
     GDVIRTUAL0(_stop_listing)
@@ -129,6 +130,7 @@ public:
     virtual godot::Dictionary client_settings();
     virtual godot::String join_address();
     virtual godot::String member_name(int64_t p_peer_id);
+    virtual godot::String account_of(int64_t p_peer_id);
     virtual godot::String local_member_name();
 
     static godot::String member_name_default(int64_t p_peer_id);

@@ -74,7 +74,6 @@ Gdscript
     class_hostpopup
     class_joindirectpopup
     class_joinpopup
-    class_nakamaauth
     class_nakamadatabase
     class_nakamadatabase.connection
     class_nakamalobbydirectory
@@ -105,6 +104,7 @@ Other classes
     class_netw
     class_netwaction
     class_netwactioncontext
+    class_netwadmissionconfig
     class_netwauthprotocol
     class_netwbitstream
     class_netwchannel
@@ -126,6 +126,7 @@ Other classes
     class_netwinterestlayer
     class_netwinterpolate
     class_netwjoinconfig
+    class_netwjoinrequest
     class_netwlagcompensationconfig
     class_netwlifecyclerequest
     class_netwlinkconditions

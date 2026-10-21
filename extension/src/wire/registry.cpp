@@ -263,7 +263,7 @@ WireRegistry WireRegistry::create_default() {
         Delivery::FITTED,
         Direction::EITHER,
         PayloadContract::PLANNED,
-        4
+        5
     );
     reg_c(
         15,
@@ -360,7 +360,8 @@ WireRegistry WireRegistry::create_default() {
         Freshness::NONE,
         Delivery::FITTED,
         Direction::CLIENT_TO_SERVER,
-        PayloadContract::PLANNED
+        PayloadContract::PLANNED,
+        1
     );
     reg_c(
         24,
@@ -371,7 +372,7 @@ WireRegistry WireRegistry::create_default() {
         Delivery::FITTED,
         Direction::SERVER_TO_CLIENT,
         PayloadContract::PLANNED,
-        1
+        3
     );
     reg_c(
         25,
@@ -382,7 +383,7 @@ WireRegistry WireRegistry::create_default() {
         Delivery::FITTED,
         Direction::SERVER_TO_CLIENT,
         PayloadContract::PLANNED,
-        1
+        3
     );
     reg_c(
         26,

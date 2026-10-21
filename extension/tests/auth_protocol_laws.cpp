@@ -112,4 +112,16 @@ TEST_CASE(
     NETW_CHECK_EQ(int(decoded.refusal), int(auth::Refusal::VERSION));
 }
 
+TEST_CASE(
+    "[Networked][Session][Hosted] A5 one challenge bound to two server "
+    "identities answers two values, so a proof relayed through another "
+    "server does not answer this one"
+) {
+    const String challenge = String("ab").repeat(16);
+    const String target = auth::bind_challenge(challenge, "sha-256 aa:bb");
+    const String relay = auth::bind_challenge(challenge, "sha-256 cc:dd");
+    CHECK(bool(target != relay));
+    CHECK(bool(target != challenge));
+}
+
 } // namespace TestNetwAuthProtocol

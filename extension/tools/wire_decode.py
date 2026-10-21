@@ -516,17 +516,37 @@ AGAINST_SPEC = [
     },
     {
         "record": "AcceptFrame",
-        "bytes": bytes([0x0E, 0x03, 0x00]) + b"ana" + bytes([0x01]),
-        "values": {"peer_id": 7, "username": "ana", "player_id": 1},
-        "why": "WIRE.md 16, peer 7 accepted as membership 1, carrying no "
-        "join argument because the accept reaches every peer",
+        "bytes": (
+            bytes([0x0E, 0x03, 0x00]) + b"ana" + bytes([0x01])
+            + bytes([0x06, 0x00]) + b"steam:"
+            + bytes([0x00, 0x00])
+            + bytes([0x11, 0x00]) + b"203.0.113.4:21253"
+            + bytes([0x08])
+        ),
+        "values": {
+            "peer_id": 7,
+            "username": "ana",
+            "player_id": 1,
+            "account": "steam:",
+            "account_name": "",
+            "join_address": "203.0.113.4:21253",
+            "max_players": 8,
+        },
+        "why": "WIRE.md 16, the accept peer 7 itself receives, as membership 1 "
+        "under an account and no display name, with the address the server "
+        "advertises and its limit of 8 players",
     },
     {
         "record": "JoinFrame",
-        "bytes": (bytes([0x03, 0x00]) + b"ana" + bytes([0x00, 0x00]) + bytes(8) + bytes([0x08]) + bytes(24)),
+        "bytes": (
+            bytes([0x03, 0x00]) + b"ana"
+            + bytes([0x00, 0x00, 0x00, 0x00])
+            + bytes(8) + bytes([0x08]) + bytes(24)
+        ),
         "values": {
             "username": "ana",
             "args": b"",
+            "proof": b"",
             "schema_hash": 0,
             "peer_id": 4,
             "app_tag": 0,

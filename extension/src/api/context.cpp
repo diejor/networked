@@ -451,18 +451,20 @@ Ref<NetwJoinConfig> Netw::configure_join(const Callable &p_handler) {
     return config;
 }
 
-Error Netw::configure_admission(const Callable &p_handler) {
+Ref<NetwAdmissionConfig> Netw::configure_admission(const Callable &p_handler) {
     Node *scope = handler_scope(p_handler, "configure_admission");
     if (scope == nullptr) {
-        return ERR_INVALID_PARAMETER;
+        return Ref<NetwAdmissionConfig>();
     }
-    return session_decl::declare(
-        scope,
-        session_decl::KIND_ADMISSION,
-        p_handler,
-        Variant(),
-        "configure_admission"
-    );
+    Ref<NetwAdmissionConfig> config;
+    config.instantiate();
+    if (session_decl::declare(
+            scope, session_decl::KIND_ADMISSION, p_handler, config,
+            "configure_admission"
+        ) != OK) {
+        return Ref<NetwAdmissionConfig>();
+    }
+    return config;
 }
 
 Error Netw::configure_transfer(const Callable &p_keep) {

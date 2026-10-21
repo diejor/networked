@@ -31,7 +31,7 @@ Methods
    +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwChannel<class_NetwChannel>`                             | :ref:`channel<class_Netw_method_channel>`\ (\ node\: :godot:`Node`, channel_id\: :godot:`int`\ ) |static|                                                                                               |
    +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>`             | :ref:`configure_admission<class_Netw_method_configure_admission>`\ (\ handler\: :godot:`Callable`\ ) |static|                                                                                           |
+   | :ref:`NetwAdmissionConfig<class_NetwAdmissionConfig>`             | :ref:`configure_admission<class_Netw_method_configure_admission>`\ (\ handler\: :godot:`Callable`\ ) |static|                                                                                           |
    +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwClockConfig<class_NetwClockConfig>`                     | :ref:`configure_clock<class_Netw_method_configure_clock>`\ (\ node\: :godot:`Node`\ ) |static|                                                                                                          |
    +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -191,23 +191,9 @@ A :ref:`NetwChannel<class_NetwChannel>` for sending raw bytes in batches.
 
 .. rst-class:: classref-method
 
-:godot:`Error <@GlobalScope#enum_@globalscope_Error>` **configure_admission**\ (\ handler\: :godot:`Callable`\ ) |static| :ref:`🔗<class_Netw_method_configure_admission>`
+:ref:`NetwAdmissionConfig<class_NetwAdmissionConfig>` **configure_admission**\ (\ handler\: :godot:`Callable`\ ) |static| :ref:`🔗<class_Netw_method_configure_admission>`
 
-Decides whether a joining peer gets a :ref:`NetwPlayer<class_NetwPlayer>`. ``handler`` receives the peer id and the arguments of :ref:`prepare_join()<class_Netw_method_prepare_join>`. Return :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` to accept.
-
-::
-
-    func _init() -> void:
-        Netw.configure_admission(admit)
-
-    func admit(peer_id: int, username: StringName) -> Error:
-        if nakama.username_for_peer(peer_id) != username:
-            return ERR_UNAUTHORIZED
-        return OK
-
-\ To stop a peer from connecting at all, before :godot:`MultiplayerAPI.peer_connected <MultiplayerAPI#class_MultiplayerAPI_signal_peer_connected>`, use :ref:`NetwMultiplayer.auth_callback<class_NetwMultiplayer_property_auth_callback>` as you would with :godot:`SceneMultiplayer`.
-
-\ **Server Only.**
+Declares the session's admission handler and returns its :ref:`NetwAdmissionConfig<class_NetwAdmissionConfig>`. The server calls ``handler`` with each :ref:`NetwJoinRequest<class_NetwJoinRequest>` and admits the peer when it returns :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>`. The handler may ``await`` for up to :ref:`NetwMultiplayer.auth_timeout<class_NetwMultiplayer_property_auth_timeout>`.
 
 .. rst-class:: classref-item-separator
 

@@ -97,6 +97,8 @@ Methods
    +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwDatabase<class_NetwDatabase>`               | :ref:`database<class_NetwSession_method_database>`\ (\ name\: :godot:`StringName`\ ) |const|                                                                                          |
    +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPlayer<class_NetwPlayer>`                   | :ref:`find_player<class_NetwSession_method_find_player>`\ (\ account\: :godot:`String`\ ) |const|                                                                                     |
+   +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwScene<class_NetwScene>`                     | :ref:`find_scene<class_NetwSession_method_find_scene>`\ (\ label\: :godot:`StringName`\ )                                                                                             |
    +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`install_physics_stepper<class_NetwSession_method_install_physics_stepper>`\ (\ world\: :godot:`World3D`, stepper\: :ref:`NetwPhysicsStepper<class_NetwPhysicsStepper>`\ )       |
@@ -559,7 +561,7 @@ The :ref:`NetwPlayer<class_NetwPlayer>` of this peer, ``null`` until :ref:`local
 
 - :godot:`Array`\[:ref:`NetwPlayer<class_NetwPlayer>`\] **get_players**\ (\ )
 
-Every :ref:`NetwPlayer<class_NetwPlayer>` that has joined, including those whose peer has since disconnected. See :ref:`NetwMultiplayer.connected_players<class_NetwMultiplayer_property_connected_players>` for only the connected ones.
+Every :ref:`NetwPlayer<class_NetwPlayer>` whose join was accepted and who has not left, sorted by peer id. A leaving player is already gone from it when :ref:`player_left<class_NetwSession_signal_player_left>` is emitted, while :ref:`NetwMultiplayer.connected_players<class_NetwMultiplayer_property_connected_players>` still holds that player then.
 
 .. rst-class:: classref-item-separator
 
@@ -667,6 +669,26 @@ Spawns ``scene`` as a new scene with no players in it. ``isolation`` decides whe
 :ref:`NetwDatabase<class_NetwDatabase>` **database**\ (\ name\: :godot:`StringName`\ ) |const| :ref:`🔗<class_NetwSession_method_database>`
 
 The database declared as ``name`` with :ref:`Netw.configure_database()<class_Netw_method_configure_database>`, or ``null`` when there is none.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwSession_method_find_player:
+
+.. rst-class:: classref-method
+
+:ref:`NetwPlayer<class_NetwPlayer>` **find_player**\ (\ account\: :godot:`String`\ ) |const| :ref:`🔗<class_NetwSession_method_find_player>`
+
+The :ref:`NetwPlayer<class_NetwPlayer>` with :ref:`NetwPlayer.account<class_NetwPlayer_property_account>` equal to ``account``, or ``null``. It answers a player currently in the session, so an admission handler can kick a player already signed in with that account. A client knows only its own account, so on a client it answers the local player or ``null``.
+
+::
+
+    func admit(request: NetwJoinRequest) -> Error:
+        var signed_in := session.find_player(request.account)
+        if signed_in != null:
+            session.kick(signed_in, "Signed in somewhere else.")
+        return OK
 
 .. rst-class:: classref-item-separator
 

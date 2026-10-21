@@ -22,8 +22,7 @@ public:
     bool has_accepted(int64_t p_peer) const;
     session::AcceptFrame accepted_join(int64_t p_peer) const;
     godot::LocalVector<session::AcceptFrame> accepted_joins() const;
-    godot::PackedByteArray roster_frame() const;
-    godot::PackedByteArray accept_frame(int64_t p_peer) const;
+    godot::PackedByteArray roster_frame(int64_t p_destination) const;
 
     void refuse(int64_t p_peer, const godot::String &p_reason);
     godot::String refusal(int64_t p_peer) const;

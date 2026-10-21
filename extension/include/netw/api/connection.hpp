@@ -24,6 +24,7 @@ class NetwConnection : public godot::RefCounted, public enums::NetwConnection {
     GDCLASS(NetwConnection, godot::RefCounted)
 
     godot::ObjectID session_id;
+    godot::Ref<NetwEndpoint> current_endpoint;
     godot::HashMap<godot::RID, godot::Ref<NetwEndpoint>> endpoints_by_row;
 
     NetwMultiplayer *session() const;
@@ -49,10 +50,7 @@ public:
     void announce_progressed(const godot::String &p_message, double p_ratio);
     bool announce_failed(int64_t p_error, const godot::String &p_reason);
     void announce_join_address_changed(const godot::String &p_address);
-    void announce_invited(
-        const godot::RID &p_target,
-        const godot::String &p_from_name
-    );
+    void announce_invited(const godot::RID &p_target);
 
     godot::RID create_peer(
         const godot::Variant &p_transport,
@@ -80,6 +78,9 @@ public:
     godot::Dictionary defaults(const godot::Variant &p_transport) const;
 
     godot::String get_join_address() const;
+    void set_join_address(const godot::String &p_address);
+    int64_t get_max_players() const;
+    godot::Ref<NetwEndpoint> get_current_endpoint();
     godot::Dictionary diagnostics(int64_t p_peer_id) const;
     godot::Array transports() const;
     godot::Dictionary transport(const godot::Variant &p_of) const;

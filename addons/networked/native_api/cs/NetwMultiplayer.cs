@@ -1659,7 +1659,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
         ConnectionJoinAddressChanged = 53,
         /// <summary>
         /// The notification form of <see cref="NetwConnection.Invited"/>. The
-        /// callback receives <c>(endpoint: RID, from_name: String)</c>.
+        /// callback receives <c>(endpoint: RID)</c>.
         /// </summary>
         ConnectionInvited = 54,
     }
@@ -2072,7 +2072,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
 
     /// <summary>
     /// Same as <c>SceneMultiplayer.auth_timeout</c>, applied to
-    /// <see cref="NetwMultiplayer.Inner"/>.
+    /// <see cref="NetwMultiplayer.Inner"/>. It also limits how long the
+    /// admission and proof handlers set with
+    /// <see cref="Netw.ConfigureAdmission"/> may take on this peer, so a join
+    /// that waits on the player raises it on both the server and the client.
     /// </summary>
     public double AuthTimeout
     {

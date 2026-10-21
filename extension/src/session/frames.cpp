@@ -14,6 +14,15 @@ constexpr int64_t RESYNC_LEASE_BYTES = 7;
 
 } // namespace
 
+AcceptFrame accept_seen_by(AcceptFrame p_row, int64_t p_destination) {
+    if (p_destination != p_row.peer_id) {
+        p_row.account = String();
+        p_row.join_address = String();
+        p_row.max_players = 0;
+    }
+    return p_row;
+}
+
 PackedByteArray roster_write(const LocalVector<AcceptFrame> &p_rows) {
     wire::WriteStream stream;
     uint64_t count = uint64_t(p_rows.size());

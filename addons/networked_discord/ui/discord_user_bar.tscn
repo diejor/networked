@@ -1,0 +1,70 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://addons/networked_discord/ui/discord_user_bar.gd" id="1_bar"]
+[ext_resource type="PackedScene" path="res://addons/networked_discord/ui/discord_avatar.tscn" id="2_avatar"]
+[ext_resource type="Texture2D" path="res://addons/networked_discord/ui/icons/controller.svg" id="3_controller"]
+[ext_resource type="Texture2D" path="res://addons/networked_discord/ui/icons/mic.svg" id="4_mic"]
+[ext_resource type="Texture2D" path="res://addons/networked_discord/ui/icons/headset.svg" id="5_headset"]
+
+[node name="UserBar" type="PanelContainer"]
+theme_type_variation = &"DiscordCard"
+script = ExtResource("1_bar")
+
+[node name="Box" type="HBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Avatar" parent="Box" instance=ExtResource("2_avatar")]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+show_status = true
+
+[node name="Lines" type="VBoxContainer" parent="Box"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 0
+alignment = 1
+
+[node name="NameLabel" type="Label" parent="Box/Lines"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"DiscordNameLabel"
+text_overrun_behavior = 3
+
+[node name="StatusLine" type="HBoxContainer" parent="Box/Lines"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="GameIcon" type="TextureRect" parent="Box/Lines/StatusLine"]
+unique_name_in_owner = true
+self_modulate = Color(0.137, 0.647, 0.353, 1)
+custom_minimum_size = Vector2(14, 14)
+layout_mode = 2
+size_flags_vertical = 4
+texture = ExtResource("3_controller")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="StatusLabel" type="Label" parent="Box/Lines/StatusLine"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"DiscordMutedLabel"
+text_overrun_behavior = 3
+
+[node name="MuteButton" type="Button" parent="Box"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "Mute"
+theme_type_variation = &"DiscordIconButton"
+icon = ExtResource("4_mic")
+
+[node name="DeafenButton" type="Button" parent="Box"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "Deafen"
+theme_type_variation = &"DiscordIconButton"
+icon = ExtResource("5_headset")

@@ -26,6 +26,7 @@ constexpr int SETTLE_FRAMES = 20;
 enum Side {
     SIDE_HOST,
     SIDE_ASSIGNED,
+    SIDE_INVITED,
     SIDE_CLOSED,
     SIDE_REFUSED,
     SIDE_COUNT,
@@ -39,6 +40,9 @@ struct SideEvidence {
     bool promise_completed = false;
     String address_when_settled;
     int end_session_state = -1;
+    bool invite_pending = false;
+    String invited_by;
+    bool other_pending = false;
 };
 
 struct AttemptEvidence {
@@ -83,6 +87,8 @@ class ConnectAttemptScenario final : public netw_test::FrameScenario {
     Ref<netw::NetwMultiplayer> client;
     Ref<netw::NetwPromise> hosting;
     Ref<netw_test::FaultLog> diagnostics;
+    Ref<netw::NetwEndpoint> invited;
+    Ref<netw::NetwEndpoint> other;
 
     static int64_t now_msec() {
         return int64_t(Time::get_singleton()->get_ticks_msec());
@@ -130,6 +136,20 @@ class ConnectAttemptScenario final : public netw_test::FrameScenario {
     void join(Side p_side, int p_port) {
         client = watched(p_side);
         client->session_prepare_join(StringName("client"), Array());
+        if (p_side == SIDE_INVITED) {
+            const Ref<netw::NetwConnection> connection
+                = client->get_connection();
+            invited = connection->invite(
+                StringName("ENetMultiplayerPeer"),
+                String("127.0.0.1:") + itos(p_port), String("Ada")
+            );
+            other = connection->invite(
+                StringName("ENetMultiplayerPeer"),
+                String("127.0.0.1:") + itos(p_port + 1), String("Bo")
+            );
+            connection->join(invited, Dictionary());
+            return;
+        }
         client->transport_join(
             enet(client),
             String("127.0.0.1:") + itos(p_port),
@@ -151,6 +171,13 @@ class ConnectAttemptScenario final : public netw_test::FrameScenario {
         SideEvidence &side = attempt_evidence().sides[p_side];
         side.end_session_state = int(client->session_get_state());
         side.walked = side.states;
+        if (p_side == SIDE_INVITED) {
+            side.invite_pending = invited->get_is_invited();
+            side.invited_by = invited->get_invited_by();
+            side.other_pending = other->get_is_invited();
+            invited.unref();
+            other.unref();
+        }
         close(client);
     }
 
@@ -224,6 +251,14 @@ public:
             case 2: {
                 if (client->is_online() || over_budget()) {
                     finish_client(SIDE_ASSIGNED);
+                    join(SIDE_INVITED, evidence.port);
+                    enter(7);
+                }
+                return true;
+            }
+            case 7: {
+                if (client->player_local().is_valid() || over_budget()) {
+                    finish_client(SIDE_INVITED);
                     join(SIDE_CLOSED, evidence.port + CLOSED_PORT_OFFSET);
                     enter(3);
                 }
@@ -356,8 +391,8 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Connect][Frame] a join the server refuses during "
-    "authentication fails once with ERR_CANT_CONNECT and leaves the session "
-    "offline rather than connecting forever"
+    "authentication fails once with ERR_CONNECTION_ERROR and leaves the "
+    "session offline rather than connecting forever"
 ) {
     const AttemptEvidence &evidence = attempt_evidence();
     REQUIRE(evidence.driven);
@@ -365,7 +400,7 @@ TEST_CASE(
     NETW_CHECK_EQ(evidence.tag_refusals, 1);
     const SideEvidence &side = evidence.sides[SIDE_REFUSED];
     NETW_CHECK_EQ(side.failed, 1);
-    NETW_CHECK_EQ(side.failed_error, int64_t(ERR_CANT_CONNECT));
+    NETW_CHECK_EQ(side.failed_error, int64_t(ERR_CONNECTION_ERROR));
     NETW_CHECK_EQ(
         side.end_session_state,
         int(netw::NetwMultiplayer::SESSION_STATE_OFFLINE)
@@ -376,6 +411,22 @@ TEST_CASE(
          netw::connect::ATTEMPT_CONNECTING,
          netw::connect::ATTEMPT_OFFLINE}
     );
+}
+
+TEST_CASE(
+    "[Networked][Connect][Frame] joining an invited server acknowledges "
+    "only that invitation when the connection reaches ONLINE"
+) {
+    const AttemptEvidence &evidence = attempt_evidence();
+    REQUIRE(evidence.driven);
+    const SideEvidence &side = evidence.sides[SIDE_INVITED];
+    NETW_CHECK_EQ(
+        side.end_session_state,
+        int(netw::NetwMultiplayer::SESSION_STATE_ONLINE)
+    );
+    CHECK_FALSE(side.invite_pending);
+    CHECK(side.invited_by.is_empty());
+    CHECK(side.other_pending);
 }
 
 } // namespace NetwTests

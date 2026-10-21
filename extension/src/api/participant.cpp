@@ -35,9 +35,25 @@ void NetwPlayer::rebind_peer(int64_t p_peer) {
     peer_id = p_peer;
 }
 
+void NetwPlayer::bind_account(
+    const String &p_account,
+    const String &p_account_name
+) {
+    account = p_account;
+    account_name = p_account_name;
+}
+
 bool NetwPlayer::get_is_active() const {
     NetwMultiplayer *held = core();
     return held != nullptr && held->player_is_active(peer_id, incarnation);
+}
+
+String NetwPlayer::get_account() const {
+    return account;
+}
+
+String NetwPlayer::get_account_name() const {
+    return account_name;
 }
 
 int64_t NetwPlayer::get_peer_id() const {
@@ -78,6 +94,17 @@ void NetwPlayer::_bind_methods() {
         PropertyInfo(Variant::STRING_NAME, "username"),
         "",
         "get_username"
+    );
+    ClassDB::bind_method(D_METHOD("get_account"), &NetwPlayer::get_account);
+    ADD_PROPERTY(PropertyInfo(Variant::STRING, "account"), "", "get_account");
+    ClassDB::bind_method(
+        D_METHOD("get_account_name"),
+        &NetwPlayer::get_account_name
+    );
+    ADD_PROPERTY(
+        PropertyInfo(Variant::STRING, "account_name"),
+        "",
+        "get_account_name"
     );
     ClassDB::bind_method(D_METHOD("get_entities"), &NetwPlayer::get_entities);
     ADD_PROPERTY(

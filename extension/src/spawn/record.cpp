@@ -29,6 +29,9 @@ bool Record::encode_header(
     NetwEntity *entity = Object::cast_to<NetwEntity>(p_entity);
     String id = String(entity_id);
     uint64_t peer = uint64_t(peer_id > 0 ? peer_id : 0);
+    uint64_t player = uint64_t(
+        entity != nullptr ? MAX(entity->get_player_id(), int64_t(0)) : 0
+    );
     int64_t control = entity != nullptr ? entity->steering() : controller;
     uint64_t revision
         = entity != nullptr ? entity->get_control_revision() : uint64_t(0);
@@ -54,9 +57,9 @@ bool Record::encode_header(
         && entity->get_authority() == NetwEntity::AUTHORITY_CONTROLLER;
 
     if (!wire::string_field(p_stream, id) || !p_stream.varuint(peer, 5)
-        || !p_stream.svarint(control, 5) || !p_stream.varuint(revision, 5)
-        || !p_stream.varuint(tenure, 5) || !p_stream.varuint(anchor, 5)
-        || !p_stream.varuint(anchor_author, 5)
+        || !p_stream.varuint(player, 5) || !p_stream.svarint(control, 5)
+        || !p_stream.varuint(revision, 5) || !p_stream.varuint(tenure, 5)
+        || !p_stream.varuint(anchor, 5) || !p_stream.varuint(anchor_author, 5)
         || !p_stream.varuint(spawn_tick, 5) || !p_stream.svarint(requester, 5)
         || !p_stream.bits(comp_hash, 32) || !p_stream.bits(hold, 2)
         || !p_stream.bool1(controller_authority)
@@ -81,12 +84,12 @@ Ref<NetwEntity> Record::stamp_header(
     }
     entity->set_name(p_header.get(StringName("entity_id"), StringName()));
     entity->set_peer_id(int64_t(p_header.get(StringName("peer_id"), 0)));
-    if (NetwMultiplayer *session
-        = Object::cast_to<NetwMultiplayer>(p_session)) {
-        entity->set_player_id(
-            session->player_incarnation(entity->get_peer_id())
-        );
-    }
+    NetwMultiplayer *session = Object::cast_to<NetwMultiplayer>(p_session);
+    entity->set_player_id(
+        session != nullptr && session->is_host()
+            ? session->player_incarnation(entity->get_peer_id())
+            : int64_t(p_header.get(StringName("player_id"), 0))
+    );
     entity->get_record()->get_control()->set_authority(
         bool(p_header.get(StringName("controller_authority"), false))
             ? int64_t(NetwEntity::AUTHORITY_CONTROLLER)
@@ -206,6 +209,7 @@ Dictionary Record::descriptors_of_bytes(const PackedByteArray &p_bytes) {
 bool Record::decode_header(wire::ReadStream &p_stream, Dictionary &r_header) {
     String id;
     uint64_t peer = 0;
+    uint64_t player = 0;
     int64_t control = 0;
     uint64_t revision = 0;
     uint64_t tenure = 0;
@@ -221,9 +225,9 @@ bool Record::decode_header(wire::ReadStream &p_stream, Dictionary &r_header) {
     String name;
 
     if (!wire::string_field(p_stream, id) || !p_stream.varuint(peer, 5)
-        || !p_stream.svarint(control, 5) || !p_stream.varuint(revision, 5)
-        || !p_stream.varuint(tenure, 5) || !p_stream.varuint(anchor, 5)
-        || !p_stream.varuint(anchor_author, 5)
+        || !p_stream.varuint(player, 5) || !p_stream.svarint(control, 5)
+        || !p_stream.varuint(revision, 5) || !p_stream.varuint(tenure, 5)
+        || !p_stream.varuint(anchor, 5) || !p_stream.varuint(anchor_author, 5)
         || !p_stream.varuint(spawn_tick, 5) || !p_stream.svarint(requester, 5)
         || !p_stream.bits(comp_hash, 32) || !p_stream.bits(hold, 2)
         || !p_stream.bool1(controller_authority)
@@ -239,6 +243,7 @@ bool Record::decode_header(wire::ReadStream &p_stream, Dictionary &r_header) {
 
     r_header[StringName("entity_id")] = StringName(id);
     r_header[StringName("peer_id")] = int64_t(peer);
+    r_header[StringName("player_id")] = int64_t(player);
     r_header[StringName("controller")] = control;
     r_header[StringName("control_revision")] = int64_t(revision);
     r_header[StringName("control_tenure")] = int64_t(tenure);

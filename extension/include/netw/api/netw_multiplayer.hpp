@@ -836,9 +836,26 @@ private:
     bool clock_pump_attached = false;
     std::optional<JoinRequest> prepared_join;
 
+    struct Awaited {
+        godot::Ref<NetwPromise> result;
+        godot::Variant continuation;
+        uint64_t declaration = 0;
+        int64_t deadline = 0;
+    };
     struct LinkHandshake {
         bool completed = false;
+        godot::String challenge;
+        Awaited proof;
+        std::optional<JoinRequest> local_join;
     };
+    struct PendingAdmission {
+        JoinRequest submitted;
+        godot::Ref<NetwJoinRequest> request;
+        Awaited verdict;
+    };
+    godot::HashMap<int64_t, PendingAdmission> pending_admissions;
+    bool challenge_unbound_logged = false;
+
     godot::HashMap<int64_t, LinkHandshake> link_handshakes;
     std::optional<JoinRequest> resubmit_join;
     std::optional<JoinRequest> submitted_join;
@@ -3822,11 +3839,40 @@ public:
         const session::AcceptFrame &p_accepted,
         const godot::Array &p_args
     );
-    godot::Error session_admits_join(
-        int64_t p_peer,
-        const godot::StringName &p_username,
-        const godot::Array &p_args
+    void session_start_admission(const JoinRequest &p_request);
+    void session_admission_settled(int64_t p_peer, uint64_t p_promise);
+    void session_finish_join(
+        const JoinRequest &p_request,
+        const godot::Ref<NetwJoinRequest> &p_admission
     );
+    void session_poll_admissions(int64_t p_now_msec);
+    bool session_requires_proof();
+    bool session_has_proof(int64_t p_peer) const;
+    void session_request_proof(
+        int64_t p_peer,
+        const godot::String &p_challenge
+    );
+    void session_proof_settled(int64_t p_peer, uint64_t p_promise);
+    Awaited *session_awaited(int64_t p_peer, bool p_proof);
+    Awaited *session_awaited_settle(
+        int64_t p_peer,
+        bool p_proof,
+        uint64_t p_promise
+    );
+    void session_await(
+        int64_t p_peer,
+        bool p_proof,
+        const godot::Callable &p_handler,
+        const godot::Variant &p_argument,
+        uint64_t p_declaration
+    );
+    godot::String session_mint_challenge();
+    godot::String session_bind_challenge(
+        const godot::String &p_challenge,
+        int64_t p_link,
+        bool &r_bound
+    );
+
     void session_fail_join(
         int64_t p_peer,
         godot::Error p_error,
@@ -4007,11 +4053,6 @@ public:
         const godot::Array &p_infos,
         int64_t p_directory
     );
-    void discovery_directory_invited(
-        godot::Object *p_directory,
-        const godot::String &p_address,
-        const godot::String &p_from_name
-    );
     void discovery_probe_connection_failed();
     void discovery_probe_authentication_failed(int64_t p_peer_id);
     void auth_receive_hello(
@@ -4046,9 +4087,20 @@ public:
     bool session_has_accepted(int64_t p_peer) const;
     godot::LocalVector<session::AcceptFrame> session_accepted_joins() const;
     bool session_remember_join(const session::AcceptFrame &p_accepted);
+    godot::PackedByteArray session_accept_payload(
+        session::AcceptFrame p_row,
+        int64_t p_destination
+    ) const;
+    void session_send_accept(
+        const session::AcceptFrame &p_row,
+        int64_t p_destination
+    );
 #if defined(NETW_TESTS)
-    godot::PackedByteArray session_accept_bytes(int64_t p_peer) const;
-    godot::PackedByteArray session_roster_bytes() const;
+    godot::PackedByteArray session_accept_bytes(
+        int64_t p_peer,
+        int64_t p_destination
+    ) const;
+    godot::PackedByteArray session_roster_bytes(int64_t p_destination) const;
 #endif
     void session_forget_peer(int64_t p_peer);
     void session_clear_roster();
@@ -4158,10 +4210,7 @@ public:
         const godot::String &p_reason
     );
     void connection_emit_join_address_changed(const godot::String &p_address);
-    void connection_emit_invited(
-        const godot::RID &p_endpoint,
-        const godot::String &p_from_name
-    );
+    void connection_emit_invited(const godot::RID &p_endpoint);
     godot::RID transport_register(const godot::Ref<godot::Script> &p_type);
     godot::Error transport_unregister(const godot::RID &p_transport);
     godot::RID transport_find_script(
@@ -4189,6 +4238,8 @@ public:
     void endpoint_emit_removed(const godot::RID &p_endpoint);
     void endpoint_emit_updated(const godot::RID &p_endpoint);
     godot::String peer_join_address();
+    godot::Error connection_set_join_address(const godot::String &p_address);
+    int64_t connection_max_players() const;
     godot::Dictionary peer_diagnostics(int64_t p_peer_id);
     godot::Object *discovery_find_directory(
         const godot::StringName &p_peer_class
@@ -4843,6 +4894,9 @@ public:
     godot::Ref<NetwPlayer> player_admitted_of(int64_t p_peer) const;
     godot::TypedArray<NetwPlayer> player_admitted_all() const;
     godot::Ref<NetwPlayer> player_admitted_local();
+    godot::Ref<NetwPlayer> player_find_account(
+        const godot::String &p_account
+    ) const;
     godot::Ref<NetwPlayer> scene_caller_player(godot::Node *p_requester);
     void player_publish_joined(int64_t p_peer);
     void player_publish_left(const godot::Ref<NetwPlayer> &p_who);

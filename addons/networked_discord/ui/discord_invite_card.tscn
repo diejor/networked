@@ -1,0 +1,94 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://addons/networked_discord/ui/discord_invite_card.gd" id="1_card"]
+[ext_resource type="PackedScene" path="res://addons/networked_discord/ui/discord_avatar.tscn" id="2_avatar"]
+[ext_resource type="Texture2D" path="res://addons/networked_discord/ui/icons/controller.svg" id="3_controller"]
+[ext_resource type="PackedScene" path="res://addons/networked_discord/ui/discord_slot_row.tscn" id="4_slots"]
+[ext_resource type="Shader" path="res://addons/networked_discord/ui/cutout.gdshader" id="5_cutout"]
+[ext_resource type="PackedScene" path="res://addons/networked_discord/ui/discord_elapsed_label.tscn" id="6_elapsed"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_card"]
+resource_local_to_scene = true
+shader = ExtResource("5_cutout")
+
+[node name="InviteCard" type="PanelContainer"]
+material = SubResource("ShaderMaterial_card")
+theme_type_variation = &"DiscordInviteCard"
+script = ExtResource("1_card")
+
+[node name="Box" type="VBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="HeaderLabel" type="Label" parent="Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"DiscordHeaderLabel"
+text_overrun_behavior = 3
+
+[node name="Game" type="HBoxContainer" parent="Box"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Icon" parent="Box/Game" instance=ExtResource("2_avatar")]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(64, 64)
+layout_mode = 2
+size_flags_vertical = 4
+corner_radius = 13.0
+show_project_icon = true
+
+[node name="Lines" type="VBoxContainer" parent="Box/Game"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+alignment = 1
+
+[node name="NameLabel" type="Label" parent="Box/Game/Lines"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"DiscordTitleLabel"
+text_overrun_behavior = 3
+
+[node name="Details" type="HBoxContainer" parent="Box/Game/Lines"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="ControllerIcon" type="TextureRect" parent="Box/Game/Lines/Details"]
+visible = false
+self_modulate = Color(0.71, 0.729, 0.757, 1)
+custom_minimum_size = Vector2(14, 14)
+layout_mode = 2
+size_flags_vertical = 4
+texture = ExtResource("3_controller")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="ElapsedLabel" parent="Box/Game/Lines/Details" node_paths=PackedStringArray("icon") instance=ExtResource("6_elapsed")]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"DiscordMutedLabel"
+icon = NodePath("../ControllerIcon")
+
+[node name="SenderParty" type="HBoxContainer" parent="Box/Game/Lines"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="SlotRow" parent="Box/Game/Lines/SenderParty" instance=ExtResource("4_slots")]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_constants/separation = -4
+slot_size = 16
+
+[node name="PlayingLabel" type="Label" parent="Box/Game/Lines/SenderParty"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"DiscordMutedLabel"
+
+[node name="JoinButton" type="Button" parent="Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"DiscordWideButton"
+text = "Join"

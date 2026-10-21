@@ -47,25 +47,23 @@ Methods
 .. table::
    :widths: auto
 
-   +-------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|            | :ref:`_service_entered<class_NetwService_private_method__service_entered>`\ (\ session\: :ref:`NetwSession<class_NetwSession>`\ ) |virtual| |
-   +-------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|            | :ref:`_service_exiting<class_NetwService_private_method__service_exiting>`\ (\ session\: :ref:`NetwSession<class_NetwSession>`\ ) |virtual| |
-   +-------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Script`   | :ref:`_service_type<class_NetwService_private_method__service_type>`\ (\ ) |virtual|                                                        |
-   +-------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`     | :ref:`_should_register<class_NetwService_private_method__should_register>`\ (\ ) |virtual|                                                  |
-   +-------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Callable` | :ref:`get_transport_restricted_probe<class_NetwService_method_get_transport_restricted_probe>`\ (\ ) |static|                               |
-   +-------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`     | :ref:`is_transport_restricted<class_NetwService_method_is_transport_restricted>`\ (\ ) |static|                                             |
-   +-------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|            | :ref:`register<class_NetwService_method_register>`\ (\ service\: :godot:`Node`, type\: :godot:`Script` = null\ ) |static|                   |
-   +-------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|            | :ref:`set_transport_restricted_probe<class_NetwService_method_set_transport_restricted_probe>`\ (\ probe\: :godot:`Callable`\ ) |static|    |
-   +-------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|            | :ref:`unregister<class_NetwService_method_unregister>`\ (\ service\: :godot:`Node`, type\: :godot:`Script` = null\ ) |static|               |
-   +-------------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   +-----------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|          | :ref:`_service_entered<class_NetwService_private_method__service_entered>`\ (\ session\: :ref:`NetwSession<class_NetwSession>`\ ) |virtual| |
+   +-----------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|          | :ref:`_service_exiting<class_NetwService_private_method__service_exiting>`\ (\ session\: :ref:`NetwSession<class_NetwSession>`\ ) |virtual| |
+   +-----------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Script` | :ref:`_service_type<class_NetwService_private_method__service_type>`\ (\ ) |virtual|                                                        |
+   +-----------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`bool`   | :ref:`_should_register<class_NetwService_private_method__should_register>`\ (\ ) |virtual|                                                  |
+   +-----------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`bool`   | :ref:`is_transport_restricted<class_NetwService_method_is_transport_restricted>`\ (\ ) |static|                                             |
+   +-----------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|          | :ref:`register<class_NetwService_method_register>`\ (\ service\: :godot:`Node`, type\: :godot:`Script` = null\ ) |static|                   |
+   +-----------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|          | :ref:`set_transport_restricted_probe<class_NetwService_method_set_transport_restricted_probe>`\ (\ probe\: :godot:`Callable`\ ) |static|    |
+   +-----------------+---------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|          | :ref:`unregister<class_NetwService_method_unregister>`\ (\ service\: :godot:`Node`, type\: :godot:`Script` = null\ ) |static|               |
+   +-----------------+---------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -119,18 +117,6 @@ Return the type to register the service as, such as a base class. ``null`` uses 
 :godot:`bool` **_should_register**\ (\ ) |virtual| :ref:`🔗<class_NetwService_private_method__should_register>`
 
 Return ``false`` to not register, for example behind a feature flag. ``true`` by default.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwService_method_get_transport_restricted_probe:
-
-.. rst-class:: classref-method
-
-:godot:`Callable` **get_transport_restricted_probe**\ (\ ) |static| :ref:`🔗<class_NetwService_method_get_transport_restricted_probe>`
-
-Returns the :godot:`Callable` from :ref:`set_transport_restricted_probe()<class_NetwService_method_set_transport_restricted_probe>`.
 
 .. rst-class:: classref-item-separator
 

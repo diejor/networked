@@ -1,5 +1,7 @@
 #pragma once
 
+#include "netw/api/admission_config.hpp"
+
 #include <cstdint>
 
 #include "godot/callable.hpp"
@@ -64,7 +66,9 @@ public:
     static godot::Ref<NetwJoinConfig> configure_join(
         const godot::Callable &p_handler
     );
-    static godot::Error configure_admission(const godot::Callable &p_handler);
+    static godot::Ref<NetwAdmissionConfig> configure_admission(
+        const godot::Callable &p_handler
+    );
     static godot::Error configure_transfer(const godot::Callable &p_keep);
     static godot::Ref<NetwSessionConfig> configure_session(godot::Node *p_node);
     static godot::Ref<NetwClockConfig> configure_clock(godot::Node *p_node);

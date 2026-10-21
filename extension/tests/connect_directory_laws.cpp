@@ -297,7 +297,8 @@ TEST_CASE(
 struct InviteLog {
     int calls = 0;
     Ref<netw::NetwEndpoint> endpoint;
-    String from_name;
+    bool pending_when_emitted = false;
+    String name_when_emitted;
 };
 
 InviteLog &invites() {
@@ -305,10 +306,11 @@ InviteLog &invites() {
     return instance;
 }
 
-void on_invited(Ref<netw::NetwEndpoint> p_endpoint, String p_from_name) {
+void on_invited(Ref<netw::NetwEndpoint> p_endpoint) {
     invites().calls++;
     invites().endpoint = p_endpoint;
-    invites().from_name = p_from_name;
+    invites().pending_when_emitted = p_endpoint->get_is_invited();
+    invites().name_when_emitted = p_endpoint->get_invited_by();
 }
 
 TEST_CASE(
@@ -327,7 +329,7 @@ TEST_CASE(
 
     NETW_CHECK_EQ(invites().calls, 1);
     REQUIRE(invites().endpoint.is_valid());
-    CHECK(invites().from_name == String("Ada"));
+    CHECK(invites().name_when_emitted == String("Ada"));
     CHECK(invites().endpoint->get_address() == String("77"));
     CHECK(invites().endpoint->get_source() == String("Stub Lobbies"));
 
@@ -390,17 +392,23 @@ TEST_CASE(
     REQUIRE(first.is_valid());
     NETW_CHECK_EQ(invites().calls, 1);
     CHECK(bool(invites().endpoint == first));
-    CHECK(bool(invites().from_name == String("Ada")));
+    CHECK(invites().pending_when_emitted);
     CHECK(bool(first->get_address() == String("127.0.0.1:7000")));
     CHECK(first->get_is_listed());
+    CHECK(first->get_is_invited());
+    CHECK(bool(first->get_invited_by() == String("Ada")));
     CHECK(bool(connection->invite(transport, first->get_address(), String())
         == first));
     NETW_CHECK_EQ(invites().calls, 2);
+    CHECK(invites().name_when_emitted.is_empty());
+    CHECK(first->get_is_invited());
+    CHECK(first->get_invited_by().is_empty());
     NETW_CHECK_EQ(int(connection->endpoints().size()), 1);
     CHECK(connection->invite(transport, String(), String()).is_null());
     CHECK(connection->invite(StringName("Missing"), String("1"), String())
         .is_null());
     NETW_CHECK_EQ(invites().calls, 2);
+    NETW_CHECK_EQ(int(connection->remove(first)), int(OK));
     invites() = InviteLog();
     core->embed_dispose();
     core.unref();

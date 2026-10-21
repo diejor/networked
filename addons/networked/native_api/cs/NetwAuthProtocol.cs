@@ -12,10 +12,11 @@ namespace Networked;
 /// <remarks>
 /// A packet starts with four bytes that say what it is. A joining player sends
 /// <c>"NHEL"</c>, then a version byte, an 8-byte build tag, a flags byte, and
-/// the game's own authentication data. A server browser sends <c>"NPRB"</c>,
-/// then a version byte and a flags or status byte, and the reply follows. A
-/// server browser gets its reply and is disconnected, so it never appears in
-/// the <see cref="MultiplayerApi"/>.
+/// optional authentication data. <see cref="NetwAdmissionConfig"/> uses a
+/// server reply carrying a random challenge. A server browser sends
+/// <c>"NPRB"</c>, then a version byte and a flags or status byte, and the reply
+/// follows. A server browser gets its reply and is disconnected, so it never
+/// appears in the <see cref="MultiplayerApi"/>.
 /// </remarks>
 public sealed class NetwAuthProtocol : NetwRefCounted
 {

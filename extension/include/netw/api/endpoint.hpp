@@ -47,6 +47,8 @@ public:
     Status get_status() const;
     godot::Ref<NetwServerInfo> get_info();
     bool get_is_listed() const;
+    bool get_is_invited() const;
+    godot::String get_invited_by() const;
     void probe();
 };
 

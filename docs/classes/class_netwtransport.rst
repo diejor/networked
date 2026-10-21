@@ -531,7 +531,7 @@ Return ``true`` when ``peer``, created by the game itself, belongs to this trans
 
 :godot:`float` **_timeout_hint**\ (\ ) |virtual| :ref:`🔗<class_NetwTransport_private_method__timeout_hint>`
 
-Return how many seconds :ref:`_make_peer()<class_NetwTransport_private_method__make_peer>` and :ref:`_probe()<class_NetwTransport_private_method__probe>` may take before failing with :godot:`@GlobalScope.ERR_TIMEOUT <@GlobalScope#class_@GlobalScope_constant_ERR_TIMEOUT>`. Negative never times out. ``5.0`` by default.
+Return how many seconds :ref:`_make_peer()<class_NetwTransport_private_method__make_peer>` and :ref:`_probe()<class_NetwTransport_private_method__probe>` may take before failing with :godot:`@GlobalScope.ERR_TIMEOUT <@GlobalScope#class_@GlobalScope_constant_ERR_TIMEOUT>`. A join counts this time only until the server answers, and :ref:`NetwMultiplayer.auth_timeout<class_NetwMultiplayer_property_auth_timeout>` limits the admission after that. Negative never times out. ``5.0`` by default.
 
 .. rst-class:: classref-item-separator
 

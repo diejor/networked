@@ -39,6 +39,12 @@
 		<member name="info" type="NetwServerInfo" setter="" getter="get_info">
 			What the server last advertised, or a default [NetwServerInfo] before it answers.
 		</member>
+		<member name="invited_by" type="String" setter="" getter="get_invited_by">
+			The sender's display name while [member is_invited], or [code]""[/code] when no name was supplied.
+		</member>
+		<member name="is_invited" type="bool" setter="" getter="get_is_invited">
+			[code]true[/code] after [method NetwConnection.invite]. Cleared when joining this server reaches [constant NetwConnection.STATE_ONLINE] or the row is removed.
+		</member>
 		<member name="is_listed" type="bool" setter="" getter="get_is_listed">
 			[code]false[/code] once the row is removed. Only [member peer_class] and [member address] keep their values after that.
 		</member>
@@ -55,7 +61,7 @@
 	<signals>
 		<signal name="changed">
 			<description>
-				Emitted after the row is probed or listed again.
+				Emitted when server information or the invitation changes.
 			</description>
 		</signal>
 	</signals>

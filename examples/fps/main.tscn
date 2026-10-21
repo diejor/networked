@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://ctib6j2lr0uhh" path="res://examples/fps/scripts/fps_session.gd" id="1_sess"]
 [ext_resource type="Script" uid="uid://d2fg3ewfjx4u4" path="res://examples/fps/scripts/audio.gd" id="2_audio"]
 [ext_resource type="PackedScene" uid="uid://bb2nsfunxlw3a" path="res://addons/networked/gdscript/connect/ui/connect_browser.tscn" id="3_brws"]
+[ext_resource type="PackedScene" uid="uid://cdiscordpanel" path="res://examples/shared/discord_panel.tscn" id="4_discord"]
 
 [node name="Main" type="Node" unique_id=382883538]
 script = ExtResource("1_sess")
@@ -23,5 +24,7 @@ unique_name_in_owner = true
 
 [node name="TitleLabel" parent="UI/ConnectBrowser/VBox/PanelContainer/HeaderBar" parent_id_path=PackedInt32Array(1218301622, 522198391) index="1" unique_id=1146132509]
 text = "Starter Kit FPS"
+
+[node name="DiscordPanel" parent="." instance=ExtResource("4_discord")]
 
 [editable path="UI/ConnectBrowser"]

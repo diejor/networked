@@ -328,10 +328,11 @@ public sealed class NetwSession : NetwRefCounted
         NetwApi.MethodBind("NetwSession", "get_players", 3995934104UL);
 
     /// <summary>
-    /// Every <see cref="NetwPlayer"/> that has joined, including those whose
-    /// peer has since disconnected. See
-    /// <see cref="NetwMultiplayer.ConnectedPlayers"/> for only the connected
-    /// ones.
+    /// Every <see cref="NetwPlayer"/> whose join was accepted and who has not
+    /// left, sorted by peer id. A leaving player is already gone from it when
+    /// <see cref="NetwSession.PlayerLeft"/> is emitted, while
+    /// <see cref="NetwMultiplayer.ConnectedPlayers"/> still holds that player
+    /// then.
     /// </summary>
     public NetwPlayer[] Players
     {
@@ -557,6 +558,37 @@ public sealed class NetwSession : NetwRefCounted
             in slot0,
             ref answered);
         return NetwPlayer.Adopt(answered);
+    }
+
+    private static readonly IntPtr _bindFindPlayer =
+        NetwApi.MethodBind("NetwSession", "find_player", 2578560255UL);
+
+    /// <summary>
+    /// The <see cref="NetwPlayer"/> with <see cref="NetwPlayer.Account"/> equal
+    /// to <paramref name="account"/>, or <c>null</c>. It answers a player
+    /// currently in the session, so an admission handler can kick a player
+    /// already signed in with that account. A client knows only its own
+    /// account, so on a client it answers the local player or <c>null</c>.
+    /// <code>
+    /// func admit(request: NetwJoinRequest) -&gt; Error:
+    ///     var signed_in := session.find_player(request.account)
+    ///     if signed_in != null:
+    ///         session.kick(signed_in, "Signed in somewhere else.")
+    ///     return OK
+    /// </code>
+    /// </summary>
+    public NetwPlayer FindPlayer(string account)
+    {
+        godot_variant slot0 = VariantUtils.CreateFromString(account);
+        godot_variant answered = default;
+        NetwThunks.Call1(_bindFindPlayer, Checked, in slot0, ref answered);
+        slot0.Dispose();
+        NetwPlayer result =
+            NetwPlayer.Adopt(
+                NetwApi.Retained(
+                    VariantUtils.ConvertToGodotObjectPtr(answered)));
+        answered.Dispose();
+        return result;
     }
 
     private static readonly IntPtr _bindBucketOf =

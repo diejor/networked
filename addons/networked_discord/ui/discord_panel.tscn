@@ -1,0 +1,72 @@
+[gd_scene format=3 uid="uid://dxragul8r7ve2"]
+
+[ext_resource type="Script" uid="uid://4tfhe3fdtyp0" path="res://addons/networked_discord/ui/discord_panel.gd" id="1_panel"]
+[ext_resource type="Theme" path="res://addons/networked_discord/ui/discord_theme.tres" id="1_theme"]
+[ext_resource type="PackedScene" path="res://addons/networked_discord/ui/discord_party_card.tscn" id="2_party"]
+[ext_resource type="PackedScene" path="res://addons/networked_discord/ui/discord_invite_list.tscn" id="3_invites"]
+[ext_resource type="PackedScene" path="res://addons/networked_discord/ui/discord_friend_list.tscn" id="4_friends"]
+[ext_resource type="PackedScene" path="res://addons/networked_discord/ui/discord_slot_row.tscn" id="5_slots"]
+[ext_resource type="PackedScene" path="res://addons/networked_discord/ui/discord_user_bar.tscn" id="6_user_bar"]
+
+[sub_resource type="InputEventKey" id="InputEventKey_toggle"]
+shift_pressed = true
+keycode = 96
+
+[sub_resource type="Shortcut" id="Shortcut_toggle"]
+events = [SubResource("InputEventKey_toggle")]
+
+[node name="DiscordPanel" type="PanelContainer" unique_id=1150107397]
+custom_minimum_size = Vector2(344, 0)
+theme = ExtResource("1_theme")
+theme_type_variation = &"DiscordPanel"
+script = ExtResource("1_panel")
+visibility_shortcut = SubResource("Shortcut_toggle")
+
+[node name="Box" type="VBoxContainer" parent="." unique_id=1517708736]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Header" type="HBoxContainer" parent="Box" unique_id=880284536]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="HintLabel" type="Label" parent="Box/Header" unique_id=1239945680]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"DiscordMutedLabel"
+text_overrun_behavior = 3
+
+[node name="ToggleButton" type="Button" parent="Box/Header" unique_id=1930257415]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(28, 0)
+layout_mode = 2
+focus_mode = 0
+theme_type_variation = &"DiscordWideButton"
+text = "-"
+
+[node name="MiniParty" parent="Box" unique_id=2099695332 instance=ExtResource("5_slots")]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="InviteList" parent="Box" unique_id=443336824 instance=ExtResource("3_invites")]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="FullViews" type="VBoxContainer" parent="Box" unique_id=837005242]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="PartyCard" parent="Box/FullViews" unique_id=1546234733 instance=ExtResource("2_party")]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="FriendList" parent="Box/FullViews" unique_id=1362558603 instance=ExtResource("4_friends")]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="UserBar" parent="Box/FullViews" unique_id=776023374 instance=ExtResource("6_user_bar")]
+unique_name_in_owner = true
+layout_mode = 2

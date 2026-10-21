@@ -51,15 +51,34 @@ One attempt runs at a time, and :ref:`state<class_NetwConnection_property_state>
 
 Each row of :ref:`endpoints<class_NetwConnection_property_endpoints>` is a :ref:`NetwEndpoint<class_NetwEndpoint>`. A :ref:`LobbyDirectory<class_LobbyDirectory>` lists its rows while :ref:`browsing<class_NetwConnection_property_browsing>` is ``true``, and :ref:`add()<class_NetwConnection_method_add>` lists a server the game already knows.
 
-\ :ref:`invite()<class_NetwConnection_method_invite>` records an invitation from any service. :ref:`invited<class_NetwConnection_signal_invited>` carries the :ref:`NetwEndpoint<class_NetwEndpoint>` a player can join.
+\ :ref:`invite()<class_NetwConnection_method_invite>` records an invitation from any service. :ref:`NetwEndpoint.is_invited<class_NetwEndpoint_property_is_invited>` keeps it available to a scene loaded later.
+
+::
+
+    func _ready() -> void:
+        connection.invited.connect(_on_invited)
+        for endpoint in connection.endpoints:
+            if endpoint.is_invited:
+                _on_invited(endpoint)
+
+    func _on_invited(endpoint: NetwEndpoint) -> void:
+        banner.text = "%s invited you" % endpoint.invited_by
+        Netw.prepare_join(self, name_edit.text)
+        connection.join(endpoint)
 
 \ **Connecting**\ 
 
 \ :ref:`join()<class_NetwConnection_method_join>` and :ref:`host()<class_NetwConnection_method_host>` create the peer, assign it, and settle their :ref:`NetwPromise<class_NetwPromise>` once the session is online. A failure arrives once through :ref:`failed<class_NetwConnection_signal_failed>`, and a player the server refuses arrives through :ref:`NetwSession.join_failed<class_NetwSession_signal_join_failed>` instead.
 
-\ **Hosting**\ 
+\ **Sharing**\ 
 
-\ :ref:`join_address<class_NetwConnection_property_join_address>` is what another player types to reach this session, and :ref:`join_address_changed<class_NetwConnection_signal_join_address_changed>` reports each change.
+\ :ref:`join_address<class_NetwConnection_property_join_address>` is the address the server advertises, and :ref:`max_players<class_NetwConnection_property_max_players>` is its player limit. A client reads both from the server once its join is accepted, and :ref:`join_address_changed<class_NetwConnection_signal_join_address_changed>` reports each change. :ref:`current_endpoint<class_NetwConnection_property_current_endpoint>` names the :ref:`NetwEndpoint.peer_class<class_NetwEndpoint_property_peer_class>`, so a service can share both.
+
+::
+
+    func _on_host_pressed() -> void:
+        await connection.host(ENetMultiplayerPeer).wait()
+        connection.join_address = "203.0.113.4:21253"
 
 \ **Defaults**\ 
 
@@ -94,17 +113,21 @@ Properties
 .. table::
    :widths: auto
 
-   +-----------------------------------------------------------+---------------------------------------------------------------------+
-   | :godot:`bool`                                             | :ref:`browsing<class_NetwConnection_property_browsing>`             |
-   +-----------------------------------------------------------+---------------------------------------------------------------------+
-   | :godot:`Array`\[:ref:`NetwEndpoint<class_NetwEndpoint>`\] | :ref:`endpoints<class_NetwConnection_property_endpoints>`           |
-   +-----------------------------------------------------------+---------------------------------------------------------------------+
-   | :godot:`String`                                           | :ref:`join_address<class_NetwConnection_property_join_address>`     |
-   +-----------------------------------------------------------+---------------------------------------------------------------------+
-   | :godot:`float`                                            | :ref:`probe_interval<class_NetwConnection_property_probe_interval>` |
-   +-----------------------------------------------------------+---------------------------------------------------------------------+
-   | :ref:`State<enum_NetwConnection_State>`                   | :ref:`state<class_NetwConnection_property_state>`                   |
-   +-----------------------------------------------------------+---------------------------------------------------------------------+
+   +-----------------------------------------------------------+-------------------------------------------------------------------------+
+   | :godot:`bool`                                             | :ref:`browsing<class_NetwConnection_property_browsing>`                 |
+   +-----------------------------------------------------------+-------------------------------------------------------------------------+
+   | :ref:`NetwEndpoint<class_NetwEndpoint>`                   | :ref:`current_endpoint<class_NetwConnection_property_current_endpoint>` |
+   +-----------------------------------------------------------+-------------------------------------------------------------------------+
+   | :godot:`Array`\[:ref:`NetwEndpoint<class_NetwEndpoint>`\] | :ref:`endpoints<class_NetwConnection_property_endpoints>`               |
+   +-----------------------------------------------------------+-------------------------------------------------------------------------+
+   | :godot:`String`                                           | :ref:`join_address<class_NetwConnection_property_join_address>`         |
+   +-----------------------------------------------------------+-------------------------------------------------------------------------+
+   | :godot:`int`                                              | :ref:`max_players<class_NetwConnection_property_max_players>`           |
+   +-----------------------------------------------------------+-------------------------------------------------------------------------+
+   | :godot:`float`                                            | :ref:`probe_interval<class_NetwConnection_property_probe_interval>`     |
+   +-----------------------------------------------------------+-------------------------------------------------------------------------+
+   | :ref:`State<enum_NetwConnection_State>`                   | :ref:`state<class_NetwConnection_property_state>`                       |
+   +-----------------------------------------------------------+-------------------------------------------------------------------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -191,6 +214,8 @@ Its :ref:`NetwEndpoint.is_listed<class_NetwEndpoint_property_is_listed>` is alre
 
 Emitted once when an attempt fails, and never for :ref:`cancel()<class_NetwConnection_method_cancel>`. A connection to it reads the failure of the :ref:`NetwPromise<class_NetwPromise>` that started the attempt, so a caller may drop that promise.
 
+A join whose connection closes fails with :godot:`@GlobalScope.ERR_CANT_CONNECT <@GlobalScope#class_@GlobalScope_constant_ERR_CANT_CONNECT>` when the server never answered. It fails with :godot:`@GlobalScope.ERR_CONNECTION_ERROR <@GlobalScope#class_@GlobalScope_constant_ERR_CONNECTION_ERROR>` when the server answered and then refused the join or ran out of time. Running out of time means :ref:`NetwMultiplayer.auth_timeout<class_NetwMultiplayer_property_auth_timeout>` ended the join on one of the peers.
+
 .. rst-class:: classref-item-separator
 
 ----
@@ -199,9 +224,9 @@ Emitted once when an attempt fails, and never for :ref:`cancel()<class_NetwConne
 
 .. rst-class:: classref-signal
 
-**invited**\ (\ endpoint\: :ref:`NetwEndpoint<class_NetwEndpoint>`, from_name\: :godot:`String`\ ) :ref:`🔗<class_NetwConnection_signal_invited>`
+**invited**\ (\ endpoint\: :ref:`NetwEndpoint<class_NetwEndpoint>`\ ) :ref:`🔗<class_NetwConnection_signal_invited>`
 
-Emitted when ``from_name`` invites the player to ``endpoint``, which joins only when the game calls :ref:`join()<class_NetwConnection_method_join>`.
+Emitted when someone invites the player to ``endpoint``. :ref:`NetwEndpoint.invited_by<class_NetwEndpoint_property_invited_by>` names the sender, and the player joins only when the game calls :ref:`join()<class_NetwConnection_method_join>`.
 
 .. rst-class:: classref-item-separator
 
@@ -388,6 +413,22 @@ While ``true``, every :ref:`LobbyDirectory<class_LobbyDirectory>` keeps listing 
 
 ----
 
+.. _class_NetwConnection_property_current_endpoint:
+
+.. rst-class:: classref-property
+
+:ref:`NetwEndpoint<class_NetwEndpoint>` **current_endpoint** :ref:`🔗<class_NetwConnection_property_current_endpoint>`
+
+.. rst-class:: classref-property-setget
+
+- :ref:`NetwEndpoint<class_NetwEndpoint>` **get_current_endpoint**\ (\ )
+
+The connected server, including while hosting, at the address this peer connected through. ``null`` before :ref:`STATE_ONLINE<class_NetwConnection_constant_STATE_ONLINE>` or when an assigned peer supplies no address. It can be absent from :ref:`endpoints<class_NetwConnection_property_endpoints>`.
+
+.. rst-class:: classref-item-separator
+
+----
+
 .. _class_NetwConnection_property_endpoints:
 
 .. rst-class:: classref-property
@@ -412,9 +453,28 @@ The rows from :ref:`add()<class_NetwConnection_method_add>` come first.
 
 .. rst-class:: classref-property-setget
 
+- |void| **set_join_address**\ (\ value\: :godot:`String`\ )
 - :godot:`String` **get_join_address**\ (\ )
 
-Empty while the session is not hosting.
+The address other players use to join this server. A server reads its own transport's address, such as its LAN address for ENet, until it sets another. A client reads the address passed to :ref:`join()<class_NetwConnection_method_join>` until its join is accepted, then the server's value. Empty before :ref:`STATE_ONLINE<class_NetwConnection_constant_STATE_ONLINE>` or when an assigned peer supplies no address.
+
+Only an online server sets it. A server behind a router sets its internet address after :ref:`host()<class_NetwConnection_method_host>` settles, and every client follows.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwConnection_property_max_players:
+
+.. rst-class:: classref-property
+
+:godot:`int` **max_players** :ref:`🔗<class_NetwConnection_property_max_players>`
+
+.. rst-class:: classref-property-setget
+
+- :godot:`int` **get_max_players**\ (\ )
+
+The server's player limit from :ref:`NetwServerInfo.max_players<class_NetwServerInfo_property_max_players>` in :ref:`NetwSessionConfig.server_info<class_NetwSessionConfig_property_server_info>`. A client reads the server's value once its join is accepted. ``0`` when no limit is declared or before that.
 
 .. rst-class:: classref-item-separator
 
@@ -574,7 +634,7 @@ Invalid :ref:`NetwSessionConfig<class_NetwSessionConfig>`, :ref:`NetwClockConfig
 
 :ref:`NetwEndpoint<class_NetwEndpoint>` **invite**\ (\ transport\: :godot:`Variant`, address\: :godot:`String`, from_name\: :godot:`String` = ""\ ) :ref:`🔗<class_NetwConnection_method_invite>`
 
-Keeps a joinable :ref:`NetwEndpoint<class_NetwEndpoint>` at ``address`` and emits :ref:`invited<class_NetwConnection_signal_invited>` with ``from_name``. Returns ``null`` if ``transport`` is unavailable or the address is empty.
+Sets :ref:`NetwEndpoint.is_invited<class_NetwEndpoint_property_is_invited>` and :ref:`NetwEndpoint.invited_by<class_NetwEndpoint_property_invited_by>` before emitting :ref:`invited<class_NetwConnection_signal_invited>`. Reuses the row at ``address``. Returns ``null`` if ``transport`` is unavailable or the address is empty.
 
 .. rst-class:: classref-item-separator
 
@@ -663,7 +723,7 @@ A transport named by its peer class, its :godot:`Script`, a :godot:`StringName` 
     ┠╴capabilities          int         NetwConnection.TransportCapability flags
     ┠╴host_settings         Dictionary  a host form's settings, defaults included
     ┠╴client_settings       Dictionary  a join form's settings, defaults included
-    ┖╴timeout_hint          float       seconds an attempt waits before it fails
+    ┖╴timeout_hint          float       seconds an attempt waits for the server to answer
 
 .. rst-class:: classref-item-separator
 

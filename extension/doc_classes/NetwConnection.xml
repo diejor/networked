@@ -32,11 +32,28 @@
 		[/codeblock]
 		[b]Rows[/b]
 		Each row of [member endpoints] is a [NetwEndpoint]. A [LobbyDirectory] lists its rows while [member browsing] is [code]true[/code], and [method add] lists a server the game already knows.
-		[method invite] records an invitation from any service. [signal invited] carries the [NetwEndpoint] a player can join.
+		[method invite] records an invitation from any service. [member NetwEndpoint.is_invited] keeps it available to a scene loaded later.
+		[codeblock]
+		func _ready() -&gt; void:
+		    connection.invited.connect(_on_invited)
+		    for endpoint in connection.endpoints:
+		        if endpoint.is_invited:
+		            _on_invited(endpoint)
+
+		func _on_invited(endpoint: NetwEndpoint) -&gt; void:
+		    banner.text = "%s invited you" % endpoint.invited_by
+		    Netw.prepare_join(self, name_edit.text)
+		    connection.join(endpoint)
+		[/codeblock]
 		[b]Connecting[/b]
 		[method join] and [method host] create the peer, assign it, and settle their [NetwPromise] once the session is online. A failure arrives once through [signal failed], and a player the server refuses arrives through [signal NetwSession.join_failed] instead.
-		[b]Hosting[/b]
-		[member join_address] is what another player types to reach this session, and [signal join_address_changed] reports each change.
+		[b]Sharing[/b]
+		[member join_address] is the address the server advertises, and [member max_players] is its player limit. A client reads both from the server once its join is accepted, and [signal join_address_changed] reports each change. [member current_endpoint] names the [member NetwEndpoint.peer_class], so a service can share both.
+		[codeblock]
+		func _on_host_pressed() -&gt; void:
+		    await connection.host(ENetMultiplayerPeer).wait()
+		    connection.join_address = "203.0.113.4:21253"
+		[/codeblock]
 		[b]Defaults[/b]
 		[method set_defaults] fills settings once for every connection through a transport, and the settings a call passes win over them.
 		[codeblock]
@@ -137,7 +154,7 @@
 			<param index="1" name="address" type="String" />
 			<param index="2" name="from_name" type="String" default="&quot;&quot;" />
 			<description>
-				Keeps a joinable [NetwEndpoint] at [param address] and emits [signal invited] with [param from_name]. Returns [code]null[/code] if [param transport] is unavailable or the address is empty.
+				Sets [member NetwEndpoint.is_invited] and [member NetwEndpoint.invited_by] before emitting [signal invited]. Reuses the row at [param address]. Returns [code]null[/code] if [param transport] is unavailable or the address is empty.
 			</description>
 		</method>
 		<method name="join">
@@ -193,7 +210,7 @@
 				┠╴capabilities          int         NetwConnection.TransportCapability flags
 				┠╴host_settings         Dictionary  a host form's settings, defaults included
 				┠╴client_settings       Dictionary  a join form's settings, defaults included
-				┖╴timeout_hint          float       seconds an attempt waits before it fails
+				┖╴timeout_hint          float       seconds an attempt waits for the server to answer
 				[/codeblock]
 			</description>
 		</method>
@@ -215,11 +232,18 @@
 		<member name="browsing" type="bool" setter="set_browsing" getter="is_browsing">
 			While [code]true[/code], every [LobbyDirectory] keeps listing and every row from [method add] is probed every [member probe_interval], which costs network traffic.
 		</member>
+		<member name="current_endpoint" type="NetwEndpoint" setter="" getter="get_current_endpoint">
+			The connected server, including while hosting, at the address this peer connected through. [code]null[/code] before [constant STATE_ONLINE] or when an assigned peer supplies no address. It can be absent from [member endpoints].
+		</member>
 		<member name="endpoints" type="NetwEndpoint[]" setter="" getter="get_endpoints">
 			The rows from [method add] come first.
 		</member>
-		<member name="join_address" type="String" setter="" getter="get_join_address">
-			Empty while the session is not hosting.
+		<member name="join_address" type="String" setter="set_join_address" getter="get_join_address">
+			The address other players use to join this server. A server reads its own transport's address, such as its LAN address for ENet, until it sets another. A client reads the address passed to [method join] until its join is accepted, then the server's value. Empty before [constant STATE_ONLINE] or when an assigned peer supplies no address.
+			Only an online server sets it. A server behind a router sets its internet address after [method host] settles, and every client follows.
+		</member>
+		<member name="max_players" type="int" setter="" getter="get_max_players">
+			The server's player limit from [member NetwServerInfo.max_players] in [member NetwSessionConfig.server_info]. A client reads the server's value once its join is accepted. [code]0[/code] when no limit is declared or before that.
 		</member>
 		<member name="probe_interval" type="float" setter="set_probe_interval" getter="get_probe_interval">
 			Seconds between probes of a row from [method add] while [member browsing]. [code]0[/code] probes it once each time browsing starts.
@@ -246,13 +270,13 @@
 			<param index="1" name="reason" type="String" />
 			<description>
 				Emitted once when an attempt fails, and never for [method cancel]. A connection to it reads the failure of the [NetwPromise] that started the attempt, so a caller may drop that promise.
+				A join whose connection closes fails with [constant @GlobalScope.ERR_CANT_CONNECT] when the server never answered. It fails with [constant @GlobalScope.ERR_CONNECTION_ERROR] when the server answered and then refused the join or ran out of time. Running out of time means [member NetwMultiplayer.auth_timeout] ended the join on one of the peers.
 			</description>
 		</signal>
 		<signal name="invited">
 			<param index="0" name="endpoint" type="NetwEndpoint" />
-			<param index="1" name="from_name" type="String" />
 			<description>
-				Emitted when [param from_name] invites the player to [param endpoint], which joins only when the game calls [method join].
+				Emitted when someone invites the player to [param endpoint]. [member NetwEndpoint.invited_by] names the sender, and the player joins only when the game calls [method join].
 			</description>
 		</signal>
 		<signal name="join_address_changed">

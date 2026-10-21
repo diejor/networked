@@ -111,7 +111,7 @@ TEST_CASE(
     NETW_CHECK_EQ(int(joins[2].peer_id), 9);
 
     LocalVector<AcceptFrame> rows;
-    const bool framed = netw::session::roster_read(roster.roster_frame(), rows);
+    const bool framed = netw::session::roster_read(roster.roster_frame(4), rows);
     CHECK(framed);
     NETW_CHECK_EQ(int(rows.size()), 3);
     NETW_CHECK_EQ(int(rows[0].peer_id), 4);

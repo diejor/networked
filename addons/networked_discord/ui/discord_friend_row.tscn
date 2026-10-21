@@ -1,0 +1,81 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://addons/networked_discord/ui/discord_friend_row.gd" id="1_row"]
+[ext_resource type="PackedScene" path="res://addons/networked_discord/ui/discord_avatar.tscn" id="2_avatar"]
+[ext_resource type="Texture2D" path="res://addons/networked_discord/ui/icons/controller.svg" id="3_controller"]
+
+[node name="FriendRow" type="Button"]
+custom_minimum_size = Vector2(0, 58)
+theme_type_variation = &"DiscordRowButton"
+script = ExtResource("1_row")
+
+[node name="Separator" type="HSeparator" parent="."]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 8.0
+offset_right = -8.0
+offset_bottom = 1.0
+grow_horizontal = 2
+mouse_filter = 2
+
+[node name="Box" type="HBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 8.0
+offset_right = -8.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_constants/separation = 12
+
+[node name="Avatar" parent="Box" instance=ExtResource("2_avatar")]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+show_status = true
+
+[node name="Lines" type="VBoxContainer" parent="Box"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_override_constants/separation = 0
+alignment = 1
+
+[node name="NameLabel" type="Label" parent="Box/Lines"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"DiscordNameLabel"
+text_overrun_behavior = 3
+
+[node name="StatusLine" type="HBoxContainer" parent="Box/Lines"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 4
+
+[node name="GameIcon" type="TextureRect" parent="Box/Lines/StatusLine"]
+unique_name_in_owner = true
+self_modulate = Color(0.137, 0.647, 0.353, 1)
+custom_minimum_size = Vector2(14, 14)
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+texture = ExtResource("3_controller")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="StatusLabel" type="Label" parent="Box/Lines/StatusLine"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"DiscordMutedLabel"
+text_overrun_behavior = 3
+
+[node name="ActionButton" type="Button" parent="Box"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+theme_type_variation = &"DiscordWideButton"
+text = "Invite"

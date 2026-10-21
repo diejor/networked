@@ -3,7 +3,7 @@
 ## The host needs no open port, so web exports can host. A lobby's address is
 ## its match id, which players can share to join directly. Lobby names and
 ## settings are stored in Nakama storage so they can be listed.
-##
+## [br][br]
 ## Needs the Nakama Godot SDK [constant NakamaWrapper.NAKAMA_SDK_VERSION].
 class_name NakamaLobbyDirectory
 extends LobbyDirectory
@@ -274,6 +274,13 @@ func _member_name(peer_id: int) -> String:
 		return LobbyDirectory.member_name_default(peer_id)
 	var name := _wrapper.username_for_peer(peer_id)
 	return name if not name.is_empty() else LobbyDirectory.member_name_default(peer_id)
+
+
+func _account_of(peer_id: int) -> String:
+	if _wrapper == null:
+		return ""
+	var user_id: String = _wrapper.user_id_for_peer(peer_id)
+	return "nakama:" + user_id if not user_id.is_empty() else ""
 
 
 func _local_member_name() -> String:

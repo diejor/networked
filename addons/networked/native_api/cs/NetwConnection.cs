@@ -42,15 +42,40 @@ namespace Networked;
 /// while <see cref="NetwConnection.Browsing"/> is <c>true</c>, and
 /// <see cref="NetwConnection.Add"/> lists a server the game already knows.
 /// <see cref="NetwConnection.Invite"/> records an invitation from any service.
-/// <see cref="NetwConnection.Invited"/> carries the <see cref="NetwEndpoint"/>
-/// a player can join. <b>Connecting</b> <see cref="NetwConnection.Join"/> and
+/// <see cref="NetwEndpoint.IsInvited"/> keeps it available to a scene loaded
+/// later.
+/// <code>
+/// func _ready() -&gt; void:
+///     connection.invited.connect(_on_invited)
+///     for endpoint in connection.endpoints:
+///         if endpoint.is_invited:
+///             _on_invited(endpoint)
+///
+/// func _on_invited(endpoint: NetwEndpoint) -&gt; void:
+///     banner.text = "%s invited you" % endpoint.invited_by
+///     Netw.prepare_join(self, name_edit.text)
+///     connection.join(endpoint)
+/// </code>
+/// </para>
+/// <para>
+/// <b>Connecting</b> <see cref="NetwConnection.Join"/> and
 /// <see cref="NetwConnection.Host"/> create the peer, assign it, and settle
 /// their <see cref="NetwPromise"/> once the session is online. A failure
 /// arrives once through <see cref="NetwConnection.Failed"/>, and a player the
 /// server refuses arrives through <see cref="NetwSession.JoinFailed"/> instead.
-/// <b>Hosting</b> <see cref="NetwConnection.JoinAddress"/> is what another
-/// player types to reach this session, and
+/// <b>Sharing</b> <see cref="NetwConnection.JoinAddress"/> is the address the
+/// server advertises, and <see cref="NetwConnection.MaxPlayers"/> is its player
+/// limit. A client reads both from the server once its join is accepted, and
 /// <see cref="NetwConnection.JoinAddressChanged"/> reports each change.
+/// <see cref="NetwConnection.CurrentEndpoint"/> names the
+/// <see cref="NetwEndpoint.PeerClass"/>, so a service can share both.
+/// <code>
+/// func _on_host_pressed() -&gt; void:
+///     await connection.host(ENetMultiplayerPeer).wait()
+///     connection.join_address = "203.0.113.4:21253"
+/// </code>
+/// </para>
+/// <para>
 /// <b>Defaults</b> <see cref="NetwConnection.SetDefaults"/> fills settings once
 /// for every connection through a transport, and the settings a call passes win
 /// over them.
@@ -195,7 +220,12 @@ public sealed class NetwConnection : NetwRefCounted
     /// Emitted once when an attempt fails, and never for
     /// <see cref="NetwConnection.Cancel"/>. A connection to it reads the
     /// failure of the <see cref="NetwPromise"/> that started the attempt, so a
-    /// caller may drop that promise.
+    /// caller may drop that promise. A join whose connection closes fails with
+    /// <c>@GlobalScope.ERR_CANT_CONNECT</c> when the server never answered. It
+    /// fails with <c>@GlobalScope.ERR_CONNECTION_ERROR</c> when the server
+    /// answered and then refused the join or ran out of time. Running out of
+    /// time means <see cref="NetwMultiplayer.AuthTimeout"/> ended the join on
+    /// one of the peers.
     /// </summary>
     public event Action<Error, string> Failed
     {
@@ -227,17 +257,18 @@ public sealed class NetwConnection : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted when <c>from_name</c> invites the player to <c>endpoint</c>,
-    /// which joins only when the game calls <see cref="NetwConnection.Join"/>.
+    /// Emitted when someone invites the player to <c>endpoint</c>.
+    /// <see cref="NetwEndpoint.InvitedBy"/> names the sender, and the player
+    /// joins only when the game calls <see cref="NetwConnection.Join"/>.
     /// </summary>
-    public event Action<NetwEndpoint, string> Invited
+    public event Action<NetwEndpoint> Invited
     {
         add => ConnectBridge(
             "invited",
             value,
             Callable.From(
-                (Variant a0, string a1) =>
-                    value(Wrapped(a0, NetwEndpoint.From), a1)
+                (Variant a0) =>
+                    value(Wrapped(a0, NetwEndpoint.From))
             )
         );
         remove => DisconnectBridge("invited", value);
@@ -293,11 +324,48 @@ public sealed class NetwConnection : NetwRefCounted
         }
     }
 
+    private static readonly IntPtr _bindGetCurrentEndpoint =
+        NetwApi.MethodBind(
+            "NetwConnection",
+            "get_current_endpoint",
+            3139723074UL);
+
+    /// <summary>
+    /// The connected server, including while hosting, at the address this peer
+    /// connected through. <c>null</c> before
+    /// <see cref="NetwConnection.StateEnum.Online"/> or when an assigned peer
+    /// supplies no address. It can be absent from
+    /// <see cref="NetwConnection.Endpoints"/>.
+    /// </summary>
+    public NetwEndpoint CurrentEndpoint
+    {
+        get
+        {
+            IntPtr answered = default;
+            NetwThunks.Ptrcall0_IntPtr(
+                _bindGetCurrentEndpoint,
+                Checked,
+                ref answered);
+            return NetwEndpoint.Adopt(answered);
+        }
+    }
+
     private static readonly IntPtr _bindGetJoinAddress =
         NetwApi.MethodBind("NetwConnection", "get_join_address", 201670096UL);
 
+    private static readonly IntPtr _bindSetJoinAddress =
+        NetwApi.MethodBind("NetwConnection", "set_join_address", 83702148UL);
+
     /// <summary>
-    /// Empty while the session is not hosting.
+    /// The address other players use to join this server. A server reads its
+    /// own transport's address, such as its LAN address for ENet, until it sets
+    /// another. A client reads the address passed to
+    /// <see cref="NetwConnection.Join"/> until its join is accepted, then the
+    /// server's value. Empty before
+    /// <see cref="NetwConnection.StateEnum.Online"/> or when an assigned peer
+    /// supplies no address. Only an online server sets it. A server behind a
+    /// router sets its internet address after <see cref="NetwConnection.Host"/>
+    /// settles, and every client follows.
     /// </summary>
     public string JoinAddress
     {
@@ -308,6 +376,37 @@ public sealed class NetwConnection : NetwRefCounted
             string result = VariantUtils.ConvertToString(answered);
             answered.Dispose();
             return result;
+        }
+        set
+        {
+            godot_variant slot0 = VariantUtils.CreateFromString(value);
+            godot_variant answered = default;
+            NetwThunks.Call1(
+                _bindSetJoinAddress,
+                Checked,
+                in slot0,
+                ref answered);
+            slot0.Dispose();
+            answered.Dispose();
+        }
+    }
+
+    private static readonly IntPtr _bindGetMaxPlayers =
+        NetwApi.MethodBind("NetwConnection", "get_max_players", 3905245786UL);
+
+    /// <summary>
+    /// The server's player limit from <see cref="NetwServerInfo.MaxPlayers"/>
+    /// in <see cref="NetwSessionConfig.ServerInfo"/>. A client reads the
+    /// server's value once its join is accepted. <c>0</c> when no limit is
+    /// declared or before that.
+    /// </summary>
+    public long MaxPlayers
+    {
+        get
+        {
+            long answered = default;
+            NetwThunks.Ptrcall0_Long(_bindGetMaxPlayers, Checked, ref answered);
+            return answered;
         }
     }
 
@@ -639,7 +738,7 @@ public sealed class NetwConnection : NetwRefCounted
     /// ┠╴capabilities          int         NetwConnection.TransportCapability flags
     /// ┠╴host_settings         Dictionary  a host form's settings, defaults included
     /// ┠╴client_settings       Dictionary  a join form's settings, defaults included
-    /// ┖╴timeout_hint          float       seconds an attempt waits before it fails
+    /// ┖╴timeout_hint          float       seconds an attempt waits for the server to answer
     /// </code>
     /// </summary>
     public Godot.Collections.Dictionary Transport(Variant of)
@@ -756,11 +855,11 @@ public sealed class NetwConnection : NetwRefCounted
         NetwApi.MethodBind("NetwConnection", "invite", 3138012286UL);
 
     /// <summary>
-    /// Keeps a joinable <see cref="NetwEndpoint"/> at
-    /// <paramref name="address"/> and emits
-    /// <see cref="NetwConnection.Invited"/> with <paramref name="fromName"/>.
-    /// Returns <c>null</c> if <paramref name="transport"/> is unavailable or
-    /// the address is empty.
+    /// Sets <see cref="NetwEndpoint.IsInvited"/> and
+    /// <see cref="NetwEndpoint.InvitedBy"/> before emitting
+    /// <see cref="NetwConnection.Invited"/>. Reuses the row at
+    /// <paramref name="address"/>. Returns <c>null</c> if
+    /// <paramref name="transport"/> is unavailable or the address is empty.
     /// </summary>
     public NetwEndpoint Invite(
         Variant transport,

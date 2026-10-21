@@ -472,6 +472,7 @@ Ref<NetwPlayer> NetwMultiplayer::player_ensure(
     Ref<NetwPlayer> minted;
     minted.instantiate();
     minted->bind_to(this, p_accepted.peer_id, player_id, p_accepted.username);
+    minted->bind_account(p_accepted.account, p_accepted.account_name);
     NETW_TRACE(
         sys::SESSION,
         "Gave player id %d to peer %d.",
@@ -583,6 +584,21 @@ TypedArray<NetwPlayer> NetwMultiplayer::player_admitted_all() const {
 
 Ref<NetwPlayer> NetwMultiplayer::player_admitted_local() {
     return player_admitted_of(get_unique_id());
+}
+
+Ref<NetwPlayer> NetwMultiplayer::player_find_account(
+    const String &p_account
+) const {
+    if (p_account.is_empty()) {
+        return Ref<NetwPlayer>();
+    }
+    for (const KeyValue<int64_t, PlayerRow> &row : players) {
+        if (row.value.admitted && row.value.row.is_valid()
+            && row.value.row->get_account() == p_account) {
+            return row.value.row;
+        }
+    }
+    return Ref<NetwPlayer>();
 }
 
 TypedArray<NetwEntity> NetwMultiplayer::player_entities_held(
@@ -1375,57 +1391,6 @@ bool NetwMultiplayer::session_preflight_join(
     return true;
 }
 
-Error NetwMultiplayer::session_admits_join(
-    int64_t p_peer,
-    const StringName &p_username,
-    const Array &p_args
-) {
-    NETW_ZONE_NC("netw::session_admits_join", colors::SESSION);
-    const session_decl::Resolved declared
-        = declaration_book().resolve(this, session_decl::KIND_ADMISSION);
-    if (declared.state == session_decl::ABSENT) {
-        return OK;
-    }
-    if (declared.state != session_decl::READY) {
-        declaration_book().report_unresolved(
-            this,
-            session_decl::KIND_ADMISSION,
-            declared.state,
-            "a join"
-        );
-        return ERR_UNAUTHORIZED;
-    }
-    Array arguments;
-    arguments.push_back(p_peer);
-    arguments.push_back(p_username);
-    arguments.append_array(p_args);
-    bool called = false;
-    const Variant verdict
-        = gd::call_checked(declared.callable, arguments, called);
-    if (!called) {
-        NETW_ERROR(
-            sys::SESSION,
-            "Peer %d was refused, because the Netw.configure_admission "
-            "handler could not be called. It must take the peer id, the "
-            "username and then each join argument.",
-            int(p_peer)
-        );
-        return ERR_UNAUTHORIZED;
-    }
-    const Variant::Type answered = verdict.get_type();
-    if (answered != Variant::INT && answered != Variant::FLOAT) {
-        NETW_ERROR(
-            sys::SESSION,
-            "Peer %d was refused, because the Netw.configure_admission "
-            "handler returned %s. Return OK to accept, or an Error to refuse.",
-            int(p_peer),
-            String(Variant::get_type_name(answered))
-        );
-        return ERR_INVALID_DATA;
-    }
-    return Error(int64_t(verdict));
-}
-
 void NetwMultiplayer::session_fail_join(
     int64_t p_peer,
     Error p_error,
@@ -1802,10 +1767,37 @@ void NetwMultiplayer::session_accept_join(
         );
         return;
     }
+    if (!session_decode_join_args(requested)
+        || String(requested.username).is_empty()) {
+        session_fail_join(p_sender, ERR_INVALID_DATA, "Invalid join arguments.");
+        return;
+    }
+    session_start_admission(requested);
+}
+
+void NetwMultiplayer::session_finish_join(
+    const JoinRequest &p_request,
+    const Ref<NetwJoinRequest> &p_admission
+) {
+    JoinRequest requested = p_request;
+    const int64_t p_sender = requested.peer_id;
+    const String account = p_admission->get_account();
+    const Ref<NetwPlayer> playing = player_find_account(account);
+    if (playing.is_valid() && playing->get_peer_id() != p_sender) {
+        session_fail_join(
+            p_sender,
+            ERR_ALREADY_IN_USE,
+            "This account is already playing in the session."
+        );
+        return;
+    }
     session::AcceptFrame accepting;
     if (!session_resolve_inbound_join(requested, p_sender, accepting)) {
         return;
     }
+    accepting.account = account;
+    accepting.account_name
+        = account.is_empty() ? String() : p_admission->get_account_name();
     const Array decoded = requested.arg_values;
     if (!session_preflight_join(accepting, decoded)) {
         return;
@@ -1815,26 +1807,16 @@ void NetwMultiplayer::session_accept_join(
     if (inner.is_valid()) {
         set_peer_ids(gd::api_peer_ids(inner));
     }
-    const PackedByteArray accepted = session::frame_write(accepting);
     const PackedInt32Array peers = NETW_API_VIRTUAL(get_peer_ids)();
     for (int at = 0; at < int(peers.size()); ++at) {
-        send_to(
-            peers[at],
-            0,
-            session_accept_channel,
-            accepted,
-            true,
-            0,
-            String(),
-            false
-        );
+        session_send_accept(accepting, peers[at]);
     }
     if (p_sender != get_unique_id()) {
         send_to(
             p_sender,
             0,
             session_roster_channel,
-            join_roster.roster_frame(),
+            join_roster.roster_frame(p_sender),
             true,
             0,
             String(),
@@ -1843,6 +1825,33 @@ void NetwMultiplayer::session_accept_join(
         liveness_grant_lease(p_sender);
     }
     session_run_join_handler(accepting, decoded);
+}
+
+PackedByteArray NetwMultiplayer::session_accept_payload(
+    session::AcceptFrame p_row,
+    int64_t p_destination
+) const {
+    if (p_destination == p_row.peer_id) {
+        p_row.join_address = connect_core.join_address();
+        p_row.max_players = uint64_t(connection_max_players());
+    }
+    return session::frame_write(session::accept_seen_by(p_row, p_destination));
+}
+
+void NetwMultiplayer::session_send_accept(
+    const session::AcceptFrame &p_row,
+    int64_t p_destination
+) {
+    send_to(
+        p_destination,
+        0,
+        session_accept_channel,
+        session_accept_payload(p_row, p_destination),
+        true,
+        0,
+        String(),
+        false
+    );
 }
 
 void NetwMultiplayer::session_receive_accept(
@@ -1860,7 +1869,40 @@ void NetwMultiplayer::session_receive_accept(
         );
         return;
     }
+    if (accepted.peer_id == get_unique_id()) {
+        connect_core.advertise(
+            accepted.join_address, int64_t(accepted.max_players)
+        );
+    }
     session_admit(accepted);
+}
+
+int64_t NetwMultiplayer::connection_max_players() const {
+    if (!has_server_role()) {
+        return connect_core.advertised_max_players();
+    }
+    return session_settings.server_info.is_valid()
+        ? session_settings.server_info->get_max_players()
+        : 0;
+}
+
+Error NetwMultiplayer::connection_set_join_address(const String &p_address) {
+    if (!has_server_role() || !is_online()) {
+        NETW_ERROR(
+            sys::TRANSPORT,
+            "Only an online server sets NetwConnection.join_address. Set it "
+            "after NetwConnection.host settles."
+        );
+        return ERR_UNAVAILABLE;
+    }
+    connect_core.advertise(p_address, 0);
+    const int64_t mine = get_unique_id();
+    for (const session::AcceptFrame &row : join_roster.accepted_joins()) {
+        if (row.peer_id != mine) {
+            session_send_accept(row, row.peer_id);
+        }
+    }
+    return OK;
 }
 
 void NetwMultiplayer::session_receive_roster(
@@ -1997,12 +2039,22 @@ bool NetwMultiplayer::session_remember_join(
 }
 
 #if defined(NETW_TESTS)
-PackedByteArray NetwMultiplayer::session_accept_bytes(int64_t p_peer) const {
-    return join_roster.accept_frame(p_peer);
+PackedByteArray NetwMultiplayer::session_accept_bytes(
+    int64_t p_peer,
+    int64_t p_destination
+) const {
+    if (!join_roster.has_accepted(p_peer)) {
+        return PackedByteArray();
+    }
+    return session_accept_payload(
+        join_roster.accepted_join(p_peer), p_destination
+    );
 }
 
-PackedByteArray NetwMultiplayer::session_roster_bytes() const {
-    return join_roster.roster_frame();
+PackedByteArray NetwMultiplayer::session_roster_bytes(
+    int64_t p_destination
+) const {
+    return join_roster.roster_frame(p_destination);
 }
 #endif
 
@@ -2014,6 +2066,7 @@ void NetwMultiplayer::session_forget_peer(int64_t p_peer) {
 void NetwMultiplayer::session_clear_roster() {
     peer_buckets.clear();
     link_handshakes.clear();
+    pending_admissions.clear();
     join_roster.clear();
     unreachable_peers.clear();
     settled_peer_departures.clear();
@@ -2381,7 +2434,11 @@ void NetwMultiplayer::auth_send_hello(int64_t p_peer) {
     );
     const Error sent = send_auth(
         p_peer,
-        auth::encode_client_hello(uint64_t(auth_app_tag), 0)
+        auth::encode_client_hello(
+            uint64_t(auth_app_tag),
+            p_peer == SERVER_PEER && session_requires_proof()
+                ? auth::HELLO_PROOF_CAPABLE : 0
+        )
     );
     if (sent != OK) {
         NETW_WARN(
@@ -2392,6 +2449,9 @@ void NetwMultiplayer::auth_send_hello(int64_t p_peer) {
             int(p_peer),
             int(sent)
         );
+        return;
+    }
+    if (p_peer == SERVER_PEER && session_requires_proof()) {
         return;
     }
     const Error completed = auth_complete_link(p_peer);
@@ -2418,6 +2478,7 @@ Error NetwMultiplayer::auth_complete_link(int64_t p_peer) {
 
 void NetwMultiplayer::auth_forget_link(int64_t p_peer) {
     link_handshakes.erase(p_peer);
+    pending_admissions.erase(p_peer);
 }
 
 #if defined(NETW_TESTS)
@@ -2468,11 +2529,46 @@ void NetwMultiplayer::auth_receive_hello(
         disconnect_peer(p_peer);
         return;
     }
-    NETW_TRACE(
-        sys::SESSION,
-        "Peer %d runs this build, so the hello completes its connection.",
-        int(p_peer)
-    );
+    if (!has_server_role()) {
+        if (p_peer != SERVER_PEER
+            || (decoded.flags & auth::HELLO_PROOF_CHALLENGE) == 0) {
+            auth_complete_link(p_peer);
+            return;
+        }
+        if (p_data.size() != auth::HELLO_HEADER_LEN + auth::CHALLENGE_LENGTH) {
+            disconnect_peer(p_peer);
+            return;
+        }
+        session_request_proof(p_peer, String::utf8(
+            reinterpret_cast<const char *>(p_data.ptr())
+                + auth::HELLO_HEADER_LEN, auth::CHALLENGE_LENGTH
+        ));
+        return;
+    }
+    const bool required = session_requires_proof();
+    if (required || (decoded.flags & auth::HELLO_PROOF_CAPABLE) != 0) {
+        PackedByteArray reply = auth::encode_client_hello(
+            uint64_t(auth_app_tag), required ? auth::HELLO_PROOF_CHALLENGE : 0
+        );
+        if (required) {
+            LinkHandshake &link = link_handshakes[p_peer];
+            if (link.challenge.is_empty()) {
+                link.challenge = session_mint_challenge();
+            }
+            if (link.challenge.is_empty()) {
+                disconnect_peer(p_peer);
+                return;
+            }
+            const CharString text = link.challenge.utf8();
+            for (int at = 0; at < text.length(); ++at) {
+                reply.push_back(uint8_t(text[at]));
+            }
+        }
+        if (send_auth(p_peer, reply) != OK) {
+            disconnect_peer(p_peer);
+            return;
+        }
+    }
     auth_complete_link(p_peer);
 }
 
@@ -2954,6 +3050,9 @@ Error NetwMultiplayer::NETW_API_VIRTUAL(poll)() {
     }
     const double frame_delta
         = poll_delta(Time::get_singleton()->get_ticks_usec());
+    session_poll_admissions(
+        int64_t(Time::get_singleton()->get_ticks_msec())
+    );
     connect_core.on_poll(frame_delta);
     const Error err = embed_poll_transport();
     const bool clocked = clock_engine().get_configured();
@@ -3342,14 +3441,11 @@ void NetwMultiplayer::connection_emit_join_address_changed(
     notify(CONNECTION_JOIN_ADDRESS_CHANGED, p_address);
 }
 
-void NetwMultiplayer::connection_emit_invited(
-    const RID &p_endpoint,
-    const String &p_from_name
-) {
+void NetwMultiplayer::connection_emit_invited(const RID &p_endpoint) {
     if (connection_handle.is_valid()) {
-        connection_handle->announce_invited(p_endpoint, p_from_name);
+        connection_handle->announce_invited(p_endpoint);
     }
-    notify(CONNECTION_INVITED, p_endpoint, p_from_name);
+    notify(CONNECTION_INVITED, p_endpoint);
 }
 
 RID NetwMultiplayer::transport_register(const Ref<Script> &p_type) {
@@ -3709,14 +3805,6 @@ void NetwMultiplayer::discovery_directory_listed(
 ) {
     connect_core
         .on_directory_listed(p_addresses, p_names, p_infos, p_directory);
-}
-
-void NetwMultiplayer::discovery_directory_invited(
-    Object *p_directory,
-    const String &p_address,
-    const String &p_from_name
-) {
-    connect_core.on_directory_invited(p_directory, p_address, p_from_name);
 }
 
 Ref<NetwConnection> NetwMultiplayer::get_connection() {
@@ -4212,6 +4300,9 @@ int64_t NetwMultiplayer::get_standalone_acks_out() const {
 }
 
 void NetwMultiplayer::auth_relay_authenticating(int64_t p_peer) {
+    if (p_peer == SERVER_PEER) {
+        connect_core.on_server_answered();
+    }
     emit_signal(SIG_PEER_AUTHENTICATING, p_peer);
     notify(PEER_AUTHENTICATING, p_peer);
 }
@@ -4661,28 +4752,6 @@ bool NetwMultiplayer::session_resolve_inbound_join(
         );
         return false;
     }
-    const Error refusal = session_admits_join(
-        p_sender,
-        r_request.username,
-        r_request.arg_values
-    );
-    if (refusal != OK) {
-        NETW_INFO(
-            sys::SESSION,
-            "Peer %d was refused by this session's admission handler (%s).",
-            int(p_sender),
-            gd::error_name(refusal)
-        );
-        session_fail_join(
-            p_sender,
-            refusal,
-            vformat(
-                "This server did not admit the join (%s)",
-                String(gd::error_name(refusal))
-            )
-        );
-        return false;
-    }
     r_accepted.peer_id = p_sender;
     r_accepted.username = r_request.username;
     r_accepted.player_id = uint64_t(player_mint_id());
@@ -4717,6 +4786,31 @@ void NetwMultiplayer::session_submit_join(
 void NetwMultiplayer::session_submit_request(const JoinRequest &p_request) {
     NETW_ZONE_NC("netw::session_submit_join", colors::SESSION);
     JoinRequest sending = p_request;
+    const int64_t mine = get_unique_id();
+    if (is_host() && session_requires_proof() && !session_has_proof(mine)) {
+        LinkHandshake &local = link_handshakes[mine];
+        local.local_join = p_request;
+        if (local.proof.result.is_null()) {
+            session_request_proof(
+                mine,
+                local.challenge.is_empty() ? session_mint_challenge()
+                                           : local.challenge
+            );
+        }
+        return;
+    }
+    const int64_t proven = is_host() ? mine : int64_t(SERVER_PEER);
+    if (session_has_proof(proven)) {
+        sending.proof_bytes = gd::var_to_bytes(
+            link_handshakes[proven].proof.result->get_result()
+        );
+        if (sending.proof_bytes.size() > 16383) {
+            session_report_join_failure(
+                ERR_INVALID_DATA, "The admission proof exceeds 16383 bytes."
+            );
+            return;
+        }
+    }
     session_encode_join_args(sending);
     sending.app_tag = auth_app_tag;
     sending.wire_identity = SessionCore::compute_wire_identity();

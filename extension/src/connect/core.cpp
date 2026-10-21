@@ -328,6 +328,10 @@ void ConnectCore::drop_live() {
 }
 
 void ConnectCore::release_live() {
+    joined_target = RID();
+    joined_address = String();
+    advertised_address = String();
+    advertised_players = 0;
     if (live == nullptr) {
         return;
     }
@@ -784,12 +788,26 @@ void ConnectCore::on_session_edge(int p_old, int p_new) {
     announce_join_address();
 }
 
+void ConnectCore::on_server_answered() {
+    attempt.deadline = 0.0;
+    attempt.answered = true;
+}
+
 void ConnectCore::on_session_online() {
     const Ref<NetwPromise> outcome = attempt.promise;
     attempt.ticket = RID();
     attempt.promise.unref();
     attempt.deadline = 0.0;
+    TargetRow *joined = rows.row(joined_target);
+    const bool acknowledged = joined != nullptr && joined->invite_pending;
+    if (acknowledged) {
+        joined->invite_pending = false;
+        joined->invited_by = String();
+    }
     move_attempt(ATTEMPT_ONLINE);
+    if (acknowledged) {
+        session->endpoint_emit_updated(joined_target);
+    }
     announce_join_address();
     if (outcome.is_valid()) {
         outcome->resolve(int64_t(OK));
@@ -798,6 +816,16 @@ void ConnectCore::on_session_online() {
 
 void ConnectCore::on_transport_failed() {
     if (attempt.state != ATTEMPT_CONNECTING) {
+        return;
+    }
+    if (attempt.answered) {
+        end_attempt(
+            ERR_CONNECTION_ERROR,
+            "The server refused the join or ran out of time before admitting "
+            "the player. Check the server's log, and raise "
+            "NetwMultiplayer.auth_timeout on both peers if the player needs "
+            "more time."
+        );
         return;
     }
     end_attempt(ERR_CANT_CONNECT, "The server could not be reached.");
@@ -995,13 +1023,45 @@ bool ConnectCore::claim_offer(const Ref<MultiplayerPeer> &p_peer) {
         asked->provider = nullptr;
         taken->bind_session(session);
         taken->adopt(p_peer);
+        const String address = asked->mode == PEER_MODE_CLIENT
+            ? asked->address
+            : String();
+        const RID target = asked->mode == PEER_MODE_CLIENT
+            ? rows.find(asked->transport, asked->address)
+            : RID();
         adopt_live(taken);
+        joined_target = target;
+        joined_address = address;
     }
     return true;
 }
 
+bool ConnectCore::live_online() const {
+    return live != nullptr && session != nullptr && session->is_online();
+}
+
+String ConnectCore::endpoint_address() const {
+    if (!live_online()) {
+        return String();
+    }
+    return joined_address.is_empty() ? live->join_address() : joined_address;
+}
+
 String ConnectCore::join_address() const {
-    return live != nullptr ? live->join_address() : String();
+    if (!live_online() || advertised_address.is_empty()) {
+        return endpoint_address();
+    }
+    return advertised_address;
+}
+
+void ConnectCore::advertise(const String &p_address, int64_t p_max_players) {
+    advertised_address = p_address;
+    advertised_players = p_max_players;
+    announce_join_address();
+}
+
+int64_t ConnectCore::advertised_max_players() const {
+    return live_online() ? advertised_players : 0;
 }
 
 Dictionary ConnectCore::diagnostics(int64_t p_peer_id) const {
@@ -1327,25 +1387,18 @@ RID ConnectCore::invite(
     const RID target = rows.invite(
         named, source, p_transport, p_address, minted
     );
+    TargetRow *held = rows.row(target);
+    if (held != nullptr) {
+        held->invite_pending = true;
+        held->invited_by = p_from_name;
+    }
     if (minted) {
         session->endpoint_emit_added(target);
+    } else {
+        session->endpoint_emit_updated(target);
     }
-    session->connection_emit_invited(target, p_from_name);
+    session->connection_emit_invited(target);
     return target;
-}
-
-void ConnectCore::on_directory_invited(
-    Object *p_directory,
-    const String &p_address,
-    const String &p_from_name
-) {
-    invite(
-        session->transport_find(
-            DirectoryTransport::peer_class_of_directory(p_directory)
-        ),
-        p_address,
-        p_from_name
-    );
 }
 
 void ConnectCore::forget_directory(ObjectID p_directory) {

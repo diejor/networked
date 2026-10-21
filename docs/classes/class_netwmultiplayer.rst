@@ -3584,7 +3584,7 @@ The notification form of :ref:`NetwConnection.join_address_changed<class_NetwCon
 
 :ref:`Notification<enum_NetwMultiplayer_Notification>` **CONNECTION_INVITED** = ``54``
 
-The notification form of :ref:`NetwConnection.invited<class_NetwConnection_signal_invited>`. The callback receives ``(endpoint: RID, from_name: String)``.
+The notification form of :ref:`NetwConnection.invited<class_NetwConnection_signal_invited>`. The callback receives ``(endpoint: RID)``.
 
 .. rst-class:: classref-section-separator
 
@@ -3673,7 +3673,7 @@ Same as :godot:`SceneMultiplayer.auth_callback <SceneMultiplayer#class_SceneMult
 - |void| **set_auth_timeout**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_auth_timeout**\ (\ )
 
-Same as :godot:`SceneMultiplayer.auth_timeout <SceneMultiplayer#class_SceneMultiplayer_property_auth_timeout>`, applied to :ref:`inner<class_NetwMultiplayer_property_inner>`.
+Same as :godot:`SceneMultiplayer.auth_timeout <SceneMultiplayer#class_SceneMultiplayer_property_auth_timeout>`, applied to :ref:`inner<class_NetwMultiplayer_property_inner>`. It also limits how long the admission and proof handlers set with :ref:`Netw.configure_admission()<class_Netw_method_configure_admission>` may take on this peer, so a join that waits on the player raises it on both the server and the client.
 
 .. rst-class:: classref-item-separator
 

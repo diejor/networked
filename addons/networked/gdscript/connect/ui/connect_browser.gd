@@ -1,9 +1,37 @@
 ## A server browser that lists, joins and hosts games for its session.
+##
+## A game that checks an invitation before the player leaves its session
+## turns off [member join_invites] and calls [method join] itself.
+## [codeblock]
+## @onready var session: NetwSession = Netw.session(self)
+## @onready var browser: ConnectBrowser = %ConnectBrowser
+## @onready var leave_dialog: ConfirmationDialog = %LeaveDialog
+## var invitation: NetwEndpoint
+##
+## func _ready() -> void:
+##     browser.join_invites = false
+##     session.connection.invited.connect(_on_invited)
+##     leave_dialog.confirmed.connect(_on_leave_dialog_confirmed)
+##
+## func _on_invited(endpoint: NetwEndpoint) -> void:
+##     invitation = endpoint
+##     if session.is_online:
+##         leave_dialog.popup_centered()
+##     else:
+##         browser.join(endpoint, { }, [])
+##
+## func _on_leave_dialog_confirmed() -> void:
+##     await session.leave().wait()
+##     browser.join(invitation, { }, [])
+## [/codeblock]
 class_name ConnectBrowser
 extends Control
 
 const ROW := preload("res://addons/networked/gdscript/connect/ui/row.tscn")
 
+## Answers each [signal NetwConnection.invited] by joining that server, or by
+## opening the join form when the session is online or the join needs inputs.
+@export var join_invites := true
 ## Hides the server list while the session is online.
 @export var hide_when_session_active := true
 ## Settings every connection through a transport starts from.
@@ -139,7 +167,9 @@ func on_server_list_visibility_changed() -> void:
 	connection.browsing = server_list.is_visible_in_tree()
 
 
-func _on_invited(endpoint: NetwEndpoint, _from_name: String) -> void:
+func _on_invited(endpoint: NetwEndpoint) -> void:
+	if not join_invites:
+		return
 	on_row_selected(endpoint)
 	if session.is_online or not connection.join_schema().is_empty():
 		on_join_pressed()

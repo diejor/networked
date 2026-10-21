@@ -39,6 +39,9 @@ void NetwConnection::bind_session(NetwMultiplayer *p_session) {
 }
 
 void NetwConnection::announce_state_changed(int64_t p_state) {
+    if (p_state != STATE_ONLINE) {
+        current_endpoint.unref();
+    }
     emit_signal(StringName(SIG_STATE_CHANGED), p_state);
 }
 
@@ -107,13 +110,10 @@ void NetwConnection::announce_endpoint_removed(const RID &p_target) {
     emit_signal(StringName(SIG_ENDPOINT_REMOVED), held);
 }
 
-void NetwConnection::announce_invited(
-    const RID &p_target,
-    const String &p_from_name
-) {
+void NetwConnection::announce_invited(const RID &p_target) {
     const Ref<NetwEndpoint> held = remember_endpoint(p_target);
     if (held.is_valid()) {
-        emit_signal(StringName(SIG_INVITED), held, p_from_name);
+        emit_signal(StringName(SIG_INVITED), held);
     }
 }
 
@@ -217,6 +217,42 @@ Dictionary NetwConnection::defaults(const Variant &p_transport) const {
 String NetwConnection::get_join_address() const {
     NetwMultiplayer *api = session();
     return api != nullptr ? api->peer_join_address() : String();
+}
+
+void NetwConnection::set_join_address(const String &p_address) {
+    NetwMultiplayer *api = session();
+    if (api != nullptr) {
+        api->connection_set_join_address(p_address);
+    }
+}
+
+int64_t NetwConnection::get_max_players() const {
+    NetwMultiplayer *api = session();
+    return api != nullptr ? api->connection_max_players() : 0;
+}
+
+Ref<NetwEndpoint> NetwConnection::get_current_endpoint() {
+    NetwMultiplayer *api = session();
+    const connect::Transport *live
+        = api != nullptr ? api->connect_plane().live_transport() : nullptr;
+    const String address
+        = api != nullptr ? api->connect_plane().endpoint_address() : String();
+    if (live == nullptr || address.is_empty()) {
+        current_endpoint.unref();
+        return current_endpoint;
+    }
+    const StringName peer_class = live->peer_class();
+    if (current_endpoint.is_valid()
+        && current_endpoint->get_peer_class() == peer_class
+        && current_endpoint->get_address() == address) {
+        return current_endpoint;
+    }
+    current_endpoint = find(peer_class, address);
+    if (current_endpoint.is_null()) {
+        current_endpoint.instantiate();
+        current_endpoint->bind_to(api, RID(), peer_class, address);
+    }
+    return current_endpoint;
 }
 
 Dictionary NetwConnection::diagnostics(int64_t p_peer_id) const {
@@ -494,6 +530,14 @@ void NetwConnection::_bind_methods() {
         &NetwConnection::get_join_address
     );
     ClassDB::bind_method(
+        D_METHOD("set_join_address", "address"),
+        &NetwConnection::set_join_address
+    );
+    ClassDB::bind_method(
+        D_METHOD("get_max_players"),
+        &NetwConnection::get_max_players
+    );
+    ClassDB::bind_method(
         D_METHOD("diagnostics", "peer_id"),
         &NetwConnection::diagnostics
     );
@@ -584,8 +628,7 @@ void NetwConnection::_bind_methods() {
             "endpoint",
             PROPERTY_HINT_RESOURCE_TYPE,
             "NetwEndpoint"
-        ),
-        PropertyInfo(Variant::STRING, "from_name")
+        )
     ));
     ADD_PROPERTY(
         PropertyInfo(
@@ -618,10 +661,24 @@ void NetwConnection::_bind_methods() {
         )
     ));
 
+    ClassDB::bind_method(
+        D_METHOD("get_current_endpoint"), &NetwConnection::get_current_endpoint
+    );
+    ADD_PROPERTY(
+        PropertyInfo(Variant::OBJECT, "current_endpoint",
+            PROPERTY_HINT_RESOURCE_TYPE, "NetwEndpoint"),
+        "",
+        "get_current_endpoint"
+    );
     ADD_PROPERTY(
         PropertyInfo(Variant::STRING, "join_address"),
-        "",
+        "set_join_address",
         "get_join_address"
+    );
+    ADD_PROPERTY(
+        PropertyInfo(Variant::INT, "max_players"),
+        "",
+        "get_max_players"
     );
     ADD_PROPERTY(
         PropertyInfo(

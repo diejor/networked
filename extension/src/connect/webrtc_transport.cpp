@@ -548,6 +548,12 @@ Dictionary WebRTCTransport::diagnostics(int64_t p_peer_id) const {
     return session_core->connection_diagnostics(p_peer_id);
 }
 
+String WebRTCTransport::server_identity(int64_t p_peer_id) const {
+    return session_core != nullptr
+        ? session_core->server_fingerprint(p_peer_id)
+        : String();
+}
+
 void WebRTCTransport::close() {
     if (signaler != nullptr) {
         unregister_local_room(signaler->room_id());

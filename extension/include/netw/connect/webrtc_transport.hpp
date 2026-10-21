@@ -38,6 +38,7 @@ public:
     void poll(double p_delta) override;
     godot::String join_address() const override;
     godot::Dictionary diagnostics(int64_t p_peer_id) const override;
+    godot::String server_identity(int64_t p_peer_id) const override;
     void close() override;
 
     static godot::Array filter_ice_servers(const godot::Array &p_servers);

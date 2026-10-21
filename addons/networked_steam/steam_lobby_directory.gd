@@ -23,9 +23,9 @@
 ## ) -> void:
 ##     $Members.get_node(str(steam_id)).queue_free()
 ## [/codeblock]
-## Enable the Networked Steam editor plugin to remove this node from exports
-## GodotSteam does not support. Scripts shared with those exports use
-## [LobbyDirectory] as their type.
+## An export GodotSteam does not support omits this node and every script that
+## names SteamLobbyDirectory. A script that must stay in those exports uses
+## [LobbyDirectory] as its type.
 class_name SteamLobbyDirectory
 extends LobbyDirectory
 
@@ -198,6 +198,13 @@ func _member_name(peer_id: int) -> String:
 
 	var steam_id := peer.get_steam_id_for_peer_id(peer_id)
 	return Steam.getFriendPersonaName(steam_id)
+
+
+func _account_of(peer_id: int) -> String:
+	if peer == null:
+		return ""
+	var steam_id: int = peer.get_steam_id_for_peer_id(peer_id)
+	return "steam:" + str(steam_id) if steam_id != 0 else ""
 
 
 func _local_member_name() -> String:

@@ -4,18 +4,33 @@
 		A player whose join was accepted.
 	</brief_description>
 	<description>
-		The session creates one [NetwPlayer] when it accepts a join, and always returns the same object for it, so it can be compared with [code]==[/code] and used as a [Dictionary] key. A connected peer that has not joined has none.
+		The session creates one [NetwPlayer] when it accepts a join and keeps that object until the player leaves, so it can be compared with [code]==[/code] and used as a [Dictionary] key. A connected peer that has not joined has none.
 		[codeblock]
-		var player := Netw.of(self).peer_get_player(peer_id)
+		var player := session.player_of(peer_id)
 		greet(player.username)
 		for entity: NetwEntity in player.entities:
 		    follow(entity.owner)
 		[/codeblock]
 		A player is not a peer. After the player leaves, [member is_active] is [code]false[/code], even if a new player connects with the same [member peer_id].
+		Every join is a new player, including a join with an [member account] that joined before. A game that wants to recognise a returning player keys its own data by [member account] on the server, which is empty for a guest.
+		[codeblock]
+		var scores := {}
+
+		func on_player_joined(player: NetwPlayer) -&gt; void:
+		    if player.account != "" and not scores.has(player.account):
+		        scores[player.account] = 0
+		[/codeblock]
+		[member account] reaches only the server and the player's own peer. Every other peer reads it empty and still reads [member account_name].
 	</description>
 	<tutorials>
 	</tutorials>
 	<members>
+		<member name="account" type="String" setter="" getter="get_account">
+			The account [method Netw.configure_admission] assigned to [member NetwJoinRequest.account], such as [code]"steam:76561198000000000"[/code]. Empty for a guest, and empty for another player on a client.
+		</member>
+		<member name="account_name" type="String" setter="" getter="get_account_name">
+			The display name admission verified with [member account]. Every peer reads it. Empty for a guest.
+		</member>
 		<member name="entities" type="NetwEntity[]" setter="" getter="get_entities">
 			The entities spawned for this player with [method Netw.spawn_player], in no particular order. Empty for a spectator.
 		</member>

@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwJoinRequest" inherits="RefCounted" api_type="extension">
+	<brief_description>
+		A player's request to join a session.
+	</brief_description>
+	<description>
+		The server passes this request to the handler declared with [method Netw.configure_admission]. A requested [member username] does not verify an account.
+		[codeblocks]
+		[gdscript]
+		func admit(request: NetwJoinRequest) -&gt; Error:
+		    if request.identities.is_empty():
+		        return ERR_UNAUTHORIZED
+		    return OK
+		[/gdscript]
+		[csharp]
+		private Error Admit(Variant value)
+		{
+		    using var request = NetwJoinRequest.From(value);
+		    return request.Identities.Length == 0
+		        ? Error.Unauthorized : Error.Ok;
+		}
+		[/csharp]
+		[/codeblocks]
+	</description>
+	<members>
+		<member name="peer_id" type="int" setter="" getter="get_peer_id">
+			The joining peer's id.
+		</member>
+		<member name="username" type="StringName" setter="" getter="get_username">
+			The name requested through [method Netw.prepare_join].
+		</member>
+		<member name="args" type="Array" setter="" getter="get_args">
+			The arguments of [method Netw.prepare_join], decoded with the types declared by [method Netw.configure_join].
+		</member>
+		<member name="challenge" type="String" setter="" getter="get_challenge">
+			The challenge the joining peer's [method NetwAdmissionConfig.proof] handler answered, or [code]""[/code] without a proof. Verify that [member proof] answers this value. Over WebRTC it is bound to this server's certificate on the connection, and over Steam to this server's Steam ID, so a proof that another server relays does not answer it.
+		</member>
+		<member name="challenge_bound" type="bool" setter="" getter="get_challenge_bound">
+			[code]true[/code] when [member challenge] is bound to this server, over WebRTC, over Steam and for the host's own join. [code]false[/code] over ENet and other transports that do not identify the server, where another server of this game can pass the challenge to its own player and forward the answer. Refuse such a request when an account depends on [member proof].
+		</member>
+		<member name="proof" type="Variant" setter="" getter="get_proof">
+			The value returned by the joining peer's [method NetwAdmissionConfig.proof] handler. [code]null[/code] when no proof was requested.
+		</member>
+		<member name="identities" type="PackedStringArray" setter="" getter="get_identities">
+			Accounts verified by the active [LobbyDirectory] through [method LobbyDirectory._account_of]. The first initializes [member account].
+		</member>
+		<member name="account" type="String" setter="set_account" getter="get_account">
+			The account to assign in the admission handler, such as [code]"discord:80351110224678912"[/code] or [code]"steam:76561198000000000"[/code]. Empty for a guest.
+		</member>
+		<member name="account_name" type="String" setter="set_account_name" getter="get_account_name">
+			The verified display name, initially supplied by the active [LobbyDirectory]. Empty for a guest.
+		</member>
+	</members>
+</class>

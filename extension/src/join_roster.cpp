@@ -59,17 +59,12 @@ LocalVector<session::AcceptFrame> JoinRoster::accepted_joins() const {
     return out;
 }
 
-PackedByteArray JoinRoster::roster_frame() const {
-    return session::roster_write(accepted_joins());
-}
-
-PackedByteArray JoinRoster::accept_frame(int64_t p_peer) const {
-    const HashMap<int64_t, session::AcceptFrame>::ConstIterator found
-        = accepted.find(p_peer);
-    if (found == accepted.end()) {
-        return PackedByteArray();
+PackedByteArray JoinRoster::roster_frame(int64_t p_destination) const {
+    LocalVector<session::AcceptFrame> rows;
+    for (const int64_t peer : peers_in_order()) {
+        rows.push_back(session::accept_seen_by(accepted[peer], p_destination));
     }
-    return session::frame_write(found->value);
+    return session::roster_write(rows);
 }
 
 void JoinRoster::refuse(int64_t p_peer, const String &p_reason) {

@@ -13,6 +13,10 @@ struct AcceptFrame {
     int64_t peer_id = 0;
     godot::StringName username;
     uint64_t player_id = 0;
+    godot::String account;
+    godot::String account_name;
+    godot::String join_address;
+    uint64_t max_players = 0;
 
     static constexpr auto wire = netw::wire::describe(
         netw::wire::field<&AcceptFrame::peer_id>(
@@ -26,9 +30,27 @@ struct AcceptFrame {
         netw::wire::field<&AcceptFrame::player_id>(
             "player_id",
             netw::wire::varuint(5)
+        ),
+        netw::wire::field<&AcceptFrame::account>(
+            "account",
+            netw::wire::string()
+        ),
+        netw::wire::field<&AcceptFrame::account_name>(
+            "account_name",
+            netw::wire::string()
+        ),
+        netw::wire::field<&AcceptFrame::join_address>(
+            "join_address",
+            netw::wire::string()
+        ),
+        netw::wire::field<&AcceptFrame::max_players>(
+            "max_players",
+            netw::wire::varuint(2)
         )
     );
 };
+
+AcceptFrame accept_seen_by(AcceptFrame row, int64_t destination);
 
 struct ClockRate {
     uint64_t tickrate = 0;

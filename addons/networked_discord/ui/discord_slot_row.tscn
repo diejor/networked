@@ -1,0 +1,15 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://addons/networked_discord/ui/discord_slot_row.gd" id="1_row"]
+
+[node name="SlotRow" type="HBoxContainer"]
+theme_override_constants/separation = -6
+script = ExtResource("1_row")
+
+[node name="MoreLabel" type="Label" parent="."]
+visible = false
+custom_minimum_size = Vector2(36, 0)
+layout_mode = 2
+theme_type_variation = &"DiscordMutedLabel"
+text = "+0"
+horizontal_alignment = 2

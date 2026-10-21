@@ -3268,7 +3268,7 @@
 			Same as [member SceneMultiplayer.auth_callback]. Setting it replaces the built-in authentication.
 		</member>
 		<member name="auth_timeout" type="float" setter="set_auth_timeout" getter="get_auth_timeout" default="3.0">
-			Same as [member SceneMultiplayer.auth_timeout], applied to [member inner].
+			Same as [member SceneMultiplayer.auth_timeout], applied to [member inner]. It also limits how long the admission and proof handlers set with [method Netw.configure_admission] may take on this peer, so a join that waits on the player raises it on both the server and the client.
 		</member>
 		<member name="connected_players" type="NetwPlayer[]" setter="" getter="player_all" default="[]">
 			Every player, sorted by peer id. Same as [member players], except that a player who is leaving stays here a little longer.
@@ -4305,7 +4305,7 @@
 			The notification form of [signal NetwConnection.join_address_changed].
 		</constant>
 		<constant name="CONNECTION_INVITED" value="54" enum="Notification">
-			The notification form of [signal NetwConnection.invited]. The callback receives [code](endpoint: RID, from_name: String)[/code].
+			The notification form of [signal NetwConnection.invited]. The callback receives [code](endpoint: RID)[/code].
 		</constant>
 	</constants>
 </class>

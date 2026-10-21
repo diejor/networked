@@ -165,6 +165,9 @@ struct SideRecord {
     int state = -1;
     String join_address;
     bool server_role = false;
+    bool admitted = false;
+    bool has_current = false;
+    RowSeen current;
     bool browsing = false;
     int failed = 0;
     std::vector<RowSeen> rows;
@@ -621,7 +624,8 @@ class ConnectLifecycleMatrix final : public netw_test::FrameScenario {
             case ACT_JOIN_DIRECT:
             case ACT_JOIN_BLANK:
                 return state_of(now.side) == online
-                    && seats(side.session->NETW_API_VIRTUAL(get_unique_id)());
+                    && seats(side.session->NETW_API_VIRTUAL(get_unique_id)())
+                    && side.session->player_local().is_valid();
             case ACT_CLIENT_LEAVE:
             case ACT_KICK:
                 return state_of(now.side) == offline && !seats(side.joined_id);
@@ -702,7 +706,14 @@ class ConnectLifecycleMatrix final : public netw_test::FrameScenario {
             SideRecord &out = r_step.sides[at];
             out.state = state_of(at);
             out.join_address = side.connection->get_join_address();
+            const Ref<netw::NetwEndpoint> current
+                = side.connection->get_current_endpoint();
+            out.has_current = current.is_valid();
+            if (out.has_current) {
+                out.current = seen(current);
+            }
             out.server_role = side.session->has_server_role();
+            out.admitted = side.session->player_local().is_valid();
             out.browsing = side.connection->is_browsing();
             out.failed = browser(at).failed;
             const TypedArray<netw::NetwEndpoint> rows
@@ -967,6 +978,49 @@ LawVerdict law_join_address(const ScenarioRecord &p_run) {
                     vformat("%s hosts with no address", side_name(side))
                 );
             }
+            const SideRecord &host = now.sides[HOST];
+            if (held.state == netw::NetwConnection::STATE_ONLINE
+                && !held.server_role && held.admitted
+                && host.state == netw::NetwConnection::STATE_ONLINE
+                && held.join_address != host.join_address) {
+                return broken_at(
+                    now,
+                    at,
+                    vformat(
+                        "%s reads '%s' rather than the host's '%s'",
+                        side_name(side),
+                        held.join_address,
+                        host.join_address
+                    )
+                );
+            }
+        }
+    }
+    return law_held();
+}
+
+LawVerdict law_current_endpoint(const ScenarioRecord &p_run) {
+    for (size_t at = 0; at < p_run.steps.size(); at++) {
+        const StepRecord &now = p_run.steps[at];
+        for (int side = 0; side < SIDES; side++) {
+            const SideRecord &held = now.sides[side];
+            const bool online
+                = held.state == netw::NetwConnection::STATE_ONLINE;
+            if (held.has_current != online) {
+                return broken_at(now, at, vformat(
+                    "%s current endpoint disagrees with connection state",
+                    side_name(side)
+                ));
+            }
+            const bool addressed = held.server_role
+                ? held.current.address == held.join_address
+                : !held.current.address.is_empty();
+            if (online && !addressed) {
+                return broken_at(now, at, vformat(
+                    "%s current endpoint lost its address",
+                    side_name(side)
+                ));
+            }
         }
     }
     return law_held();
@@ -1067,7 +1121,8 @@ const MatrixLaw V3 = {
 };
 const MatrixLaw V4 = {
     "V4",
-    "join_address is empty offline and set while hosting online",
+    "join_address is empty offline, set while hosting online, and an "
+    "admitted client reads the host's",
     &law_join_address,
 };
 const MatrixLaw V5 = {
@@ -1090,7 +1145,12 @@ const MatrixLaw V8 = {
     "every ONLINE row added with connection.add reports a ping",
     &law_added_online_rows_report_ping,
 };
-const MatrixLaw LAWS[] = {V0, V1, V2, V3, V4, V5, V6, V7, V8};
+const MatrixLaw V9 = {
+    "V9",
+    "a host or client holds one current endpoint while online",
+    &law_current_endpoint,
+};
+const MatrixLaw LAWS[] = {V0, V1, V2, V3, V4, V5, V6, V7, V8, V9};
 
 } // namespace
 

@@ -223,29 +223,16 @@ public sealed class Netw : NetwRefCounted
     }
 
     private static readonly IntPtr _bindConfigureAdmission =
-        NetwApi.MethodBind("Netw", "configure_admission", 2275419960UL);
+        NetwApi.MethodBind("Netw", "configure_admission", 2472650386UL);
 
     /// <summary>
-    /// Decides whether a joining peer gets a <see cref="NetwPlayer"/>.
-    /// <paramref name="handler"/> receives the peer id and the arguments of
-    /// <see cref="Netw.PrepareJoin"/>. Return <c>@GlobalScope.OK</c> to accept.
-    /// <code>
-    /// func _init() -&gt; void:
-    ///     Netw.configure_admission(admit)
-    ///
-    /// func admit(peer_id: int, username: StringName) -&gt; Error:
-    ///     if nakama.username_for_peer(peer_id) != username:
-    ///         return ERR_UNAUTHORIZED
-    ///     return OK
-    /// </code>
-    /// <para>
-    /// To stop a peer from connecting at all, before
-    /// <c>MultiplayerAPI.peer_connected</c>, use
-    /// <see cref="NetwMultiplayer.AuthCallback"/> as you would with
-    /// <see cref="SceneMultiplayer"/>. <b>Server Only.</b>
-    /// </para>
+    /// Declares the session's admission handler and returns its
+    /// <see cref="NetwAdmissionConfig"/>. The server calls
+    /// <paramref name="handler"/> with each <see cref="NetwJoinRequest"/> and
+    /// admits the peer when it returns <c>@GlobalScope.OK</c>. The handler may
+    /// <c>await</c> for up to <see cref="NetwMultiplayer.AuthTimeout"/>.
     /// </summary>
-    public static Error ConfigureAdmission(Callable handler)
+    public static NetwAdmissionConfig ConfigureAdmission(Callable handler)
     {
         godot_variant slot0 = VariantUtils.CreateFromCallable(handler);
         godot_variant answered = default;
@@ -255,7 +242,10 @@ public sealed class Netw : NetwRefCounted
             in slot0,
             ref answered);
         slot0.Dispose();
-        Error result = (Error)VariantUtils.ConvertToInt64(answered);
+        NetwAdmissionConfig result =
+            NetwAdmissionConfig.Adopt(
+                NetwApi.Retained(
+                    VariantUtils.ConvertToGodotObjectPtr(answered)));
         answered.Dispose();
         return result;
     }

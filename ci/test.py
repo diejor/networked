@@ -92,7 +92,7 @@ config/features=PackedStringArray("4.7")
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/networked/plugin.cfg", "res://addons/networked_steam/plugin.cfg")
+enabled=PackedStringArray("res://addons/networked/plugin.cfg")
 """
 
 CONSUMER_PROBE = """extends SceneTree

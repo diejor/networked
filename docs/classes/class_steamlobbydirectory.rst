@@ -42,7 +42,7 @@ A member is a Steam user in the joined lobby, identified by their Steam ID. :ref
     ) -> void:
         $Members.get_node(str(steam_id)).queue_free()
 
-\ Enable the Networked Steam editor plugin to remove this node from exports GodotSteam does not support. Scripts shared with those exports use :ref:`LobbyDirectory<class_LobbyDirectory>` as their type.
+\ An export GodotSteam does not support omits this node and every script that names SteamLobbyDirectory. A script that must stay in those exports uses :ref:`LobbyDirectory<class_LobbyDirectory>` as its type.
 
 .. rst-class:: classref-reftable-group
 

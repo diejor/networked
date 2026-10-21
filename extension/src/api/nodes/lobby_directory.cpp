@@ -130,6 +130,14 @@ String LobbyDirectory::member_name(int64_t p_peer_id) {
     return member_name_default(p_peer_id);
 }
 
+String LobbyDirectory::account_of(int64_t p_peer_id) {
+    String answered;
+    if (GDVIRTUAL_CALL(_account_of, p_peer_id, answered)) {
+        return answered;
+    }
+    return String();
+}
+
 String LobbyDirectory::local_member_name() {
     String answered;
     if (GDVIRTUAL_CALL(_local_member_name, answered)) {
@@ -357,6 +365,7 @@ void LobbyDirectory::_bind_methods() {
     GDVIRTUAL_BIND(_client_settings);
     GDVIRTUAL_BIND(_join_address);
     GDVIRTUAL_BIND(_member_name, "peer_id");
+    GDVIRTUAL_BIND(_account_of, "peer_id");
     GDVIRTUAL_BIND(_local_member_name);
     GDVIRTUAL_BIND(_list_lobbies);
     GDVIRTUAL_BIND(_stop_listing);

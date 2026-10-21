@@ -258,7 +258,7 @@ enum DiscordSkuType {
 }
 
 ## https://discord.com/developers/docs/developer-tools/embedded-app-sdk#activity
-class DiscordActivity:
+class DiscordActivityInfo:
 	## The name of the activity
 	var name: String
 	## The type of the activity
@@ -278,7 +278,7 @@ class DiscordActivity:
 	## Emoji (Nullable)
 	var emoji: DiscordEmoji
 	## Party (Nullable)
-	var party: DiscordParty
+	var party: DiscordPartyInfo
 	## Assets (Nullable)
 	var assets: DiscordAssets
 	## Secrets (Nullable)
@@ -287,15 +287,15 @@ class DiscordActivity:
 	var instance: bool
 	## Flags (Nullable)
 	var flags: int
-	static func decode(dict: Dictionary) -> DiscordActivity:
-		var data := DiscordActivity.new()
+	static func decode(dict: Dictionary) -> DiscordActivityInfo:
+		var data := DiscordActivityInfo.new()
 		DiscordSDK._decode_simple(dict, data)
 		if dict.get("timestamps") != null:
 			data.timestamps = DiscordTimestamp.decode(dict["timestamps"])
 		if dict.get("emoji") != null:
 			data.emoji = DiscordEmoji.decode(dict["emoji"])
 		if dict.get("party") != null:
-			data.party = DiscordParty.decode(dict["party"])
+			data.party = DiscordPartyInfo.decode(dict["party"])
 		if dict.get("assets") != null:
 			data.assets = DiscordAssets.decode(dict["assets"])
 		if dict.get("secrets") != null:
@@ -465,13 +465,13 @@ class DiscordApplication:
 		return data
 
 ## https://discord.com/developers/docs/developer-tools/embedded-app-sdk#party
-class DiscordParty:
+class DiscordPartyInfo:
 	## Party ID (Nullable)
 	var id: String
 	## Party size (Nullable)
 	var size: Array[String]
-	static func decode(dict: Dictionary) -> DiscordParty:
-		var data := DiscordParty.new()
+	static func decode(dict: Dictionary) -> DiscordPartyInfo:
+		var data := DiscordPartyInfo.new()
 		DiscordSDK._decode_simple(dict, data)
 		return data
 
@@ -1237,7 +1237,7 @@ func command_open_share_moment_dialog(media_url: String) -> void:
 	}, nonce)
 	await _wait_for_nonce(nonce)
 
-func command_set_activity(state: String, details: String, timestamps: Dictionary = {}, assets: Dictionary = {}, party: Dictionary = {}, secrets: Dictionary = {}, instance: bool = false) -> DiscordActivity:
+func command_set_activity(state: String, details: String, timestamps: Dictionary = {}, assets: Dictionary = {}, party: Dictionary = {}, secrets: Dictionary = {}, instance: bool = false) -> DiscordActivityInfo:
 	var nonce := _gen_nonce()
 	sendCommand("SET_ACTIVITY", {
 		"activity": {
@@ -1252,7 +1252,7 @@ func command_set_activity(state: String, details: String, timestamps: Dictionary
 	}, nonce)
 
 	var packet = await _wait_for_nonce(nonce)
-	return DiscordActivity.decode(packet)
+	return DiscordActivityInfo.decode(packet)
 
 
 func command_set_config(use_interactive_pip: bool) -> CommandSetConfigResponse:

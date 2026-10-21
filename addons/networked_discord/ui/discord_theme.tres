@@ -1,0 +1,346 @@
+[gd_resource type="Theme" format=3 uid="uid://cgixq0kn1mjjf"]
+
+[ext_resource type="FontFile" uid="uid://dxr4ltssam3cu" path="res://addons/networked_discord/ui/fonts/Figtree.ttf" id="1_figtree"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_card"]
+content_margin_left = 12.0
+content_margin_top = 10.0
+content_margin_right = 12.0
+content_margin_bottom = 12.0
+bg_color = Color(0.173, 0.176, 0.196, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="FontVariation" id="FontVariation_digits"]
+base_font = ExtResource("1_figtree")
+variation_opentype = {
+2003265652: 600
+}
+opentype_features = {
+1953396077: 1
+}
+
+[sub_resource type="FontVariation" id="FontVariation_semibold"]
+base_font = ExtResource("1_figtree")
+variation_opentype = {
+2003265652: 600
+}
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_icon"]
+content_margin_left = 6.0
+content_margin_top = 6.0
+content_margin_right = 6.0
+content_margin_bottom = 6.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_icon_hover"]
+content_margin_left = 6.0
+content_margin_top = 6.0
+content_margin_right = 6.0
+content_margin_bottom = 6.0
+bg_color = Color(0.231, 0.235, 0.259, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[sub_resource type="Gradient" id="Gradient_invite"]
+colors = PackedColorArray(0.012, 0.278, 0.435, 1, 0.204, 0.251, 0.278, 1)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_invite"]
+gradient = SubResource("Gradient_invite")
+width = 128
+fill_from = Vector2(0, 1)
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_invite"]
+content_margin_left = 12.0
+content_margin_top = 10.0
+content_margin_right = 12.0
+content_margin_bottom = 12.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
+content_margin_left = 12.0
+content_margin_top = 12.0
+content_margin_right = 12.0
+content_margin_bottom = 12.0
+bg_color = Color(0.102, 0.102, 0.118, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_row"]
+content_margin_left = 8.0
+content_margin_top = 8.0
+content_margin_right = 8.0
+content_margin_bottom = 8.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_focus"]
+content_margin_left = 12.0
+content_margin_top = 7.0
+content_margin_right = 12.0
+content_margin_bottom = 7.0
+draw_center = false
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.949, 0.953, 0.961, 0.5)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_row_hover"]
+content_margin_left = 8.0
+content_margin_top = 8.0
+content_margin_right = 8.0
+content_margin_bottom = 8.0
+bg_color = Color(0.18, 0.184, 0.204, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_row_pressed"]
+content_margin_left = 8.0
+content_margin_top = 8.0
+content_margin_right = 8.0
+content_margin_bottom = 8.0
+bg_color = Color(0.208, 0.212, 0.235, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_sign_in_disabled"]
+content_margin_left = 16.0
+content_margin_top = 10.0
+content_margin_right = 16.0
+content_margin_bottom = 10.0
+bg_color = Color(0.345, 0.396, 0.949, 0.5)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_sign_in_hover"]
+content_margin_left = 16.0
+content_margin_top = 10.0
+content_margin_right = 16.0
+content_margin_bottom = 10.0
+bg_color = Color(0.278, 0.322, 0.769, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_sign_in"]
+content_margin_left = 16.0
+content_margin_top = 10.0
+content_margin_right = 16.0
+content_margin_bottom = 10.0
+bg_color = Color(0.345, 0.396, 0.949, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="FontVariation" id="FontVariation_bold"]
+base_font = ExtResource("1_figtree")
+variation_opentype = {
+2003265652: 700
+}
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_wide_disabled"]
+content_margin_left = 12.0
+content_margin_top = 7.0
+content_margin_right = 12.0
+content_margin_bottom = 7.0
+bg_color = Color(0.196, 0.2, 0.224, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_wide_hover"]
+content_margin_left = 12.0
+content_margin_top = 7.0
+content_margin_right = 12.0
+content_margin_bottom = 7.0
+bg_color = Color(0.271, 0.275, 0.302, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_wide_pressed"]
+content_margin_left = 12.0
+content_margin_top = 7.0
+content_margin_right = 12.0
+content_margin_bottom = 7.0
+bg_color = Color(0.141, 0.502, 0.275, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_wide"]
+content_margin_left = 12.0
+content_margin_top = 7.0
+content_margin_right = 12.0
+content_margin_bottom = 7.0
+bg_color = Color(0.231, 0.235, 0.259, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxLine" id="StyleBoxLine_separator"]
+color = Color(0.18, 0.184, 0.204, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_search_focus"]
+content_margin_left = 10.0
+content_margin_top = 6.0
+content_margin_right = 10.0
+content_margin_bottom = 6.0
+draw_center = false
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.58, 0.608, 0.643, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_search"]
+content_margin_left = 10.0
+content_margin_top = 6.0
+content_margin_right = 10.0
+content_margin_bottom = 6.0
+bg_color = Color(0.071, 0.071, 0.082, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.18, 0.184, 0.204, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_grabber"]
+content_margin_left = 3.0
+content_margin_right = 3.0
+bg_color = Color(0.173, 0.176, 0.196, 1)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_scroll"]
+
+[sub_resource type="FontVariation" id="FontVariation_medium"]
+base_font = ExtResource("1_figtree")
+variation_opentype = {
+2003265652: 500
+}
+
+[resource]
+default_font = SubResource("FontVariation_medium")
+default_font_size = 16
+Button/colors/font_color = Color(0.949, 0.953, 0.961, 1)
+Button/colors/font_disabled_color = Color(0.58, 0.608, 0.643, 1)
+Button/colors/font_focus_color = Color(0.949, 0.953, 0.961, 1)
+Button/colors/font_hover_color = Color(1, 1, 1, 1)
+Button/colors/font_hover_pressed_color = Color(1, 1, 1, 1)
+Button/colors/font_pressed_color = Color(1, 1, 1, 1)
+Button/font_sizes/font_size = 14
+DiscordAvatar/colors/dnd = Color(0.949, 0.247, 0.263, 1)
+DiscordAvatar/colors/idle = Color(0.941, 0.698, 0.196, 1)
+DiscordAvatar/colors/offline = Color(0.502, 0.518, 0.557, 1)
+DiscordAvatar/colors/online = Color(0.137, 0.647, 0.353, 1)
+DiscordAvatar/colors/open_slot = Color(0.067, 0.071, 0.078, 1)
+DiscordAvatar/colors/placeholder = Color(0.231, 0.235, 0.259, 1)
+DiscordAvatar/colors/speaking = Color(0.137, 0.647, 0.353, 1)
+DiscordAvatar/colors/voice_badge = Color(0.118, 0.122, 0.133, 1)
+DiscordAvatar/constants/cutout_gap = 3
+DiscordAvatar/constants/ring_width = 2
+DiscordAvatar/constants/status_size = 10
+DiscordCard/base_type = &"PanelContainer"
+DiscordCard/styles/panel = SubResource("StyleBoxFlat_card")
+DiscordElapsedLabel/base_type = &"Label"
+DiscordElapsedLabel/colors/font_color = Color(0.137, 0.647, 0.353, 1)
+DiscordElapsedLabel/font_sizes/font_size = 14
+DiscordElapsedLabel/fonts/font = SubResource("FontVariation_digits")
+DiscordHeaderLabel/base_type = &"Label"
+DiscordHeaderLabel/colors/font_color = Color(0.71, 0.729, 0.757, 1)
+DiscordHeaderLabel/font_sizes/font_size = 14
+DiscordHeaderLabel/fonts/font = SubResource("FontVariation_semibold")
+DiscordIconButton/base_type = &"Button"
+DiscordIconButton/colors/icon_disabled_color = Color(1, 1, 1, 0.35)
+DiscordIconButton/colors/icon_hover_color = Color(1, 1, 1, 1)
+DiscordIconButton/colors/icon_normal_color = Color(1, 1, 1, 1)
+DiscordIconButton/colors/icon_pressed_color = Color(1, 1, 1, 1)
+DiscordIconButton/styles/disabled = SubResource("StyleBoxEmpty_icon")
+DiscordIconButton/styles/focus = SubResource("StyleBoxEmpty_icon")
+DiscordIconButton/styles/hover = SubResource("StyleBoxFlat_icon_hover")
+DiscordIconButton/styles/normal = SubResource("StyleBoxEmpty_icon")
+DiscordIconButton/styles/pressed = SubResource("StyleBoxFlat_icon_hover")
+DiscordInviteCard/base_type = &"PanelContainer"
+DiscordInviteCard/constants/corner_radius = 8
+DiscordInviteCard/icons/background = SubResource("GradientTexture2D_invite")
+DiscordInviteCard/styles/panel = SubResource("StyleBoxEmpty_invite")
+DiscordMutedLabel/base_type = &"Label"
+DiscordMutedLabel/colors/font_color = Color(0.58, 0.608, 0.643, 1)
+DiscordMutedLabel/font_sizes/font_size = 14
+DiscordNameLabel/base_type = &"Label"
+DiscordNameLabel/font_sizes/font_size = 16
+DiscordNameLabel/fonts/font = SubResource("FontVariation_semibold")
+DiscordPanel/base_type = &"PanelContainer"
+DiscordPanel/styles/panel = SubResource("StyleBoxFlat_panel")
+DiscordRowButton/base_type = &"Button"
+DiscordRowButton/styles/disabled = SubResource("StyleBoxEmpty_row")
+DiscordRowButton/styles/focus = SubResource("StyleBoxFlat_focus")
+DiscordRowButton/styles/hover = SubResource("StyleBoxFlat_row_hover")
+DiscordRowButton/styles/hover_pressed = SubResource("StyleBoxFlat_row_pressed")
+DiscordRowButton/styles/normal = SubResource("StyleBoxEmpty_row")
+DiscordRowButton/styles/pressed = SubResource("StyleBoxFlat_row_pressed")
+DiscordSignInButton/base_type = &"Button"
+DiscordSignInButton/colors/font_color = Color(1, 1, 1, 1)
+DiscordSignInButton/colors/font_disabled_color = Color(1, 1, 1, 0.6)
+DiscordSignInButton/font_sizes/font_size = 14
+DiscordSignInButton/fonts/font = SubResource("FontVariation_semibold")
+DiscordSignInButton/styles/disabled = SubResource("StyleBoxFlat_sign_in_disabled")
+DiscordSignInButton/styles/focus = SubResource("StyleBoxFlat_focus")
+DiscordSignInButton/styles/hover = SubResource("StyleBoxFlat_sign_in_hover")
+DiscordSignInButton/styles/normal = SubResource("StyleBoxFlat_sign_in")
+DiscordSignInButton/styles/pressed = SubResource("StyleBoxFlat_sign_in_hover")
+DiscordTitleLabel/base_type = &"Label"
+DiscordTitleLabel/font_sizes/font_size = 16
+DiscordTitleLabel/fonts/font = SubResource("FontVariation_bold")
+DiscordWideButton/base_type = &"Button"
+DiscordWideButton/styles/disabled = SubResource("StyleBoxFlat_wide_disabled")
+DiscordWideButton/styles/focus = SubResource("StyleBoxFlat_focus")
+DiscordWideButton/styles/hover = SubResource("StyleBoxFlat_wide_hover")
+DiscordWideButton/styles/hover_pressed = SubResource("StyleBoxFlat_wide_pressed")
+DiscordWideButton/styles/normal = SubResource("StyleBoxFlat_wide")
+DiscordWideButton/styles/pressed = SubResource("StyleBoxFlat_wide_pressed")
+HSeparator/constants/separation = 1
+HSeparator/styles/separator = SubResource("StyleBoxLine_separator")
+Label/colors/font_color = Color(0.949, 0.953, 0.961, 1)
+Label/font_sizes/font_size = 16
+LineEdit/colors/caret_color = Color(0.949, 0.953, 0.961, 1)
+LineEdit/colors/clear_button_color = Color(0.58, 0.608, 0.643, 1)
+LineEdit/colors/font_color = Color(0.949, 0.953, 0.961, 1)
+LineEdit/colors/font_placeholder_color = Color(0.58, 0.608, 0.643, 1)
+LineEdit/font_sizes/font_size = 16
+LineEdit/styles/focus = SubResource("StyleBoxFlat_search_focus")
+LineEdit/styles/normal = SubResource("StyleBoxFlat_search")
+VScrollBar/styles/grabber = SubResource("StyleBoxFlat_grabber")
+VScrollBar/styles/grabber_highlight = SubResource("StyleBoxFlat_grabber")
+VScrollBar/styles/grabber_pressed = SubResource("StyleBoxFlat_grabber")
+VScrollBar/styles/scroll = SubResource("StyleBoxEmpty_scroll")

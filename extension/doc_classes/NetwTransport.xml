@@ -203,7 +203,7 @@
 		<method name="_timeout_hint" qualifiers="virtual">
 			<return type="float" />
 			<description>
-				Return how many seconds [method _make_peer] and [method _probe] may take before failing with [constant @GlobalScope.ERR_TIMEOUT]. Negative never times out. [code]5.0[/code] by default.
+				Return how many seconds [method _make_peer] and [method _probe] may take before failing with [constant @GlobalScope.ERR_TIMEOUT]. A join counts this time only until the server answers, and [member NetwMultiplayer.auth_timeout] limits the admission after that. Negative never times out. [code]5.0[/code] by default.
 			</description>
 		</method>
 		<method name="accepts_empty_address">

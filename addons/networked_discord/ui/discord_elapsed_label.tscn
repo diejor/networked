@@ -1,0 +1,10 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://addons/networked_discord/ui/discord_elapsed_label.gd" id="1_label"]
+
+[node name="ElapsedLabel" type="Label"]
+visible = false
+script = ExtResource("1_label")
+
+[node name="Timer" type="Timer" parent="."]
+autostart = true

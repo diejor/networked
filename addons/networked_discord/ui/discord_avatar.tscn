@@ -1,0 +1,71 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://addons/networked_discord/ui/discord_avatar.gd" id="1_avatar"]
+[ext_resource type="Shader" path="res://addons/networked_discord/ui/cutout.gdshader" id="2_cutout"]
+[ext_resource type="Texture2D" path="res://addons/networked_discord/ui/icons/headset.svg" id="3_headset"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_avatar"]
+resource_local_to_scene = true
+shader = ExtResource("2_cutout")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_ring"]
+resource_local_to_scene = true
+shader = ExtResource("2_cutout")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_dot"]
+resource_local_to_scene = true
+shader = ExtResource("2_cutout")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_badge"]
+resource_local_to_scene = true
+shader = ExtResource("2_cutout")
+
+[node name="Avatar" type="TextureRect"]
+material = SubResource("ShaderMaterial_avatar")
+custom_minimum_size = Vector2(32, 32)
+mouse_filter = 2
+expand_mode = 1
+script = ExtResource("1_avatar")
+
+[node name="Ring" type="ColorRect" parent="."]
+visible = false
+material = SubResource("ShaderMaterial_ring")
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="StatusDot" type="ColorRect" parent="."]
+visible = false
+material = SubResource("ShaderMaterial_dot")
+layout_mode = 0
+offset_right = 10.0
+offset_bottom = 10.0
+mouse_filter = 2
+
+[node name="VoiceBadge" type="ColorRect" parent="."]
+visible = false
+material = SubResource("ShaderMaterial_badge")
+layout_mode = 0
+offset_right = 14.0
+offset_bottom = 14.0
+mouse_filter = 2
+
+[node name="VoiceIcon" type="TextureRect" parent="VoiceBadge"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 2.0
+offset_top = 2.0
+offset_right = -2.0
+offset_bottom = -2.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("3_headset")
+expand_mode = 1
+stretch_mode = 5

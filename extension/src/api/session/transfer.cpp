@@ -509,7 +509,7 @@ void NetwMultiplayer::transfer_readmit(int64_t p_survivor) {
         p_survivor,
         0,
         session_roster_channel,
-        join_roster.roster_frame(),
+        join_roster.roster_frame(p_survivor),
         true,
         0,
         String(),

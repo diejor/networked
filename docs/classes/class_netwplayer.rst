@@ -19,16 +19,28 @@ A player whose join was accepted.
 Description
 -----------
 
-The session creates one **NetwPlayer** when it accepts a join, and always returns the same object for it, so it can be compared with ``==`` and used as a :godot:`Dictionary` key. A connected peer that has not joined has none.
+The session creates one **NetwPlayer** when it accepts a join and keeps that object until the player leaves, so it can be compared with ``==`` and used as a :godot:`Dictionary` key. A connected peer that has not joined has none.
 
 ::
 
-    var player := Netw.of(self).peer_get_player(peer_id)
+    var player := session.player_of(peer_id)
     greet(player.username)
     for entity: NetwEntity in player.entities:
         follow(entity.owner)
 
 \ A player is not a peer. After the player leaves, :ref:`is_active<class_NetwPlayer_property_is_active>` is ``false``, even if a new player connects with the same :ref:`peer_id<class_NetwPlayer_property_peer_id>`.
+
+Every join is a new player, including a join with an :ref:`account<class_NetwPlayer_property_account>` that joined before. A game that wants to recognise a returning player keys its own data by :ref:`account<class_NetwPlayer_property_account>` on the server, which is empty for a guest.
+
+::
+
+    var scores := {}
+
+    func on_player_joined(player: NetwPlayer) -> void:
+        if player.account != "" and not scores.has(player.account):
+            scores[player.account] = 0
+
+\ :ref:`account<class_NetwPlayer_property_account>` reaches only the server and the player's own peer. Every other peer reads it empty and still reads :ref:`account_name<class_NetwPlayer_property_account_name>`.
 
 .. rst-class:: classref-reftable-group
 
@@ -38,17 +50,21 @@ Properties
 .. table::
    :widths: auto
 
-   +-------------------------------------------------------+-------------------------------------------------------+
-   | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] | :ref:`entities<class_NetwPlayer_property_entities>`   |
-   +-------------------------------------------------------+-------------------------------------------------------+
-   | :godot:`bool`                                         | :ref:`is_active<class_NetwPlayer_property_is_active>` |
-   +-------------------------------------------------------+-------------------------------------------------------+
-   | :godot:`int`                                          | :ref:`peer_id<class_NetwPlayer_property_peer_id>`     |
-   +-------------------------------------------------------+-------------------------------------------------------+
-   | :ref:`NetwScene<class_NetwScene>`                     | :ref:`scene<class_NetwPlayer_property_scene>`         |
-   +-------------------------------------------------------+-------------------------------------------------------+
-   | :godot:`StringName`                                   | :ref:`username<class_NetwPlayer_property_username>`   |
-   +-------------------------------------------------------+-------------------------------------------------------+
+   +-------------------------------------------------------+-------------------------------------------------------------+
+   | :godot:`String`                                       | :ref:`account<class_NetwPlayer_property_account>`           |
+   +-------------------------------------------------------+-------------------------------------------------------------+
+   | :godot:`String`                                       | :ref:`account_name<class_NetwPlayer_property_account_name>` |
+   +-------------------------------------------------------+-------------------------------------------------------------+
+   | :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] | :ref:`entities<class_NetwPlayer_property_entities>`         |
+   +-------------------------------------------------------+-------------------------------------------------------------+
+   | :godot:`bool`                                         | :ref:`is_active<class_NetwPlayer_property_is_active>`       |
+   +-------------------------------------------------------+-------------------------------------------------------------+
+   | :godot:`int`                                          | :ref:`peer_id<class_NetwPlayer_property_peer_id>`           |
+   +-------------------------------------------------------+-------------------------------------------------------------+
+   | :ref:`NetwScene<class_NetwScene>`                     | :ref:`scene<class_NetwPlayer_property_scene>`               |
+   +-------------------------------------------------------+-------------------------------------------------------------+
+   | :godot:`StringName`                                   | :ref:`username<class_NetwPlayer_property_username>`         |
+   +-------------------------------------------------------+-------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -86,6 +102,38 @@ Emitted when :ref:`scene<class_NetwPlayer_property_scene>` changes. Either may b
 
 Property Descriptions
 ---------------------
+
+.. _class_NetwPlayer_property_account:
+
+.. rst-class:: classref-property
+
+:godot:`String` **account** :ref:`🔗<class_NetwPlayer_property_account>`
+
+.. rst-class:: classref-property-setget
+
+- :godot:`String` **get_account**\ (\ )
+
+The account :ref:`Netw.configure_admission()<class_Netw_method_configure_admission>` assigned to :ref:`NetwJoinRequest.account<class_NetwJoinRequest_property_account>`, such as ``"steam:76561198000000000"``. Empty for a guest, and empty for another player on a client.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwPlayer_property_account_name:
+
+.. rst-class:: classref-property
+
+:godot:`String` **account_name** :ref:`🔗<class_NetwPlayer_property_account_name>`
+
+.. rst-class:: classref-property-setget
+
+- :godot:`String` **get_account_name**\ (\ )
+
+The display name admission verified with :ref:`account<class_NetwPlayer_property_account>`. Every peer reads it. Empty for a guest.
+
+.. rst-class:: classref-item-separator
+
+----
 
 .. _class_NetwPlayer_property_entities:
 

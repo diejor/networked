@@ -287,7 +287,9 @@ def export_web(
     templates: Path | None,
     timeout: float,
 ) -> dict:
-    overrides: dict[str, str] = {"enabled": "PackedStringArray()"}
+    overrides: dict[str, str] = {
+        "enabled": 'PackedStringArray("res://addons/networked/plugin.cfg")',
+    }
     if scene:
         overrides["run/main_scene"] = '"%s"' % scene
     if out.exists():

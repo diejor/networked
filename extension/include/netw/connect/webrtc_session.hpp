@@ -65,6 +65,7 @@ public:
     bool is_connected_to(int64_t p_id) const;
     CandidateCounts candidate_summary(int64_t p_id) const;
     godot::Dictionary connection_diagnostics(int64_t p_id) const;
+    godot::String server_fingerprint(int64_t p_id) const;
 
     const godot::Ref<godot::MultiplayerPeer> &peer() const {
         return live;
@@ -115,6 +116,7 @@ private:
         int64_t native_msec = 0;
         godot::String desc_type;
         godot::String desc_sdp;
+        godot::String remote_fingerprint;
         godot::Array local_candidates;
         godot::Array pending_candidates;
         godot::Dictionary applied_candidates;

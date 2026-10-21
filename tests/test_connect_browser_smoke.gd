@@ -317,3 +317,24 @@ func test_an_invite_leaves_the_current_lobby_only_after_confirmation() -> void:
 	assert_int(connection.state).is_equal(NetwConnection.STATE_ONLINE)
 	assert_bool(browser.server_list.visible).is_false()
 	await EnetTestSupport.stop_tree(host.tree)
+
+
+func test_an_invite_waits_for_the_game_while_join_invites_is_off() -> void:
+	browser.join_invites = false
+
+	connection.invite(&"ENetMultiplayerPeer", "127.0.0.1", "Host")
+
+	assert_int(connection.state).is_equal(NetwConnection.STATE_OFFLINE)
+	assert_object(browser.selected).is_null()
+	assert_bool(browser.join_popup.visible).is_false()
+
+	browser.host(&"LocalMultiplayerPeer", { }, NetwServerInfo.new(), [])
+	assert_int(await EnetTestSupport.await_online(tree)).is_equal(OK)
+	connection.invite(&"ENetMultiplayerPeer", "127.0.0.1", "Host")
+
+	assert_bool(browser.join_popup.visible).is_false()
+
+	browser.join_invites = true
+	connection.invite(&"ENetMultiplayerPeer", "127.0.0.1", "Host")
+
+	assert_bool(browser.join_popup.visible).is_true()

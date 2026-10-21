@@ -49,12 +49,6 @@
 				Return [code]false[/code] to not register, for example behind a feature flag. [code]true[/code] by default.
 			</description>
 		</method>
-		<method name="get_transport_restricted_probe" qualifiers="static">
-			<return type="Callable" />
-			<description>
-				Returns the [Callable] from [method set_transport_restricted_probe].
-			</description>
-		</method>
 		<method name="is_transport_restricted" qualifiers="static">
 			<return type="bool" />
 			<description>
