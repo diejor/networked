@@ -2640,13 +2640,6 @@
 				Notifies [constant SESSION_SERVER_DISCONNECTING] with [param reason] on every peer. It does not disconnect anyone.
 			</description>
 		</method>
-		<method name="session_pause">
-			<return type="void" />
-			<param index="0" name="reason" type="String" default="&quot;&quot;" />
-			<description>
-				Pauses the game on every peer, which notifies [constant SESSION_TREE_PAUSED] with [param reason].
-			</description>
-		</method>
 		<method name="session_prepare_join">
 			<return type="NetwPromise" />
 			<param index="0" name="username" type="StringName" />
@@ -2712,12 +2705,6 @@
 			<param index="0" name="state" type="int" enum="NetwSession.State" />
 			<description>
 				Changes [member state] and notifies [constant SESSION_STATE_CHANGED]. A change that is not allowed, or [constant NetwSession.STATE_CREATING], pushes an error and does nothing.
-			</description>
-		</method>
-		<method name="session_unpause">
-			<return type="void" />
-			<description>
-				Unpauses the game on every peer, which notifies [constant SESSION_TREE_UNPAUSED].
 			</description>
 		</method>
 		<method name="simulation_get_mode">
@@ -4238,10 +4225,10 @@
 			On the server, a peer asked to leave with [method session_request_leave]. The callback receives [code](peer_id: int, reason: String)[/code].
 		</constant>
 		<constant name="SESSION_TREE_PAUSED" value="38" enum="Notification">
-			The server called [method session_pause]. It does not pause the [SceneTree]. The callback receives [code](reason: String)[/code].
+			The session was paused with [method NetwSession.pause]. The callback receives [code](reason: String)[/code].
 		</constant>
 		<constant name="SESSION_TREE_UNPAUSED" value="39" enum="Notification">
-			The server called [method session_unpause]. The callback receives no arguments.
+			The session was unpaused, or it ended while paused. The callback receives no arguments.
 		</constant>
 		<constant name="SERVICE_REGISTERED" value="40" enum="Notification">
 			A service was registered. The callback receives [code](service: Object)[/code].

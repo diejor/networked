@@ -1992,15 +1992,6 @@ void NetwMultiplayer::_bind_methods() {
         &NetwMultiplayer::session_transition
     );
     ClassDB::bind_method(
-        D_METHOD("session_pause", "reason"),
-        &NetwMultiplayer::session_pause,
-        DEFVAL(String())
-    );
-    ClassDB::bind_method(
-        D_METHOD("session_unpause"),
-        &NetwMultiplayer::session_unpause
-    );
-    ClassDB::bind_method(
         D_METHOD("session_notify_shutdown", "reason"),
         &NetwMultiplayer::session_notify_shutdown,
         DEFVAL(String())

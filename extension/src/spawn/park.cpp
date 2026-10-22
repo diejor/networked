@@ -98,10 +98,7 @@ PackedInt64Array Park::waiting_on(Wait wait) const {
 
 bool Park::is_expired(int64_t route, int64_t now) const {
     const HashMap<int64_t, Row>::ConstIterator found = rows.find(route);
-    if (!found || found->value.deadline <= 0) {
-        return false;
-    }
-    return now >= found->value.deadline;
+    return found && now >= found->value.deadline;
 }
 
 int Park::size() const {

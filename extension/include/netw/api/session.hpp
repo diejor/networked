@@ -40,6 +40,7 @@ protected:
 public:
     void bind_session(NetwMultiplayer *p_session);
     void announce_state_changed(State p_state);
+    void announce_paused_changed(bool p_paused, const godot::String &p_reason);
     void announce_entered();
     void announce_exiting(ExitReason p_reason, const godot::String &p_detail);
     void announce_exited(ExitReason p_reason, const godot::String &p_detail);
@@ -65,6 +66,7 @@ public:
     State get_state() const;
     enums::NetwSession::Role get_role() const;
     bool get_is_online() const;
+    bool is_paused() const;
     bool get_is_local_client() const;
     godot::Node *get_root() const;
     godot::TypedArray<NetwScene> get_scenes() const;
@@ -75,6 +77,8 @@ public:
     void set_peer_bandwidth(int64_t p_peer, int64_t p_kbps);
 
     godot::Ref<NetwPromise> leave();
+    void pause(const godot::String &p_reason);
+    void unpause();
     godot::Ref<NetwPromise> save_entities();
     godot::Error kick(
         const godot::Ref<NetwPlayer> &p_who,

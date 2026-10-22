@@ -32,6 +32,7 @@ const char *SIG_SCENE_READY = "scene_ready";
 const char *SIG_PLAYER_LEFT = "player_left";
 const char *SIG_JOIN_FAILED = "join_failed";
 const char *SIG_SERVER_TRANSFERRED = "server_transferred";
+const char *SIG_PAUSED_CHANGED = "paused_changed";
 
 } // namespace
 
@@ -45,6 +46,13 @@ void NetwSession::bind_session(NetwMultiplayer *p_session) {
 
 void NetwSession::announce_state_changed(State p_state) {
     emit_signal(StringName(SIG_STATE_CHANGED), p_state);
+}
+
+void NetwSession::announce_paused_changed(
+    bool p_paused,
+    const String &p_reason
+) {
+    emit_signal(StringName(SIG_PAUSED_CHANGED), p_paused, p_reason);
 }
 
 void NetwSession::announce_entered() {
@@ -147,6 +155,11 @@ bool NetwSession::get_is_online() const {
     return api != nullptr && api->is_online();
 }
 
+bool NetwSession::is_paused() const {
+    NetwMultiplayer *api = session();
+    return api != nullptr && api->session_is_paused();
+}
+
 bool NetwSession::get_is_local_client() const {
     NetwMultiplayer *api = session();
     return api != nullptr && api->is_local_client();
@@ -200,6 +213,20 @@ Ref<NetwPromise> NetwSession::leave() {
     NetwMultiplayer *api = session();
     return api != nullptr ? api->session_leave()
                           : NetwPromise::resolved(ERR_UNCONFIGURED);
+}
+
+void NetwSession::pause(const String &p_reason) {
+    NetwMultiplayer *api = session();
+    if (api != nullptr) {
+        api->session_pause(p_reason);
+    }
+}
+
+void NetwSession::unpause() {
+    NetwMultiplayer *api = session();
+    if (api != nullptr) {
+        api->session_unpause();
+    }
 }
 
 Ref<NetwPromise> NetwSession::save_entities() {
@@ -403,6 +430,8 @@ void NetwSession::_bind_methods() {
         &NetwSession::get_is_online
     );
     ADD_PROPERTY(PropertyInfo(Variant::BOOL, "is_online"), "", "get_is_online");
+    ClassDB::bind_method(D_METHOD("is_paused"), &NetwSession::is_paused);
+    ADD_PROPERTY(PropertyInfo(Variant::BOOL, "paused"), "", "is_paused");
     ClassDB::bind_method(
         D_METHOD("get_is_local_client"),
         &NetwSession::get_is_local_client
@@ -466,6 +495,12 @@ void NetwSession::_bind_methods() {
     );
 
     ClassDB::bind_method(D_METHOD("leave"), &NetwSession::leave);
+    ClassDB::bind_method(
+        D_METHOD("pause", "reason"),
+        &NetwSession::pause,
+        DEFVAL(String())
+    );
+    ClassDB::bind_method(D_METHOD("unpause"), &NetwSession::unpause);
     ClassDB::bind_method(
         D_METHOD("save_entities"),
         &NetwSession::save_entities
@@ -563,6 +598,11 @@ void NetwSession::_bind_methods() {
             PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
             "NetwSession.State"
         )
+    ));
+    ADD_SIGNAL(MethodInfo(
+        SIG_PAUSED_CHANGED,
+        PropertyInfo(Variant::BOOL, "paused"),
+        PropertyInfo(Variant::STRING, "reason")
     ));
     ADD_SIGNAL(MethodInfo(SIG_ENTERED));
     ADD_SIGNAL(MethodInfo(

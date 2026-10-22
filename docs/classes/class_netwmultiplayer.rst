@@ -712,8 +712,6 @@ Methods
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | |void|                                                              | :ref:`session_notify_shutdown<class_NetwMultiplayer_method_session_notify_shutdown>`\ (\ reason\: :godot:`String` = ""\ )                                                                                                                                                                                                                                                                                                                                                               |
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                                              | :ref:`session_pause<class_NetwMultiplayer_method_session_pause>`\ (\ reason\: :godot:`String` = ""\ )                                                                                                                                                                                                                                                                                                                                                                                   |
-   +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwPromise<class_NetwPromise>`                               | :ref:`session_prepare_join<class_NetwMultiplayer_method_session_prepare_join>`\ (\ username\: :godot:`StringName`, args\: :godot:`Array` = []\ )                                                                                                                                                                                                                                                                                                                                        |
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | |void|                                                              | :ref:`session_request_leave<class_NetwMultiplayer_method_session_request_leave>`\ (\ reason\: :godot:`String` = ""\ )                                                                                                                                                                                                                                                                                                                                                                   |
@@ -729,8 +727,6 @@ Methods
    | |void|                                                              | :ref:`session_set_state<class_NetwMultiplayer_method_session_set_state>`\ (\ state\: :ref:`State<enum_NetwSession_State>`\ )                                                                                                                                                                                                                                                                                                                                                            |
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | |void|                                                              | :ref:`session_transition<class_NetwMultiplayer_method_session_transition>`\ (\ state\: :ref:`State<enum_NetwSession_State>`\ )                                                                                                                                                                                                                                                                                                                                                          |
-   +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|                                                              | :ref:`session_unpause<class_NetwMultiplayer_method_session_unpause>`\ (\ )                                                                                                                                                                                                                                                                                                                                                                                                              |
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`Mode<enum_NetwSimulation_Mode>`                               | :ref:`simulation_get_mode<class_NetwMultiplayer_method_simulation_get_mode>`\ (\ entity\: :godot:`RID`\ )                                                                                                                                                                                                                                                                                                                                                                               |
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -3452,7 +3448,7 @@ On the server, a peer asked to leave with :ref:`session_request_leave()<class_Ne
 
 :ref:`Notification<enum_NetwMultiplayer_Notification>` **SESSION_TREE_PAUSED** = ``38``
 
-The server called :ref:`session_pause()<class_NetwMultiplayer_method_session_pause>`. It does not pause the :godot:`SceneTree`. The callback receives ``(reason: String)``.
+The session was paused with :ref:`NetwSession.pause()<class_NetwSession_method_pause>`. The callback receives ``(reason: String)``.
 
 .. _class_NetwMultiplayer_constant_SESSION_TREE_UNPAUSED:
 
@@ -3460,7 +3456,7 @@ The server called :ref:`session_pause()<class_NetwMultiplayer_method_session_pau
 
 :ref:`Notification<enum_NetwMultiplayer_Notification>` **SESSION_TREE_UNPAUSED** = ``39``
 
-The server called :ref:`session_unpause()<class_NetwMultiplayer_method_session_unpause>`. The callback receives no arguments.
+The session was unpaused, or it ended while paused. The callback receives no arguments.
 
 .. _class_NetwMultiplayer_constant_SERVICE_REGISTERED:
 
@@ -7892,18 +7888,6 @@ Notifies :ref:`SESSION_SERVER_DISCONNECTING<class_NetwMultiplayer_constant_SESSI
 
 ----
 
-.. _class_NetwMultiplayer_method_session_pause:
-
-.. rst-class:: classref-method
-
-|void| **session_pause**\ (\ reason\: :godot:`String` = ""\ ) :ref:`🔗<class_NetwMultiplayer_method_session_pause>`
-
-Pauses the game on every peer, which notifies :ref:`SESSION_TREE_PAUSED<class_NetwMultiplayer_constant_SESSION_TREE_PAUSED>` with ``reason``.
-
-.. rst-class:: classref-item-separator
-
-----
-
 .. _class_NetwMultiplayer_method_session_prepare_join:
 
 .. rst-class:: classref-method
@@ -8009,18 +7993,6 @@ Sets :ref:`state<class_NetwMultiplayer_property_state>` without checking the cha
 |void| **session_transition**\ (\ state\: :ref:`State<enum_NetwSession_State>`\ ) :ref:`🔗<class_NetwMultiplayer_method_session_transition>`
 
 Changes :ref:`state<class_NetwMultiplayer_property_state>` and notifies :ref:`SESSION_STATE_CHANGED<class_NetwMultiplayer_constant_SESSION_STATE_CHANGED>`. A change that is not allowed, or :ref:`NetwSession.STATE_CREATING<class_NetwSession_constant_STATE_CREATING>`, pushes an error and does nothing.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwMultiplayer_method_session_unpause:
-
-.. rst-class:: classref-method
-
-|void| **session_unpause**\ (\ ) :ref:`🔗<class_NetwMultiplayer_method_session_unpause>`
-
-Unpauses the game on every peer, which notifies :ref:`SESSION_TREE_UNPAUSED<class_NetwMultiplayer_constant_SESSION_TREE_UNPAUSED>`.
 
 .. rst-class:: classref-item-separator
 

@@ -27,6 +27,16 @@
 		    pass
 		[/codeblock]
 		The peer emits the signal from its own [method MultiplayerPeer.poll], once it already answers the new ids. [NakamaWrapper] does this when [member NakamaWrapper.migrate_on_host_loss] is on. ENet, WebRTC, Steam and [OfflineMultiplayerPeer] do not, so losing the server ends the session.
+		[b]Pausing[/b]
+		[method pause] pauses every peer together. Properties stop syncing until [method unpause], and RPCs still arrive. Setting [member SceneTree.paused] yourself pauses only that peer's nodes, and the session keeps running. In an online game a pause menu usually leaves the tree running, because a paused peer stops predicting its physics bodies and is corrected on unpause.
+		[codeblock]
+		func _on_pause_pressed() -&gt; void:
+		    session.pause("The host paused the game")
+
+		func _on_paused_changed(paused: bool, reason: String) -&gt; void:
+		    pause_menu.visible = paused
+		    pause_label.text = reason
+		[/codeblock]
 	</description>
 	<tutorials>
 	</tutorials>
@@ -118,6 +128,14 @@
 				Leaves the session. The server saves its entity rows first, and stays online if the database refuses a row. The promise resolves with an [enum @GlobalScope.Error] once the peer is down or the save failed.
 			</description>
 		</method>
+		<method name="pause">
+			<return type="void" />
+			<param index="0" name="reason" type="String" default="&quot;&quot;" />
+			<description>
+				Pauses the [SceneTree] on every peer, which emits [signal paused_changed] with [param reason]. A player who joins while paused joins paused.
+				[b]Server Only.[/b]
+			</description>
+		</method>
 		<method name="player_of" qualifiers="const">
 			<return type="NetwPlayer" />
 			<param index="0" name="peer" type="int" />
@@ -201,6 +219,13 @@
 				[b]Server Only.[/b]
 			</description>
 		</method>
+		<method name="unpause">
+			<return type="void" />
+			<description>
+				Unpauses every peer that [method pause] paused.
+				[b]Server Only.[/b]
+			</description>
+		</method>
 		<method name="unregister_service">
 			<return type="void" />
 			<param index="0" name="service" type="Object" />
@@ -228,6 +253,9 @@
 		</member>
 		<member name="local_player" type="NetwPlayer" setter="" getter="get_local_player">
 			The [NetwPlayer] of this peer, [code]null[/code] until [signal local_joined].
+		</member>
+		<member name="paused" type="bool" setter="" getter="is_paused">
+			Whether the server has paused the session with [method pause].
 		</member>
 		<member name="players" type="NetwPlayer[]" setter="" getter="get_players">
 			Every [NetwPlayer] whose join was accepted and who has not left, sorted by peer id. A leaving player is already gone from it when [signal player_left] is emitted, while [member NetwMultiplayer.connected_players] still holds that player then.
@@ -287,6 +315,13 @@
 			<param index="0" name="player" type="NetwPlayer" />
 			<description>
 				The [NetwPlayer] of this peer has joined. [member local_player] is set from here on.
+			</description>
+		</signal>
+		<signal name="paused_changed">
+			<param index="0" name="paused" type="bool" />
+			<param index="1" name="reason" type="String" />
+			<description>
+				Emitted when [member paused] changes. [param reason] is what the server passed to [method pause]. A session that ends while paused emits it with [code]false[/code].
 			</description>
 		</signal>
 		<signal name="player_joined">

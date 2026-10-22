@@ -92,8 +92,9 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Spawn][SceneTree] a parked ADOPT whose node never "
-    "arrives expires once, so a structure that truly does not match is "
-    "reported rather than held forever"
+    "arrives expires once its timeout passes in session ticks, so a "
+    "structure that truly does not match is reported rather than held "
+    "forever"
 ) {
     netw_test::FaultWatch expected_faults;
     expected_faults.expect_warning(
@@ -106,11 +107,11 @@ TEST_CASE(
     LoopbackRig rig(1);
     rig.mount();
     netw_test::flow_clocks(rig, TICKRATE);
-    rig.spawn_plane(0)->set_park_timeout_seconds(0.0);
+    rig.spawn_plane(0)->set_park_timeout_seconds(0.2);
 
     Node *server_side = shared_probe("Shared");
     rig.branch(-1)->add_child(server_side);
-    rig.step_ticks(8);
+    rig.step_ticks(12);
 
     NETW_CHECK_EQ(counter_of(rig, 0, "spawn_park_expired"), int64_t(1));
     NETW_CHECK_EQ(counter_of(rig, 0, "drops_spawn_unresolved"), int64_t(1));

@@ -50,6 +50,19 @@ The session survives the server leaving when its :godot:`MultiplayerPeer` can ha
 
 \ The peer emits the signal from its own :godot:`MultiplayerPeer.poll() <MultiplayerPeer#class_MultiplayerPeer_method_poll>`, once it already answers the new ids. :ref:`NakamaWrapper<class_NakamaWrapper>` does this when :ref:`NakamaWrapper.migrate_on_host_loss<class_NakamaWrapper_property_migrate_on_host_loss>` is on. ENet, WebRTC, Steam and :godot:`OfflineMultiplayerPeer` do not, so losing the server ends the session.
 
+\ **Pausing**\ 
+
+\ :ref:`pause()<class_NetwSession_method_pause>` pauses every peer together. Properties stop syncing until :ref:`unpause()<class_NetwSession_method_unpause>`, and RPCs still arrive. Setting :godot:`SceneTree.paused <SceneTree#class_SceneTree_property_paused>` yourself pauses only that peer's nodes, and the session keeps running. In an online game a pause menu usually leaves the tree running, because a paused peer stops predicting its physics bodies and is corrected on unpause.
+
+::
+
+    func _on_pause_pressed() -> void:
+        session.pause("The host paused the game")
+
+    func _on_paused_changed(paused: bool, reason: String) -> void:
+        pause_menu.visible = paused
+        pause_label.text = reason
+
 .. rst-class:: classref-reftable-group
 
 Properties
@@ -70,6 +83,8 @@ Properties
    | :godot:`bool`                                         | :ref:`is_online<class_NetwSession_property_is_online>`             |
    +-------------------------------------------------------+--------------------------------------------------------------------+
    | :ref:`NetwPlayer<class_NetwPlayer>`                   | :ref:`local_player<class_NetwSession_property_local_player>`       |
+   +-------------------------------------------------------+--------------------------------------------------------------------+
+   | :godot:`bool`                                         | :ref:`paused<class_NetwSession_property_paused>`                   |
    +-------------------------------------------------------+--------------------------------------------------------------------+
    | :godot:`Array`\[:ref:`NetwPlayer<class_NetwPlayer>`\] | :ref:`players<class_NetwSession_property_players>`                 |
    +-------------------------------------------------------+--------------------------------------------------------------------+
@@ -113,6 +128,8 @@ Methods
    +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`leave<class_NetwSession_method_leave>`\ (\ )                                                                                                                                    |
    +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                                | :ref:`pause<class_NetwSession_method_pause>`\ (\ reason\: :godot:`String` = ""\ )                                                                                                     |
+   +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwPlayer<class_NetwPlayer>`                   | :ref:`player_of<class_NetwSession_method_player_of>`\ (\ peer\: :godot:`int`\ ) |const|                                                                                               |
    +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | |void|                                                | :ref:`register_service<class_NetwSession_method_register_service>`\ (\ service\: :godot:`Object`, type\: :godot:`Object` = null\ )                                                    |
@@ -128,6 +145,8 @@ Methods
    | :ref:`NetwTable<class_NetwTable>`                     | :ref:`table<class_NetwSession_method_table>`\ (\ name\: :godot:`StringName`\ ) |const|                                                                                                |
    +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`transfer_server<class_NetwSession_method_transfer_server>`\ (\ peer_id\: :godot:`int`\ )                                                                                        |
+   +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                                | :ref:`unpause<class_NetwSession_method_unpause>`\ (\ )                                                                                                                                |
    +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | |void|                                                | :ref:`unregister_service<class_NetwSession_method_unregister_service>`\ (\ service\: :godot:`Object`, type\: :godot:`Object` = null\ )                                                |
    +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -196,6 +215,18 @@ This peer's join was rejected with ``code`` and the ``reason`` the server gave. 
 **local_joined**\ (\ player\: :ref:`NetwPlayer<class_NetwPlayer>`\ ) :ref:`🔗<class_NetwSession_signal_local_joined>`
 
 The :ref:`NetwPlayer<class_NetwPlayer>` of this peer has joined. :ref:`local_player<class_NetwSession_property_local_player>` is set from here on.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwSession_signal_paused_changed:
+
+.. rst-class:: classref-signal
+
+**paused_changed**\ (\ paused\: :godot:`bool`, reason\: :godot:`String`\ ) :ref:`🔗<class_NetwSession_signal_paused_changed>`
+
+Emitted when :ref:`paused<class_NetwSession_property_paused>` changes. ``reason`` is what the server passed to :ref:`pause()<class_NetwSession_method_pause>`. A session that ends while paused emits it with ``false``.
 
 .. rst-class:: classref-item-separator
 
@@ -573,6 +604,22 @@ The :ref:`NetwPlayer<class_NetwPlayer>` of this peer, ``null`` until :ref:`local
 
 ----
 
+.. _class_NetwSession_property_paused:
+
+.. rst-class:: classref-property
+
+:godot:`bool` **paused** :ref:`🔗<class_NetwSession_property_paused>`
+
+.. rst-class:: classref-property-setget
+
+- :godot:`bool` **is_paused**\ (\ )
+
+Whether the server has paused the session with :ref:`pause()<class_NetwSession_method_pause>`.
+
+.. rst-class:: classref-item-separator
+
+----
+
 .. _class_NetwSession_property_players:
 
 .. rst-class:: classref-property
@@ -820,6 +867,20 @@ Leaves the session. The server saves its entity rows first, and stays online if 
 
 ----
 
+.. _class_NetwSession_method_pause:
+
+.. rst-class:: classref-method
+
+|void| **pause**\ (\ reason\: :godot:`String` = ""\ ) :ref:`🔗<class_NetwSession_method_pause>`
+
+Pauses the :godot:`SceneTree` on every peer, which emits :ref:`paused_changed<class_NetwSession_signal_paused_changed>` with ``reason``. A player who joins while paused joins paused.
+
+\ **Server Only.**
+
+.. rst-class:: classref-item-separator
+
+----
+
 .. _class_NetwSession_method_player_of:
 
 .. rst-class:: classref-method
@@ -942,6 +1003,20 @@ Asks the transport to make ``peer_id`` the server and this peer a client under a
     ┠╴ERR_UNAVAILABLE         the transport cannot move the server
     ┠╴ERR_INVALID_PARAMETER   peer_id is not a connected client
     ┖╴ERR_BUSY                a database still has writes to settle
+
+\ **Server Only.**
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwSession_method_unpause:
+
+.. rst-class:: classref-method
+
+|void| **unpause**\ (\ ) :ref:`🔗<class_NetwSession_method_unpause>`
+
+Unpauses every peer that :ref:`pause()<class_NetwSession_method_pause>` paused.
 
 \ **Server Only.**
 

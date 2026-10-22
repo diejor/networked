@@ -45,7 +45,20 @@ namespace Networked;
 /// once it already answers the new ids. <c>NakamaWrapper</c> does this when
 /// <c>NakamaWrapper.migrate_on_host_loss</c> is on. ENet, WebRTC, Steam and
 /// <see cref="OfflineMultiplayerPeer"/> do not, so losing the server ends the
-/// session.
+/// session. <b>Pausing</b> <see cref="NetwSession.Pause"/> pauses every peer
+/// together. Properties stop syncing until <see cref="NetwSession.Unpause"/>,
+/// and RPCs still arrive. Setting <c>SceneTree.paused</c> yourself pauses only
+/// that peer's nodes, and the session keeps running. In an online game a pause
+/// menu usually leaves the tree running, because a paused peer stops predicting
+/// its physics bodies and is corrected on unpause.
+/// <code>
+/// func _on_pause_pressed() -&gt; void:
+///     session.pause("The host paused the game")
+///
+/// func _on_paused_changed(paused: bool, reason: String) -&gt; void:
+///     pause_menu.visible = paused
+///     pause_label.text = reason
+/// </code>
 /// </para>
 /// </remarks>
 public sealed class NetwSession : NetwRefCounted
@@ -173,6 +186,24 @@ public sealed class NetwSession : NetwRefCounted
             )
         );
         remove => DisconnectBridge("state_changed", value);
+    }
+
+    /// <summary>
+    /// Emitted when <see cref="NetwSession.Paused"/> changes. <c>reason</c> is
+    /// what the server passed to <see cref="NetwSession.Pause"/>. A session
+    /// that ends while paused emits it with <c>false</c>.
+    /// </summary>
+    public event Action<bool, string> PausedChanged
+    {
+        add => ConnectBridge(
+            "paused_changed",
+            value,
+            Callable.From(
+                (bool a0, string a1) =>
+                    value(a0, a1)
+            )
+        );
+        remove => DisconnectBridge("paused_changed", value);
     }
 
     /// <summary>
@@ -454,6 +485,23 @@ public sealed class NetwSession : NetwRefCounted
         {
             byte answered = default;
             NetwThunks.Ptrcall0_Byte(_bindGetIsOnline, Checked, ref answered);
+            return answered != 0;
+        }
+    }
+
+    private static readonly IntPtr _bindIsPaused =
+        NetwApi.MethodBind("NetwSession", "is_paused", 36873697UL);
+
+    /// <summary>
+    /// Whether the server has paused the session with
+    /// <see cref="NetwSession.Pause"/>.
+    /// </summary>
+    public bool Paused
+    {
+        get
+        {
+            byte answered = default;
+            NetwThunks.Ptrcall0_Byte(_bindIsPaused, Checked, ref answered);
             return answered != 0;
         }
     }
@@ -758,6 +806,36 @@ public sealed class NetwSession : NetwRefCounted
         IntPtr answered = default;
         NetwThunks.Ptrcall0_IntPtr(_bindLeave, Checked, ref answered);
         return NetwPromise.Adopt(answered);
+    }
+
+    private static readonly IntPtr _bindPause =
+        NetwApi.MethodBind("NetwSession", "pause", 3005725572UL);
+
+    /// <summary>
+    /// Pauses the <see cref="SceneTree"/> on every peer, which emits
+    /// <see cref="NetwSession.PausedChanged"/> with <paramref name="reason"/>.
+    /// A player who joins while paused joins paused. <b>Server Only.</b>
+    /// </summary>
+    public void Pause(string reason = "")
+    {
+        godot_variant slot0 = VariantUtils.CreateFromString(reason);
+        godot_variant answered = default;
+        NetwThunks.Call1(_bindPause, Checked, in slot0, ref answered);
+        slot0.Dispose();
+        answered.Dispose();
+    }
+
+    private static readonly IntPtr _bindUnpause =
+        NetwApi.MethodBind("NetwSession", "unpause", 3218959716UL);
+
+    /// <summary>
+    /// Unpauses every peer that <see cref="NetwSession.Pause"/> paused.
+    /// <b>Server Only.</b>
+    /// </summary>
+    public void Unpause()
+    {
+        long discarded = default;
+        NetwThunks.Ptrcall0_Long(_bindUnpause, Checked, ref discarded);
     }
 
     private static readonly IntPtr _bindSaveEntities =

@@ -12,6 +12,7 @@
 #include "netw/api/promise.hpp"
 #include "netw/call_args.hpp"
 #include "netw/script/model.hpp"
+#include "netw/session/frames.hpp"
 #include "netw/wire/registry.hpp"
 #include "netw/wire/stream.hpp"
 #include "support/declared_nodes.h"
@@ -419,6 +420,13 @@ TEST_CASE(
         NetwMultiplayer::SESSION_TREE_UNPAUSED,
         seen.callable(StringName("unpaused"))
     );
+
+    core->session_publish_control(
+        netw::wire::builtin_channel("SESSION_PAUSE"),
+        MESH_SERVER,
+        netw::session::frame_write(netw::session::SessionReason{String()})
+    );
+    REQUIRE(core->session_is_paused());
 
     const int64_t channel = netw::wire::builtin_channel("SESSION_UNPAUSE");
     core->session_publish_control(channel, MESH_OTHER, PackedByteArray());

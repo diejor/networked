@@ -309,6 +309,7 @@ private:
     static double run_despawn_hook(godot::Node *p_node);
 
     int64_t park_timeout_ticks() const;
+    int64_t park_now() const;
     void park_spawn(
         const godot::PackedByteArray &p_payload,
         int64_t p_dep_route,

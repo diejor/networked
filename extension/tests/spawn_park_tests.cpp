@@ -71,11 +71,10 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Spawn][Hosted] a wait carrying a deadline expires on the "
-    "wall clock, and a route wait carries none because its waiter bounds it"
+    "[Networked][Spawn][Hosted] a wait expires once the count reaches its "
+    "deadline, and a route that is not waiting never expires"
 ) {
     Park park;
-    park.park(31, frame(1), Park::WAIT_ROUTE, 0, 7);
     park.park(32, frame(2), Park::WAIT_SCENE, 500, 7);
     park.park(33, frame(3), Park::WAIT_ADOPT, 700, 7);
 
@@ -86,7 +85,6 @@ TEST_CASE(
     CHECK_FALSE(park.is_expired(33, 699));
     CHECK(park.is_expired(33, 700));
 
-    CHECK_FALSE(park.is_expired(31, 5000));
     CHECK_FALSE(park.is_expired(99, 5000));
 }
 

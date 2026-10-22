@@ -575,6 +575,12 @@ private:
     godot::Ref<NetwPromise> session_shutting_down;
     godot::Ref<godot::MultiplayerPeer> session_shutdown_peer;
     int session_shutdown_polls = 0;
+    struct TurnedAwayPeer {
+        int64_t peer = 0;
+        int polls = 0;
+    };
+    godot::LocalVector<TurnedAwayPeer> turned_away_peers;
+    void session_poll_turned_away();
     godot::Ref<NetwPromise> session_close_peer();
     godot::Ref<NetwPromise> session_close_now();
     void session_poll_shutdown();
@@ -690,6 +696,8 @@ private:
     int session_exited_awaits_offline = -1;
     godot::String session_exited_detail;
     SessionState session_published_state = SESSION_STATE_OFFLINE;
+    bool session_paused = false;
+    godot::String session_pause_reason;
     void session_announce_exited(int p_reason, const godot::String &p_detail);
     bool scene_admits_on_join = false;
     bool is_observing(
@@ -867,6 +875,7 @@ private:
     bool join_awaiting_admission = false;
     display::Hooks display_hooks;
     int64_t display_last_frame = -1;
+    std::optional<display::Timing> display_last_timing;
     bool display_session_bound = false;
     bool display_renders = true;
 
@@ -3601,6 +3610,7 @@ public:
     void clear_session_state();
     void session_settle_clear_state();
     void session_set_tree_paused(bool p_paused);
+    void session_apply_pause(bool p_paused, const godot::String &p_reason);
 
     void session_defer(
         const godot::Callable &p_fn,
@@ -4310,6 +4320,7 @@ public:
 
     void session_pause(const godot::String &p_reason);
     void session_unpause();
+    bool session_is_paused() const;
     void session_notify_shutdown(const godot::String &p_reason);
     void session_request_leave(const godot::String &p_reason);
 

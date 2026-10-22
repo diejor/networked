@@ -4,7 +4,6 @@
 #include "godot/resource.hpp"
 #include "godot/resource_uid.hpp"
 #include "godot/script.hpp"
-#include "godot/time.hpp"
 #include "godot/utility.hpp"
 #include "netw/api/despawn_config.hpp"
 #include "netw/api/event_plane.hpp"
@@ -2633,6 +2632,15 @@ int64_t Pipeline::park_timeout_ticks() const {
     return ClockEngine::pumps_for(park_timeout_seconds, tickrate);
 }
 
+int64_t Pipeline::park_now() const {
+    NetwMultiplayer *plane = core();
+    if (plane == nullptr) {
+        return 0;
+    }
+    const ClockEngine &clock = plane->clock_engine();
+    return clock.get_configured() ? clock.get_ticks_run()
+                                  : plane->receive_tick();
+}
 void Pipeline::park_spawn(
     const PackedByteArray &p_payload,
     int64_t p_dep_route,
@@ -2644,11 +2652,18 @@ void Pipeline::park_spawn(
         return;
     }
     spawn_deferrals += 1;
-    park.park(p_route, p_payload, Park::WAIT_ROUTE, 0, p_sender);
+    const int64_t timeout = park_timeout_ticks();
+    park.park(
+        p_route,
+        p_payload,
+        Park::WAIT_ROUTE,
+        park_now() + timeout,
+        p_sender
+    );
     plane->liveness_when_live(
         p_dep_route,
         callable_mp(plane, &NetwMultiplayer::spawn_retry_parked).bind(p_route),
-        park_timeout_ticks(),
+        timeout,
         callable_mp(plane, &NetwMultiplayer::spawn_expire_parked).bind(p_route)
     );
 }
@@ -2674,24 +2689,19 @@ void Pipeline::park_spawn_for_scene(
         drops_spawn_unresolved += 1;
         return;
     }
-    const Time *reading = Time::get_singleton();
-    const int64_t now
-        = reading != nullptr ? int64_t(reading->get_ticks_msec()) : 0;
     spawn_deferrals += 1;
     park.park(
         p_route,
         p_payload,
         Park::WAIT_SCENE,
-        now + int64_t(park_timeout_seconds * 1000.0),
+        park_now() + park_timeout_ticks(),
         p_sender
     );
     retrying_scene_parks = true;
 }
 
 void Pipeline::retry_scene_parked_spawns(int64_t, const Ref<NetwEntity> &) {
-    const Time *reading = Time::get_singleton();
-    const int64_t now
-        = reading != nullptr ? int64_t(reading->get_ticks_msec()) : 0;
+    const int64_t now = park_now();
     const PackedInt64Array waiting = park.waiting_on(Park::WAIT_SCENE);
     for (int at = 0; at < waiting.size(); ++at) {
         const int64_t parked_route = waiting[at];
@@ -2720,14 +2730,11 @@ void Pipeline::park_spawn_for_adopt(
     int64_t p_route,
     int64_t p_sender
 ) {
-    const Time *reading = Time::get_singleton();
-    const int64_t now
-        = reading != nullptr ? int64_t(reading->get_ticks_msec()) : 0;
     if (park.park(
             p_route,
             p_payload,
             Park::WAIT_ADOPT,
-            now + int64_t(park_timeout_seconds * 1000.0),
+            park_now() + park_timeout_ticks(),
             p_sender
         )) {
         spawn_deferrals += 1;
@@ -2739,9 +2746,7 @@ void Pipeline::retry_adopt_parked() {
     if (waiting.is_empty()) {
         return;
     }
-    const Time *reading = Time::get_singleton();
-    const int64_t now
-        = reading != nullptr ? int64_t(reading->get_ticks_msec()) : 0;
+    const int64_t now = park_now();
     for (int at = 0; at < waiting.size(); ++at) {
         const int64_t parked_route = waiting[at];
         if (park.is_expired(parked_route, now)) {

@@ -78,6 +78,16 @@ const StringName &installed_default_interface() {
 
 godot::LocalVector<godot::ObjectID> live_registry;
 
+struct TreePauseHold {
+    int sessions = 0;
+    bool paused_by_game = false;
+};
+
+TreePauseHold &tree_pause_hold() {
+    static TreePauseHold hold;
+    return hold;
+}
+
 constexpr double POLL_PUMP_RATE = 60.0;
 
 const char *SIG_CONNECTED_TO_SERVER = "connected_to_server";
@@ -1288,15 +1298,13 @@ bool NetwMultiplayer::session_publish_control(
     const bool states_reason = session::frame_read(p_payload, stated);
     if (p_channel == control_channels.pause) {
         if (from_server && states_reason) {
-            session_set_tree_paused(true);
-            notify(SESSION_TREE_PAUSED, stated.reason);
+            session_apply_pause(true, stated.reason);
         }
         return true;
     }
     if (p_channel == control_channels.unpause) {
         if (from_server && p_payload.is_empty()) {
-            session_set_tree_paused(false);
-            notify(SESSION_TREE_UNPAUSED);
+            session_apply_pause(false, String());
         }
         return true;
     }
@@ -1425,12 +1433,12 @@ void NetwMultiplayer::session_turn_peer_away(
             false
         );
     }
-    session_defer_after(
-        callable_mp(this, &NetwMultiplayer::session_drop_turned_away_peer)
-            .bind(p_peer),
-        StringName(String("netw_join_refused_") + String::num_int64(p_peer)),
-        POLLS_BEFORE_TURNED_AWAY_PEER_DROPS
-    );
+    for (const TurnedAwayPeer &row : turned_away_peers) {
+        if (row.peer == p_peer) {
+            return;
+        }
+    }
+    turned_away_peers.push_back(TurnedAwayPeer{p_peer, 0});
 }
 
 void NetwMultiplayer::session_drop_turned_away_peer(int64_t p_peer) {
@@ -1438,6 +1446,24 @@ void NetwMultiplayer::session_drop_turned_away_peer(int64_t p_peer) {
         effective_peer->disconnect_peer(int32_t(p_peer));
     }
     session_settle_peer_loss(p_peer);
+}
+
+void NetwMultiplayer::session_poll_turned_away() {
+    LocalVector<int64_t> due;
+    uint32_t kept = 0;
+    for (uint32_t at = 0; at < turned_away_peers.size(); ++at) {
+        TurnedAwayPeer row = turned_away_peers[at];
+        row.polls += 1;
+        if (row.polls < POLLS_BEFORE_TURNED_AWAY_PEER_DROPS) {
+            turned_away_peers[kept++] = row;
+            continue;
+        }
+        due.push_back(row.peer);
+    }
+    turned_away_peers.resize(kept);
+    for (const int64_t peer : due) {
+        session_drop_turned_away_peer(peer);
+    }
 }
 
 void NetwMultiplayer::session_report_join_failure(
@@ -1683,12 +1709,44 @@ void NetwMultiplayer::session_settle_clear_state() {
 }
 
 void NetwMultiplayer::session_set_tree_paused(bool p_paused) {
+    TreePauseHold &hold = tree_pause_hold();
     SceneTree *loop = gd::scene_tree();
-    if (loop == nullptr) {
-        NETW_TRACE(sys::SESSION, "The session has no SceneTree to pause.");
+    if (p_paused) {
+        if (hold.sessions++ == 0) {
+            hold.paused_by_game = loop != nullptr && loop->is_paused();
+        }
+        if (loop != nullptr) {
+            loop->set_pause(true);
+        }
         return;
     }
-    loop->set_pause(p_paused);
+    if (hold.sessions == 0) {
+        return;
+    }
+    hold.sessions -= 1;
+    if (hold.sessions == 0 && !hold.paused_by_game && loop != nullptr) {
+        loop->set_pause(false);
+    }
+}
+
+void NetwMultiplayer::session_apply_pause(
+    bool p_paused,
+    const String &p_reason
+) {
+    if (session_paused == p_paused) {
+        return;
+    }
+    session_paused = p_paused;
+    session_pause_reason = p_paused ? p_reason : String();
+    session_set_tree_paused(p_paused);
+    if (p_paused) {
+        notify(SESSION_TREE_PAUSED, p_reason);
+    } else {
+        notify(SESSION_TREE_UNPAUSED);
+    }
+    if (session_handle.is_valid()) {
+        session_handle->announce_paused_changed(p_paused, session_pause_reason);
+    }
 }
 
 void NetwMultiplayer::session_dispose() {
@@ -1818,6 +1876,20 @@ void NetwMultiplayer::session_finish_join(
             false
         );
         liveness_grant_lease(p_sender);
+        if (session_paused) {
+            send_to(
+                p_sender,
+                0,
+                control_channels.pause,
+                session::frame_write(
+                    session::SessionReason{session_pause_reason}
+                ),
+                true,
+                0,
+                String(),
+                false
+            );
+        }
     }
     session_run_join_handler(accepting, decoded);
 }
@@ -1967,6 +2039,7 @@ void NetwMultiplayer::session_announce_ended() {
             detail
         );
     }
+    session_apply_pause(false, String());
     spawner_session_ended();
     liveness_settle_clear_session();
     interest_session_ended();
@@ -2855,7 +2928,8 @@ void NetwMultiplayer::session_pause(const String &p_reason) {
     NETW_ERR_COND(
         !session_core.is_server_role(),
         sys::SESSION,
-        "NetwMultiplayer.session_pause runs only on the server."
+        "Only the server can pause the session. Check multiplayer.is_server() "
+        "before calling NetwSession.pause."
     );
     session_broadcast_control(
         control_channels.pause,
@@ -2867,9 +2941,14 @@ void NetwMultiplayer::session_unpause() {
     NETW_ERR_COND(
         !session_core.is_server_role(),
         sys::SESSION,
-        "NetwMultiplayer.session_unpause runs only on the server."
+        "Only the server can unpause the session. Check "
+        "multiplayer.is_server() before calling NetwSession.unpause."
     );
     session_broadcast_control(control_channels.unpause, PackedByteArray());
+}
+
+bool NetwMultiplayer::session_is_paused() const {
+    return session_paused;
 }
 
 void NetwMultiplayer::session_notify_shutdown(const String &p_reason) {
@@ -2968,6 +3047,9 @@ NetwMultiplayer::~NetwMultiplayer() {
     forget_torn_down_sessions();
     sessions_tearing_down().push_back(uint64_t(gd::instance_id(this)));
     tree_forget_session(this);
+    if (session_paused) {
+        session_set_tree_paused(false);
+    }
     capture_close();
     clock_release();
     lagcomp_release();
@@ -3099,6 +3181,7 @@ Error NetwMultiplayer::NETW_API_VIRTUAL(poll)() {
     connect_core.on_poll(frame_delta);
     const Error err = embed_poll_transport();
     session_poll_shutdown();
+    session_poll_turned_away();
     const bool clocked = clock_engine().get_configured();
     if (!clocked) {
         settle_advance();
@@ -5180,6 +5263,8 @@ void NetwMultiplayer::clear_flat_family_state() {
 }
 
 void NetwMultiplayer::clear_session_state() {
+    turned_away_peers.clear();
+    display_last_timing.reset();
     clear_seq_books();
     ReplicationCore *plane = (get_replication_plane());
     if (plane != nullptr) {

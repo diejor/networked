@@ -134,7 +134,7 @@ void NetwMultiplayer::clock_on_physics_frame() {
         return;
     }
     SceneTree *tree = gd::scene_tree();
-    if (tree == nullptr || tree->is_paused() || session_root() == nullptr) {
+    if (tree == nullptr || session_paused || session_root() == nullptr) {
         return;
     }
     if (clock_engine().get_manual_tick()) {

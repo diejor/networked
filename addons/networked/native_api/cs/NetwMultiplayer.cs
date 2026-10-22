@@ -1572,14 +1572,13 @@ public sealed class NetwMultiplayer : NetwRefCounted
         /// </summary>
         SessionDisconnectRequested = 37,
         /// <summary>
-        /// The server called <see cref="NetwMultiplayer.SessionPause"/>. It
-        /// does not pause the <see cref="SceneTree"/>. The callback receives
-        /// <c>(reason: String)</c>.
+        /// The session was paused with <see cref="NetwSession.Pause"/>. The
+        /// callback receives <c>(reason: String)</c>.
         /// </summary>
         SessionTreePaused = 38,
         /// <summary>
-        /// The server called <see cref="NetwMultiplayer.SessionUnpause"/>. The
-        /// callback receives no arguments.
+        /// The session was unpaused, or it ended while paused. The callback
+        /// receives no arguments.
         /// </summary>
         SessionTreeUnpaused = 39,
         /// <summary>
@@ -10723,36 +10722,6 @@ public sealed class NetwMultiplayer : NetwRefCounted
             Checked,
             in slot0,
             ref discarded);
-    }
-
-    private static readonly IntPtr _bindSessionPause =
-        NetwApi.MethodBind("NetwMultiplayer", "session_pause", 3005725572UL);
-
-    /// <summary>
-    /// Pauses the game on every peer, which notifies
-    /// <see cref="NetwMultiplayer.Notification.SessionTreePaused"/> with
-    /// <paramref name="reason"/>.
-    /// </summary>
-    public void SessionPause(string reason = "")
-    {
-        godot_variant slot0 = VariantUtils.CreateFromString(reason);
-        godot_variant answered = default;
-        NetwThunks.Call1(_bindSessionPause, Checked, in slot0, ref answered);
-        slot0.Dispose();
-        answered.Dispose();
-    }
-
-    private static readonly IntPtr _bindSessionUnpause =
-        NetwApi.MethodBind("NetwMultiplayer", "session_unpause", 3218959716UL);
-
-    /// <summary>
-    /// Unpauses the game on every peer, which notifies
-    /// <see cref="NetwMultiplayer.Notification.SessionTreeUnpaused"/>.
-    /// </summary>
-    public void SessionUnpause()
-    {
-        long discarded = default;
-        NetwThunks.Ptrcall0_Long(_bindSessionUnpause, Checked, ref discarded);
     }
 
     private static readonly IntPtr _bindSessionNotifyShutdown =

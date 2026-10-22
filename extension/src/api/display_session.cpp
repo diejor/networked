@@ -707,10 +707,20 @@ Error NetwMultiplayer::display_pump(double p_delta) {
     if (!clock_engine().get_configured()) {
         return OK;
     }
+    if (session_paused && !display_last_timing.has_value()) {
+        return OK;
+    }
     display_renders = display_renders_here();
 
-    const display::Timing timing
-        = display::capture_timing(&clock_engine(), p_delta);
+    display::Timing timing;
+    if (session_paused) {
+        timing = *display_last_timing;
+        timing.frame_delta = 0.0;
+        timing.frame_ticks = 0.0;
+    } else {
+        timing = display::capture_timing(&clock_engine(), p_delta);
+        display_last_timing = timing;
+    }
     display::PumpStats &stats = display_book->get_stats();
     stats.reset();
 
