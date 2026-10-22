@@ -238,6 +238,30 @@ Ref<NetwMemberConfig> NetwMemberConfig::defer_until(const Signal &p_signal) {
     return Ref<NetwMemberConfig>(this);
 }
 
+Ref<NetwMemberConfig> NetwMemberConfig::timeout(double p_seconds) {
+    if (context_type != 0) {
+        NETW_WARN(
+            sys::SESSION,
+            "NetwMemberConfig.timeout does nothing on '%s', because only a "
+            "requested method waits for a reply. Remove the call.",
+            String(context_name)
+        );
+        return Ref<NetwMemberConfig>(this);
+    }
+    if (p_seconds <= 0.0) {
+        NETW_ERROR(
+            sys::SESSION,
+            "NetwMemberConfig.timeout got %s seconds for '%s'. Pass a number "
+            "of seconds above zero.",
+            String::num(p_seconds),
+            String(context_name)
+        );
+        return Ref<NetwMemberConfig>(this);
+    }
+    timeout_seconds = p_seconds;
+    return Ref<NetwMemberConfig>(this);
+}
+
 Ref<NetwMemberConfig> NetwMemberConfig::quantize(const Array &p_quantizers) {
     if (p_quantizers.is_empty()) {
         NETW_ERROR(
@@ -355,6 +379,10 @@ void NetwMemberConfig::_bind_methods() {
     ClassDB::bind_method(
         D_METHOD("defer_until", "sig"),
         &NetwMemberConfig::defer_until
+    );
+    ClassDB::bind_method(
+        D_METHOD("timeout", "seconds"),
+        &NetwMemberConfig::timeout
     );
     gd::bind_vararg_method(D_METHOD("quantize"), &NetwMemberConfig::quantize);
     gd::bind_vararg_method(

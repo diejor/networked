@@ -202,6 +202,8 @@ int64_t display_role_of(NetwMultiplayer *p_core, Node *p_node) {
 }
 
 struct ComposedWorld {
+    const Ref<PackedScene> warm_level
+        = netw::gd::load_scene(String(LEVEL_PATH));
     MeshStand stand;
     Node *held = nullptr;
     Node *at_seven = nullptr;

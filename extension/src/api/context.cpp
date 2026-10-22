@@ -134,31 +134,45 @@ NetwMultiplayer *sole_session(const char *p_verb) {
     return Object::cast_to<NetwMultiplayer>(only.ptr());
 }
 
-NetwMultiplayer *rpc_interface(const Callable &p_callable) {
-    Node *node = Object::cast_to<Node>(p_callable.get_object());
-    if (node == nullptr) {
-        NETW_ERROR(sys::SESSION, "A Netw RPC needs a method of a Node.");
-        return nullptr;
+struct CallSession {
+    NetwMultiplayer *api = nullptr;
+    Error code = OK;
+    String detail;
+};
+
+CallSession call_session(Node *p_node, const StringName &p_member) {
+    CallSession out;
+    if (p_node == nullptr) {
+        out.code = ERR_INVALID_PARAMETER;
+        out.detail = String("A Netw RPC needs a method of a Node.");
+        NETW_ERROR(sys::SESSION, "%s", out.detail);
+        return out;
     }
-    if (NetwEntity::of(node).is_null()) {
-        NETW_ERROR(
-            sys::SESSION,
-            "'%s' is not part of a NetwEntity, so it cannot take a Netw RPC. "
-            "Call Netw.configure_entity on its root.",
-            String(node->get_name())
-        );
-        return nullptr;
+    out.api = NetwMultiplayer::of(p_node);
+    if (out.api != nullptr) {
+        return out;
     }
-    NetwMultiplayer *api = NetwMultiplayer::of(node);
-    if (api == nullptr) {
-        NETW_ERROR(
-            sys::SESSION,
-            "'%s' is not inside a session, so it cannot take a Netw RPC. Add "
-            "it to the scene tree under a MultiplayerViewport.",
-            String(node->get_name())
-        );
+    out.code = ERR_UNCONFIGURED;
+    out.detail = vformat(
+        "'%s' is not inside a session, so the call to '%s' was dropped. Add "
+        "it to the scene tree under a MultiplayerViewport.",
+        String(p_node->get_name()),
+        String(p_member)
+    );
+    static HashSet<uint64_t> reported;
+    const uint64_t node_id = uint64_t(gd::instance_id(p_node));
+    if (!reported.has(node_id)) {
+        reported.insert(node_id);
+        NETW_ERROR(sys::SESSION, "%s", out.detail);
     }
-    return api;
+    return out;
+}
+
+CallSession call_session(const Callable &p_callable) {
+    return call_session(
+        Object::cast_to<Node>(p_callable.get_object()),
+        p_callable.get_method()
+    );
 }
 
 void mark_signal_fired(const Variant &p_node, const String &p_meta_key) {
@@ -747,18 +761,16 @@ void Netw::rpc_id(
     const Callable &p_callable,
     const Array &p_args
 ) {
-    NetwMultiplayer *api = rpc_interface(p_callable);
-    if (api != nullptr) {
-        api->rpc_call(p_callable, p_args, p_peer_id);
+    const CallSession session = call_session(p_callable);
+    if (session.api != nullptr) {
+        session.api->rpc_call(p_callable, p_args, p_peer_id);
     }
 }
 
 void Netw::rpc_controller(const Callable &p_callable, const Array &p_args) {
-    const Ref<NetwEntity> entity
-        = NetwEntity::of(Object::cast_to<Node>(p_callable.get_object()));
-    const int64_t controller = entity.is_valid() ? entity->get_controller() : 0;
-    if (controller > 0) {
-        rpc_id(controller, p_callable, p_args);
+    const CallSession session = call_session(p_callable);
+    if (session.api != nullptr) {
+        session.api->rpc_call_controller(p_callable, p_args);
     }
 }
 
@@ -768,23 +780,18 @@ Ref<NetwPromise> Netw::request_id(
     const Array &p_args
 ) {
     if (p_peer_id == 0) {
-        NETW_ERROR(
-            sys::SESSION,
+        const String detail = String(
             "Netw.request_id got peer id 0, which names no single peer. Use "
             "Netw.request_all to ask every peer."
         );
-        return Ref<NetwPromise>();
+        NETW_ERROR(sys::SESSION, "%s", detail);
+        return NetwPromise::refused(ERR_INVALID_PARAMETER, detail);
     }
-    NetwMultiplayer *api = rpc_interface(p_callable);
-    if (api == nullptr) {
-        return Ref<NetwPromise>();
+    const CallSession session = call_session(p_callable);
+    if (session.api == nullptr) {
+        return NetwPromise::refused(session.code, session.detail);
     }
-    return api->rpc_request_call(
-        p_peer_id,
-        p_callable,
-        p_args,
-        NetwMultiplayer::rpc_request_timeout_default()
-    );
+    return session.api->rpc_request_call(p_peer_id, p_callable, p_args);
 }
 
 Ref<NetwPromise> Netw::request(
@@ -798,32 +805,29 @@ Ref<NetwGroupPromise> Netw::request_all(
     const Callable &p_callable,
     const Array &p_args
 ) {
-    NetwMultiplayer *api = rpc_interface(p_callable);
-    if (api == nullptr) {
-        return Ref<NetwGroupPromise>();
+    const CallSession session = call_session(p_callable);
+    if (session.api == nullptr) {
+        return NetwGroupPromise::refused(session.code, session.detail);
     }
-    return api->rpc_request_call_group(
-        p_callable,
-        p_args,
-        NetwMultiplayer::rpc_request_timeout_default()
-    );
+    return session.api->rpc_request_call_group(p_callable, p_args);
 }
 
 Ref<NetwPromise> Netw::request_controller(
     const Callable &p_callable,
     const Array &p_args
 ) {
-    const Ref<NetwEntity> entity
-        = NetwEntity::of(Object::cast_to<Node>(p_callable.get_object()));
-    const int64_t controller = entity.is_valid() ? entity->get_controller() : 0;
-    if (controller > 0) {
-        return request_id(controller, p_callable, p_args);
+    const CallSession session = call_session(p_callable);
+    if (session.api == nullptr) {
+        return NetwPromise::refused(session.code, session.detail);
     }
-    return Ref<NetwPromise>();
+    return session.api->rpc_request_controller(p_callable, p_args);
 }
 
 void Netw::sync_property(Node *p_node, const StringName &p_property) {
-    NetwMultiplayer *api = NetwMultiplayer::of(p_node);
+    if (p_node == nullptr) {
+        return;
+    }
+    NetwMultiplayer *api = call_session(p_node, p_property).api;
     if (api == nullptr) {
         return;
     }
@@ -838,7 +842,7 @@ void Netw::emit_entity_signal(const Signal &p_signal, const Array &p_args) {
     if (node == nullptr) {
         return;
     }
-    NetwMultiplayer *api = NetwMultiplayer::of(node);
+    NetwMultiplayer *api = call_session(node, p_signal.get_name()).api;
     if (api == nullptr) {
         return;
     }

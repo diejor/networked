@@ -630,6 +630,7 @@ public sealed class Netw : NetwRefCounted
 
     /// <summary>
     /// Calls <paramref name="callable"/> on every peer that can see the node.
+    /// The node must be part of a spawned <see cref="NetwEntity"/>.
     /// <code>
     /// Netw.rpc(turret.aim, yaw)
     /// </code>
@@ -669,7 +670,8 @@ public sealed class Netw : NetwRefCounted
 
     /// <summary>
     /// Calls <paramref name="callable"/> on <paramref name="peerId"/>, or on
-    /// every peer when <c>0</c>.
+    /// every peer when <c>0</c>. The node must be part of a spawned
+    /// <see cref="NetwEntity"/>.
     /// </summary>
     public static void RpcId(
         long peerId,
@@ -716,7 +718,8 @@ public sealed class Netw : NetwRefCounted
 
     /// <summary>
     /// Calls <paramref name="callable"/> on the peer of the node's
-    /// <see cref="NetwEntity.Controller"/>.
+    /// <see cref="NetwEntity.Controller"/>, and on the server when no peer
+    /// steers it. The node must be part of a spawned <see cref="NetwEntity"/>.
     /// </summary>
     public static void RpcController(Callable callable, params Variant[] rest)
     {
@@ -763,10 +766,20 @@ public sealed class Netw : NetwRefCounted
     /// Calls <paramref name="callable"/> on the server and returns a
     /// <see cref="NetwPromise"/> with its return value.
     /// <code>
-    /// var sold: bool = await Netw.request(shop.buy, &amp;"shield").wait()
+    /// public async void BuyShield()
+    /// {
+    ///     bool sold = (await Netw.Request(shop, MethodName.Buy, "shield")).AsBool();
+    /// }
+    ///
+    /// [Rpc(MultiplayerApi.RpcMode.AnyPeer)]
+    /// public Variant Buy(StringName item) =&gt; NetwPromise.FromTask(stock.Take(item));
     /// </code>
     /// <para>
-    /// The method must be an RPC, as for <see cref="Netw.Rpc"/>.
+    /// The method must be an RPC, as for <see cref="Netw.Rpc"/>. The promise
+    /// fails at once when the node is not part of a spawned
+    /// <see cref="NetwEntity"/>. The method may <c>await</c>, and the reply is
+    /// sent when it returns. A method whose node is freed while it waits never
+    /// replies, so the promise fails when it times out.
     /// </para>
     /// </summary>
     public static NetwPromise Request(Callable callable, params Variant[] rest)
@@ -818,7 +831,9 @@ public sealed class Netw : NetwRefCounted
     /// <summary>
     /// Calls <paramref name="callable"/> on <paramref name="peerId"/> and
     /// returns a <see cref="NetwPromise"/> with its return value. Use
-    /// <see cref="Netw.RequestAll"/> to call every peer.
+    /// <see cref="Netw.RequestAll"/> to call every peer. The promise fails at
+    /// once when the node is not part of a spawned <see cref="NetwEntity"/>.
+    /// The method may <c>await</c>, as for <see cref="Netw.Request"/>.
     /// </summary>
     public static NetwPromise RequestId(
         long peerId,
@@ -875,7 +890,52 @@ public sealed class Netw : NetwRefCounted
 
     /// <summary>
     /// Calls <paramref name="callable"/> on every peer that can see the node,
-    /// and returns a <see cref="NetwGroupPromise"/> with each return value.
+    /// and returns a <see cref="NetwGroupPromise"/> with each return value. The
+    /// promise fails at once when the node is not part of a spawned
+    /// <see cref="NetwEntity"/>. A method declared with
+    /// <see cref="NetwMemberConfig.CallLocal"/> or a <c>call_local</c>
+    /// [annotation @GDScript.@rpc] also runs on this peer, and its value joins
+    /// <see cref="NetwGroupPromise.Results"/> under this peer's id. Otherwise
+    /// this peer is not asked. The method may <c>await</c>, as for
+    /// <see cref="Netw.Request"/>. A method that takes longer than 5 seconds
+    /// declares its own deadline with <see cref="NetwMemberConfig.Timeout"/>.
+    /// <code>
+    /// public partial class SceneManager : Node
+    /// {
+    ///     const string Match = "res://match.tscn";
+    ///
+    ///     PackedScene warm;
+    ///
+    ///     public SceneManager()
+    ///     {
+    ///         Netw.ConfigureEntity(this);
+    ///         Netw.ConfigureRpc(this, MethodName.PreloadLevel).Timeout(60.0);
+    ///         Netw.ConfigureSpawn(this, MethodName.MakePlayer);
+    ///     }
+    ///
+    ///     public async void StartMatch()
+    ///     {
+    ///         NetwGroupPromise loads = await Netw.RequestAll(this, MethodName.PreloadLevel, Match);
+    ///         if (loads.IsFailed || loads.Results.Values.Any(loaded =&gt; !loaded.AsBool()))
+    ///             return;
+    ///         NetwScene arena = await Netw.ChangeSceneToFile(this, Match).AsTask(NetwScene.From);
+    ///         foreach (NetwPlayer player in arena.Viewers)
+    ///             arena.Root.AddChild(Netw.SpawnPlayer(player, this, MethodName.MakePlayer));
+    ///     }
+    ///
+    ///     public Variant PreloadLevel(string path) =&gt; NetwPromise.FromTask(Preload(path));
+    ///
+    ///     async Task&lt;bool&gt; Preload(string path)
+    ///     {
+    ///         ResourceLoader.LoadThreadedRequest(path);
+    ///         while (ResourceLoader.LoadThreadedGetStatus(path)
+    ///                 == ResourceLoader.ThreadLoadStatus.InProgress)
+    ///             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+    ///         warm = ResourceLoader.LoadThreadedGet(path) as PackedScene;
+    ///         return warm != null;
+    ///     }
+    /// }
+    /// </code>
     /// </summary>
     public static NetwGroupPromise RequestAll(
         Callable callable,
@@ -927,7 +987,10 @@ public sealed class Netw : NetwRefCounted
 
     /// <summary>
     /// Calls <paramref name="callable"/> on the peer of the node's
-    /// <see cref="NetwEntity.Controller"/>.
+    /// <see cref="NetwEntity.Controller"/>, and on the server when no peer
+    /// steers it. The promise fails at once when the node is not part of a
+    /// spawned <see cref="NetwEntity"/>. The method may <c>await</c>, as for
+    /// <see cref="Netw.Request"/>.
     /// </summary>
     public static NetwPromise RequestController(
         Callable callable,
@@ -1170,8 +1233,20 @@ public sealed class Netw : NetwRefCounted
     /// </code>
     /// <para>
     /// Register <paramref name="fn"/> with <see cref="Netw.ConfigureSpawn"/>
-    /// first, and add the node to the tree before the next tick. A client can
-    /// call it when the node sets <see cref="NetwEntity.Lifecycle"/> to
+    /// first, and add the node to the tree before the next tick.
+    /// <paramref name="fn"/> must return the node without waiting. Load a scene
+    /// that takes a while on every peer first with
+    /// <see cref="Netw.RequestAll"/>.
+    /// <code>
+    /// var loads := Netw.request_all(preload_level, path)
+    /// await loads.wait()
+    /// if not loads.is_failed:
+    ///     add_child(Netw.spawn(make_level, path))
+    /// </code>
+    /// </para>
+    /// <para>
+    /// A client can call it when the node sets
+    /// <see cref="NetwEntity.Lifecycle"/> to
     /// <see cref="NetwEntity.LifecycleEnum.Controller"/>. That client's player
     /// becomes its <see cref="NetwEntity.Controller"/>. The client sees it at
     /// once and loses it if the server refuses.
@@ -1474,7 +1549,8 @@ public sealed class Netw : NetwRefCounted
     /// <summary>
     /// Opens <paramref name="path"/> and moves players to it.
     /// <paramref name="scope"/> says who moves. Their nodes do not move, so
-    /// spawn them in the <see cref="NetwScene"/> the promise gives.
+    /// spawn them in the <see cref="NetwScene"/> the promise gives. The scene
+    /// loads in the background, and the promise settles when it is in place.
     /// <code>
     /// func start_match() -&gt; void:
     ///     Netw.change_scene_to_file(self, "res://match.tscn").then(spawn_players)

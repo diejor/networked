@@ -69,10 +69,10 @@ public:
 
     bool spawn_is_duplicate(int64_t route, int64_t state) const;
 
-    static godot::String recipe_base(
+    static godot::StringName default_entity_id(
         const Record *record,
-        const godot::String &fallback_scene_path,
-        const godot::String &fallback_name
+        const godot::Node *node,
+        int64_t route
     );
 
     static Received received_of(const Record &record);

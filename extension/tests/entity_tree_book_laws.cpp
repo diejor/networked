@@ -67,7 +67,7 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Entity][SceneTree] a node freed off the tree takes its "
-    "entity with it once the departure settles"
+    "entity with it once the departure settles and interest next runs"
 ) {
     LoopbackRig rig(1);
     rig.mount();
@@ -86,6 +86,7 @@ TEST_CASE(
 
     memdelete(node);
     rig.step_ticks(1);
+    rig.server()->interest_flush_now();
     CHECK(!alive(entity_id));
 }
 

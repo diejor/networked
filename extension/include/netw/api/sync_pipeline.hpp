@@ -196,7 +196,10 @@ private:
     void reconcile_dropped_state_timelines();
     bool holds_state_binding(const godot::Ref<NetwEntity> &p_entity) const;
 
-    godot::Dictionary resolve_send(godot::Node *p_node);
+    godot::Dictionary resolve_send(
+        godot::Node *p_node,
+        const godot::StringName &p_member
+    );
     void send_entity_event(
         const godot::Dictionary &p_frame,
         int64_t p_channel,

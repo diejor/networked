@@ -47,8 +47,8 @@ namespace Networked;
 /// </code>
 /// </para>
 /// <para>
-/// A node placed in a scene by hand sets its own <see cref="NetwEntity.Name"/>.
-/// A spawned copy receives it with the spawn.
+/// A node placed in a scene by hand can set its own
+/// <see cref="NetwEntity.Name"/>. A spawned copy receives it with the spawn.
 /// <code>
 /// func _init() -&gt; void:
 ///     Netw.configure_entity(self).name = &amp;"ball"
@@ -411,11 +411,13 @@ public sealed class NetwEntity : NetwRefCounted
         NetwApi.MethodBind("NetwEntity", "set_name", 3304788590UL);
 
     /// <summary>
-    /// The name that identifies this entity on every peer, and in saves and
-    /// logs. A node placed in a scene sets it in <c>Object._init</c>, since an
-    /// entity without one stays inactive. <see cref="Netw.SpawnPlayer"/> sets
-    /// it to the player's <see cref="NetwPlayer.UserName"/>, so a game giving
-    /// one player several entities sets a distinct name on each.
+    /// The name that identifies this entity on every peer and in logs. A save
+    /// finds its row by <see cref="NetwPersistenceConfig.RecordId"/>. An entity
+    /// left without one is named after the scene, spawn function or node it
+    /// came from, followed by <c>@</c> and its route, such as <c>Crate@3</c>.
+    /// <see cref="Netw.SpawnPlayer"/> sets it to the player's
+    /// <see cref="NetwPlayer.UserName"/>, so a game giving one player several
+    /// entities sets a distinct name on each.
     /// </summary>
     public StringName Name
     {

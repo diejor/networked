@@ -385,7 +385,8 @@ private:
     int64_t dispatching_sender = 0;
     int64_t rpc_dropped_unroutable = 0;
     int64_t rpc_dropped_not_live = 0;
-    godot::HashSet<uint64_t> rpc_drop_warned;
+    godot::HashMap<uint64_t, uint8_t> call_faults_reported;
+    bool call_fault_first(godot::Node *p_node, godot::Error p_code);
 
     struct RpcSettle {
         godot::Ref<NetwPromise> single;
@@ -411,13 +412,27 @@ private:
         godot::Array quantizers;
         godot::Array arg_types;
         int64_t deadline = 0;
+        bool call_local = false;
     };
 
-    bool rpc_request_prepare(
+    godot::Error rpc_request_prepare(
         const godot::Callable &p_callable,
         const godot::Array &p_args,
         double p_timeout_seconds,
-        RpcRequest &r_out
+        RpcRequest &r_out,
+        godot::String &r_detail
+    );
+    godot::Error rpc_declared(
+        godot::Node *p_node,
+        const godot::StringName &p_method,
+        godot::String &r_detail
+    ) const;
+    int64_t rpc_controller_peer(const godot::Ref<NetwEntity> &p_entity) const;
+    void rpc_post_reply(
+        int64_t p_peer,
+        int64_t p_route,
+        int64_t p_txn,
+        const godot::PackedByteArray &p_payload
     );
     void rpc_open_txn(
         int64_t p_txn,
@@ -475,6 +490,20 @@ private:
     );
     void rpc_reply_when_settled(
         const godot::Ref<NetwPromise> &p_promise,
+        int64_t p_peer,
+        int64_t p_route,
+        int64_t p_txn
+    );
+    void rpc_reply_returned(
+        const godot::Variant &p_value,
+        const godot::Variant &p_held_until_return,
+        int64_t p_peer,
+        int64_t p_route,
+        int64_t p_txn,
+        uint64_t p_generation
+    );
+    bool rpc_reply_when_returned(
+        const godot::Variant &p_result,
         int64_t p_peer,
         int64_t p_route,
         int64_t p_txn
@@ -3441,13 +3470,37 @@ public:
         int64_t p_peer,
         const godot::Callable &p_callable,
         const godot::Array &p_args,
-        double p_timeout_seconds = 5.0
+        double p_timeout_seconds = 0.0
     );
     godot::Ref<NetwGroupPromise> rpc_request_call_group(
         const godot::Callable &p_callable,
         const godot::Array &p_args,
-        double p_timeout_seconds = 5.0
+        double p_timeout_seconds = 0.0
     );
+    void rpc_call_controller(
+        const godot::Callable &p_callable,
+        const godot::Array &p_args
+    );
+    godot::Ref<NetwPromise> rpc_request_controller(
+        const godot::Callable &p_callable,
+        const godot::Array &p_args
+    );
+
+    struct CallTarget {
+        godot::Ref<NetwEntity> entity;
+        int64_t route = 0;
+        godot::Error code = godot::OK;
+        godot::String detail;
+    };
+    CallTarget call_target(
+        godot::Node *p_node,
+        const godot::StringName &p_member
+    );
+    CallTarget rpc_target(
+        godot::Node *p_node,
+        const godot::StringName &p_method
+    );
+
     void rpc_send_reply(
         int64_t p_peer,
         int64_t p_route,
@@ -3458,6 +3511,24 @@ public:
         int64_t p_txn,
         int64_t p_sender,
         const godot::Variant &p_value
+    );
+    void rpc_send_refusal(
+        int64_t p_peer,
+        int64_t p_route,
+        int64_t p_txn,
+        godot::Error p_code,
+        const godot::String &p_detail
+    );
+    void rpc_refuse_unrouted_call(
+        int64_t p_peer,
+        int64_t p_route,
+        const godot::PackedByteArray &p_payload
+    );
+    void rpc_handle_reply_failed(
+        int64_t p_txn,
+        int64_t p_sender,
+        godot::Error p_code,
+        const godot::String &p_detail
     );
     void rpc_handle_call(
         const godot::Ref<NetwEntity> &p_entity,
@@ -3483,7 +3554,6 @@ public:
     );
     void rpc_note_dropped_unroutable();
     void rpc_note_dropped_not_live();
-    void rpc_warn_dropped_once(godot::Node *p_target);
     int64_t rpc_sends_dropped_unroutable() const;
     int64_t rpc_sends_dropped_not_live() const;
     void rpc_defer_call(
@@ -4773,6 +4843,8 @@ public:
         const godot::String &p_path,
         int p_scope
     );
+    void scene_poll_loading_change();
+    void scene_drop_loading_change();
     godot::Ref<NetwPromise> scene_change_to_file(
         godot::Node *p_requester,
         const godot::String &p_path,
@@ -5124,7 +5196,8 @@ public:
     void liveness_schedule_when_live(
         int64_t p_route,
         const godot::Callable &p_callback,
-        int64_t p_deadline,
+        int64_t p_origin,
+        int64_t p_timeout,
         bool p_on_clock,
         const godot::Callable &p_on_timeout
     );

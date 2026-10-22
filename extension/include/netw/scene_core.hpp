@@ -53,6 +53,14 @@ public:
         DESTINATION_PACKED_UNPATHED,
     };
 
+    struct LoadingChange {
+        godot::String path;
+        godot::Ref<NetwPromise> promise;
+        godot::ObjectID requester;
+        int scope = SCOPE_SESSION;
+        uint64_t generation = 0;
+    };
+
 private:
     struct Row {
         int32_t event = 0;
@@ -81,6 +89,7 @@ private:
     };
 
     Transition transition;
+    LoadingChange loading;
 
     godot::LocalVector<Row> rows;
     godot::LocalVector<LiveRow> live;
@@ -154,6 +163,15 @@ public:
     void transition_fail(int code);
     void transition_land(const godot::Ref<NetwScene> &destination);
     void transition_close();
+
+    bool change_loading() const {
+        return loading.promise.is_valid();
+    }
+    const godot::String &loading_path() const {
+        return loading.path;
+    }
+    void change_wait_for_load(const LoadingChange &change);
+    LoadingChange change_take_loaded();
 
     static godot::String verify_scene_path(const godot::String &path);
     static godot::Ref<godot::PackedScene> packed_at(

@@ -6,6 +6,10 @@ using namespace godot;
 
 namespace netw::spawn {
 
+void Park::hold_routes_in(const Ref<NetwLivenessCore> &p_liveness) {
+    liveness = p_liveness;
+}
+
 bool Park::park(
     int64_t route,
     const PackedByteArray &payload,
@@ -22,6 +26,9 @@ bool Park::park(
     row.deadline = deadline;
     row.sender = sender;
     rows.insert(route, row);
+    if (liveness.is_valid()) {
+        liveness->hold(int(route));
+    }
     return true;
 }
 
@@ -36,6 +43,9 @@ PackedByteArray Park::take(int64_t route) {
     }
     const PackedByteArray payload = found->value.payload;
     rows.remove(found);
+    if (liveness.is_valid()) {
+        liveness->release(int(route));
+    }
     return payload;
 }
 
@@ -51,7 +61,14 @@ int64_t Park::sender_of(int64_t route) const {
 
 bool Park::cancel(int64_t route) {
     reparents.erase(route);
-    return rows.erase(route);
+    if (!rows.erase(route)) {
+        return false;
+    }
+    if (liveness.is_valid()) {
+        liveness->release(int(route));
+        liveness->fail_live(int(route));
+    }
+    return true;
 }
 
 bool Park::keep_reparent(
@@ -106,6 +123,11 @@ int Park::size() const {
 }
 
 void Park::clear() {
+    if (liveness.is_valid()) {
+        for (const KeyValue<int64_t, Row> &row : rows) {
+            liveness->release(int(row.key));
+        }
+    }
     rows.clear();
     reparents.clear();
 }

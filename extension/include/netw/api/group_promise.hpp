@@ -20,11 +20,14 @@ private:
     godot::LocalVector<int64_t> expected;
     godot::Error code = godot::OK;
     godot::String detail;
+    godot::Error refusal = godot::OK;
+    godot::String refusal_detail;
     godot::LocalVector<godot::Callable> then_callbacks;
     godot::LocalVector<godot::Callable> catch_callbacks;
     promise_wait::Waiting waiting;
 
     bool forget(int64_t p_peer);
+    void settle_when_answered();
 
 protected:
     static void _bind_methods();
@@ -32,6 +35,10 @@ protected:
 public:
     static godot::Ref<NetwGroupPromise> create(
         const godot::PackedInt32Array &p_peers
+    );
+    static godot::Ref<NetwGroupPromise> refused(
+        godot::Error p_code,
+        const godot::String &p_detail
     );
 
     bool get_is_completed() const {
@@ -60,6 +67,11 @@ public:
     godot::Variant answer() const;
 
     void resolve_peer(int64_t p_peer, const godot::Variant &p_value);
+    void refuse_peer(
+        int64_t p_peer,
+        godot::Error p_code,
+        const godot::String &p_detail
+    );
     void remove_peer(int64_t p_peer);
     void resolve_all();
     void reject(godot::Error p_code, const godot::String &p_detail);

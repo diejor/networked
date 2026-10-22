@@ -145,7 +145,7 @@ void NetwMultiplayer::_bind_methods() {
             "timeout_seconds"
         ),
         &NetwMultiplayer::rpc_request_call,
-        DEFVAL(NetwMultiplayer::rpc_request_timeout_default())
+        DEFVAL(0.0)
     );
     ClassDB::bind_method(
         D_METHOD(
@@ -155,7 +155,7 @@ void NetwMultiplayer::_bind_methods() {
             "timeout_seconds"
         ),
         &NetwMultiplayer::rpc_request_call_group,
-        DEFVAL(NetwMultiplayer::rpc_request_timeout_default())
+        DEFVAL(0.0)
     );
     ClassDB::bind_method(
         D_METHOD("rpc_send_reply", "peer", "route", "txn", "value"),

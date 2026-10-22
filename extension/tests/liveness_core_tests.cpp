@@ -363,6 +363,7 @@ TEST_CASE(
         core->when_live(
             route,
             log.callable("live"),
+            0,
             1000,
             true,
             log.callable("out")
@@ -473,7 +474,7 @@ TEST_CASE(
     CallLog log;
     const int route = core->reserve_route() + 1;
 
-    core->when_live(route, log.callable("live"), 4, false, Callable());
+    core->when_live(route, log.callable("live"), 0, 4, false, Callable());
     NETW_CHECK_EQ(core->pending_live_count(), 1);
     NETW_CHECK_EQ(log.count("live"), 0);
 
@@ -490,14 +491,14 @@ TEST_CASE(
     }
 
     SUBCASE("a wait on a route that is already live runs immediately") {
-        core->when_live(route, log.callable("late"), 4, false, Callable());
+        core->when_live(route, log.callable("late"), 0, 4, false, Callable());
         NETW_CHECK_EQ(log.count("late"), 1);
         NETW_CHECK_EQ(core->pending_live_count(), 0);
     }
 
     SUBCASE("another route's binding leaves the wait parked") {
         const int mine = core->reserve_route() + 1;
-        core->when_live(mine, log.callable("mine"), 4, false, Callable());
+        core->when_live(mine, log.callable("mine"), 0, 4, false, Callable());
 
         PackedInt64Array elsewhere;
         elsewhere.push_back(core->reserve_route() + 1);
@@ -509,8 +510,8 @@ TEST_CASE(
 
     SUBCASE("waits are answered in the order they were parked") {
         const int other = core->reserve_route() + 1;
-        core->when_live(other, log.callable("first"), 4, false, Callable());
-        core->when_live(other, log.callable("second"), 4, false, Callable());
+        core->when_live(other, log.callable("first"), 0, 4, false, Callable());
+        core->when_live(other, log.callable("second"), 0, 4, false, Callable());
         core->flush_live(other);
 
         CHECK(log.order() == Vector<StringName>({"live", "first", "second"}));
@@ -528,7 +529,8 @@ TEST_CASE(
     core->when_live(
         route,
         log.callable("live"),
-        core->frame() + 3,
+        core->frame(),
+        3,
         false,
         log.callable("expired")
     );
@@ -566,6 +568,7 @@ TEST_CASE(
     core->when_live(
         route,
         log.callable("live_early"),
+        0,
         2,
         false,
         log.callable("early")
@@ -573,6 +576,7 @@ TEST_CASE(
     core->when_live(
         route,
         log.callable("live_late"),
+        0,
         4,
         false,
         log.callable("late")
@@ -607,7 +611,14 @@ TEST_CASE(
     CallLog log;
     const int route = core->reserve_route() + 1;
 
-    core->when_live(route, log.callable("live"), 10, true, log.callable("out"));
+    core->when_live(
+        route,
+        log.callable("live"),
+        0,
+        10,
+        true,
+        log.callable("out")
+    );
 
     for (int i = 0; i < 6; i++) {
         CHECK(core->poll(1).is_empty());
@@ -644,7 +655,7 @@ TEST_CASE("[Networked][Liveness][Hosted] clear releases the session") {
 
     SUBCASE("the waiting room and the frame counter go with it") {
         CallLog log;
-        core->when_live(route, log.callable("live"), 4, false, Callable());
+        core->when_live(route, log.callable("live"), 0, 4, false, Callable());
         core->poll(0);
         core->clear();
 

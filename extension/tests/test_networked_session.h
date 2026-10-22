@@ -348,7 +348,12 @@ TEST_CASE(
         REQUIRE(entity.is_valid());
         NETW_CHECK_EQ(entity->get_owner(), copy);
         NETW_CHECK_EQ(entity->get_peer_id(), 0);
-        NETW_CHECK_EQ(entity->get_name() == godot::StringName(), true);
+        REQUIRE(entity->get_route() > 0);
+        const godot::StringName default_name(
+            godot::String("Npc@")
+            + godot::String::num_int64(entity->get_route())
+        );
+        NETW_CHECK_EQ(entity->get_name() == default_name, true);
         NETW_CHECK_EQ(entity->get_is_player(), false);
         NETW_CHECK_EQ(entity->is_on_server(), true);
         NETW_CHECK_EQ(copy->get_parent(), fixture_parent);

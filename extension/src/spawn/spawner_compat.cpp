@@ -3,10 +3,12 @@
 #include "godot/multiplayer_spawner.hpp"
 #include "godot/node.hpp"
 #include "godot/packed_scene.hpp"
+#include "godot/resource.hpp"
 #include "godot/scene_tree.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/replication_core.hpp"
 #include "netw/log.hpp"
+#include "netw/scene_loads.hpp"
 #include "netw/subsystems.hpp"
 #include "netw/sync_authoring.hpp"
 
@@ -203,8 +205,12 @@ Node *SpawnerCompat::instantiate(
         if (p_scene_index >= int(spawner->get_spawnable_scene_count())) {
             return nullptr;
         }
-        const Ref<PackedScene> packed
-            = gd::load_scene(spawner->get_spawnable_scene(p_scene_index));
+        const String path
+            = gd::ensure_path(spawner->get_spawnable_scene(p_scene_index));
+        Ref<PackedScene> packed = SceneLoads::shared().scene(path);
+        if (packed.is_null()) {
+            packed = gd::load_scene(path);
+        }
         return packed.is_valid() ? packed->instantiate() : nullptr;
     }
     const HashMap<int64_t, Callable>::Iterator found

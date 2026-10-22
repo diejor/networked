@@ -3238,34 +3238,6 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Multiplayer][Hosted] an entry the record classifies as "
-    "inert stops there: carrying no identity, it never spawns"
-) {
-    Node *scene = memnew(Node);
-    Node *owner = memnew(Node);
-    scene->add_child(owner);
-    owner->set_owner(scene);
-    Ref<RefCounted> wrapper;
-    wrapper.instantiate();
-    netw_test::RecordBox record;
-    NetwMultiplayer::entity_enter_tree(
-        wrapper.ptr(),
-        owner,
-        record,
-        nullptr,
-        true
-    );
-
-    NETW_CHECK_EQ(record->get_stage(), int(netw::entity::Stage::UNBOUND));
-    CHECK_FALSE(owner->is_connected(
-        StringName("ready"),
-        Callable(wrapper.ptr(), StringName("_on_owner_ready"))
-    ));
-
-    memdelete(scene);
-}
-
-TEST_CASE(
     "[Networked][Multiplayer][Hosted] P9 the entity a node stands for is "
     "the nearest record above it, adopted so the index holds what it "
     "answered; a node with nothing above it carrying a record has no "

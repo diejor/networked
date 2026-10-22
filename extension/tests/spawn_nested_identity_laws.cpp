@@ -2,7 +2,11 @@
 
 #if defined(NETW_TIER_HOSTED)
 
+#include "support/stock_stand.h"
+#include "support/value_flow_stand.h"
+
 #include "godot/node.hpp"
+#include "godot/packed_scene.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/property_config.hpp"
@@ -242,11 +246,13 @@ TEST_CASE(
     "[Networked][Spawn] CN5 leaving a scene closes the nested publication "
     "with its root, and re-entering opens both again under the same routes"
 ) {
+    const String path("res://tests/support/declared_level.tscn");
+    const Ref<PackedScene> warm = netw::gd::load_scene(path);
     LoopbackRig rig(1);
     rig.mount();
     netw::NetwMultiplayer *api = rig.server();
     Node *level = api->scene_spawn(
-        String("res://tests/support/declared_level.tscn"),
+        path,
         netw::NetwMultiplayer::SCENE_ISOLATION_OWN_WORLD
     );
     REQUIRE(level != nullptr);
@@ -474,6 +480,109 @@ TEST_CASE(
         CHECK(seen.left_its_origin);
         CHECK(seen.spin_follows);
         NETW_CHECK_EQ(seen.seat_anchor, seen.host_anchor);
+    }
+}
+
+constexpr const char *UNNAMED_CRATE = R"(extends Node2D
+
+func _init() -> void:
+	Netw.configure_entity(self)
+	Netw.configure_property(self, &"visible").state()
+)";
+
+constexpr const char *NAMED_CRATE = R"(extends Node2D
+
+func _init() -> void:
+	Netw.configure_entity(self).name = &"crate"
+	Netw.configure_property(self, &"visible").state()
+)";
+
+struct PlacedCrate {
+    const char *label;
+    const char *source;
+    const char *name;
+};
+
+const PlacedCrate PLACED_CRATES[] = {
+    {"no-name", UNNAMED_CRATE, nullptr},
+    {"named-in-init", NAMED_CRATE, "crate"},
+};
+
+struct PlacedEvidence {
+    int64_t ready_stage = -1;
+    int64_t host_route = 0;
+    StringName host_name;
+    int64_t seat_route = 0;
+    StringName seat_name;
+    int64_t late_route = 0;
+    StringName late_name;
+    bool late_visible = true;
+};
+
+Node *place_crate_level(LoopbackRig &p_rig, int p_client, const char *p_src) {
+    Node2D *level = memnew(Node2D);
+    level->set_name("Level");
+    level->add_child(scripted_root(p_src, "Crate"));
+    p_rig.branch(p_client)->add_child(level);
+    return level->get_node_or_null(NodePath("Crate"));
+}
+
+void read_crate(Node *p_crate, int64_t &r_route, StringName &r_name) {
+    const Ref<NetwEntity> entity = NetwEntity::of(p_crate);
+    r_route = entity.is_valid() ? entity->get_route() : int64_t(0);
+    r_name = entity.is_valid() ? entity->get_name() : StringName();
+}
+
+PlacedEvidence run_placed_crate(const PlacedCrate &p_case) {
+    PlacedEvidence seen;
+    LoopbackRig rig(1);
+    rig.mount();
+    flow_clocks(rig, 30);
+    Node *host = place_crate_level(rig, -1, p_case.source);
+    const Ref<NetwEntity> hosted = NetwEntity::of(host);
+    seen.ready_stage = hosted.is_valid() ? hosted->get_stage() : -1;
+    read_crate(host, seen.host_route, seen.host_name);
+    Node *seat = place_crate_level(rig, 0, p_case.source);
+    rig.step_ticks(4);
+    adopt_placed(rig, "Level");
+    rig.step_ticks(8);
+    read_crate(seat, seen.seat_route, seen.seat_name);
+
+    Object::cast_to<CanvasItem>(host)->set_visible(false);
+    rig.step_ticks(4);
+    const int late = rig.add_client();
+    rig.mount_late(late, false);
+    Node *joiner = place_crate_level(rig, late, p_case.source);
+    const PackedInt64Array replay
+        = rig.spawn_plane()->get_spawn_book()->ancestry_order();
+    for (int at = 0; at < replay.size(); ++at) {
+        rig.deliver_spawn(late, rig.spawn_frame_of(int(replay[at])));
+    }
+    rig.step_ticks(8);
+    read_crate(joiner, seen.late_route, seen.late_name);
+    seen.late_visible = Object::cast_to<CanvasItem>(joiner)->is_visible();
+    return seen;
+}
+
+TEST_CASE(
+    "[Networked][Spawn] NA1 to NA5 an entity placed in a level goes online "
+    "with or without a name, and every peer reads the server's name and state"
+) {
+    for (const PlacedCrate &placement : PLACED_CRATES) {
+        NETW_FORMAT_TEXT(netw_cell_text, placement.label);
+        CAPTURE(netw_cell_text);
+        const PlacedEvidence seen = run_placed_crate(placement);
+        NETW_CHECK_EQ(seen.ready_stage, int64_t(NetwEntity::STAGE_LIVE));
+        REQUIRE(seen.host_route > 0);
+        const StringName expected = placement.name != nullptr
+            ? StringName(placement.name)
+            : StringName(vformat("Crate@%d", seen.host_route));
+        CHECK(seen.host_name == expected);
+        NETW_CHECK_EQ(seen.seat_route, seen.host_route);
+        CHECK(seen.seat_name == expected);
+        NETW_CHECK_EQ(seen.late_route, seen.host_route);
+        CHECK(seen.late_name == expected);
+        CHECK_FALSE(seen.late_visible);
     }
 }
 

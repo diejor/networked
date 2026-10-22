@@ -35,12 +35,19 @@ A promise settles once. :ref:`then()<class_NetwPromise_method_then>` runs with t
 
     var receipt = await Netw.request(server.buy_item, item_id).wait()
 
+\ C# can ``await`` the promise itself, which gives the value or throws the failure.
+
 .. code:: text
 
     Error
-    ┠╴ERR_TIMEOUT       no reply in time
-    ┠╴ERR_UNAVAILABLE   the other peer disconnected
-    ┖╴ERR_UNAUTHORIZED  the other peer refused
+    ┠╴ERR_TIMEOUT           no reply in time
+    ┠╴ERR_UNAVAILABLE       the other peer disconnected, or the node is not spawned yet
+    ┠╴ERR_UNAUTHORIZED      the other peer refused this sender
+    ┠╴ERR_UNCONFIGURED      the node is not part of a NetwEntity inside a session
+    ┠╴ERR_METHOD_NOT_FOUND  the method is not an RPC on one of the two peers
+    ┠╴ERR_INVALID_DATA      the other peer could not read the arguments
+    ┠╴ERR_DOES_NOT_EXIST    the other peer holds no such node
+    ┖╴any other code        the NetwPromise the method returned failed with it
 
 \ A returned :godot:`Node` arrives as this peer's own copy. See :ref:`NetwGroupPromise<class_NetwGroupPromise>` for requests to many peers.
 

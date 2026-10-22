@@ -1,10 +1,17 @@
 #include "netw/call_park.hpp"
 
+#include "netw/liveness_core.hpp"
+
 using namespace godot;
 
 namespace netw {
 
-int64_t NetwCallPark::park(int64_t sender, int64_t route, int64_t deadline) {
+int64_t NetwCallPark::park(
+    int64_t sender,
+    int64_t route,
+    int64_t now,
+    int64_t timeout
+) {
     if (active_count(sender) >= BUDGET) {
         refused_calls += 1;
         return -1;
@@ -13,7 +20,8 @@ int64_t NetwCallPark::park(int64_t sender, int64_t route, int64_t deadline) {
     row.id = next_id;
     row.sender = sender;
     row.route = route;
-    row.deadline = deadline;
+    row.deadline = now + timeout;
+    row.span = timeout;
     rows.push_back(row);
     next_id += 1;
     return row.id;
@@ -33,12 +41,19 @@ bool NetwCallPark::resolve(int64_t id) {
     return false;
 }
 
-void NetwCallPark::sweep(int64_t now) {
+void NetwCallPark::sweep(int64_t now, const NetwLivenessCore &liveness) {
     LocalVector<Row> kept;
     for (uint32_t index = 0; index < rows.size(); ++index) {
-        if (rows[index].active && now < rows[index].deadline) {
-            kept.push_back(rows[index]);
+        Row row = rows[index];
+        if (!row.active) {
+            continue;
         }
+        if (liveness.is_held(int(row.route))) {
+            row.deadline = now + row.span;
+        } else if (now >= row.deadline) {
+            continue;
+        }
+        kept.push_back(row);
     }
     rows = kept;
 }

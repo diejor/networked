@@ -464,30 +464,6 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Entity][Hosted] R10 what an unbound record on a node in the "
-    "tree IS, decided once"
-) {
-    SUBCASE("a bound identity goes live") {
-        Record record;
-        record->set_entity_id("crate");
-        CHECK(record->classify_activation());
-        NETW_CHECK_EQ(record->get_stage(), int(Stage::UNBOUND));
-    }
-
-    SUBCASE("a node with no identity stays inert") {
-        Record record;
-        CHECK_FALSE(record->classify_activation());
-        NETW_CHECK_EQ(record->get_stage(), int(Stage::UNBOUND));
-    }
-
-    SUBCASE("a record past UNBOUND is already classified") {
-        Record record;
-        REQUIRE(record->advance(int(Stage::ARMED)));
-        CHECK(record->classify_activation());
-    }
-}
-
-TEST_CASE(
     "[Networked][Entity][Hosted] R11 a teardown window opens once, and the "
     "options are in flight only inside it"
 ) {
@@ -806,13 +782,6 @@ TEST_CASE(
         stamped->hydrate_identity(owner);
         CHECK(stamped->get_entity_id() == StringName("crate"));
         NETW_CHECK_EQ(stamped->get_peer_id(), 3);
-    }
-
-    SUBCASE("an unidentified node stays inert rather than activating") {
-        Record inert;
-        CHECK_FALSE(inert->classify_activation());
-        inert->set_entity_id("crate");
-        CHECK(inert->classify_activation());
     }
 
     memdelete(owner);

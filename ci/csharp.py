@@ -17,7 +17,13 @@ from common import CI_DIR, ROOT, fail, load_json, main, run
 DUMP_NAME = "extension_api.json"
 OUTPUT_DIR = ROOT / "addons" / "networked" / "native_api" / "cs"
 REGISTRY = ROOT / "extension" / "register_types.cpp"
-HAND_WRITTEN = {"NetwApi.cs", "NetwObject.cs", "NetwPropertyTypes.cs"}
+HAND_WRITTEN = {
+    "NetwApi.cs",
+    "NetwObject.cs",
+    "NetwPromiseAsync.cs",
+    "NetwPropertyTypes.cs",
+}
+PARTIAL = {"NetwGroupPromise", "NetwPromise"}
 THUNKS_NAME = "NetwThunks.cs"
 DOC_DIR = ROOT / "extension" / "doc_classes"
 NAMES_FILE = CI_DIR / "engine_names.json"
@@ -755,9 +761,10 @@ class Emitter:
                 if held is not None
                 else []
             ),
-            "public %sclass %s : %s"
+            "public %s%sclass %s : %s"
             % (
                 "" if name in self.surface.subclassed else "sealed ",
+                "partial " if name in PARTIAL else "",
                 name,
                 self.base_of(entry),
             ),

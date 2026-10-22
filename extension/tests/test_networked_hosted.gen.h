@@ -175,6 +175,7 @@
 #include "scene_core_tests.cpp"
 #include "scene_despawn_laws.cpp"
 #include "scene_front_door_laws.cpp"
+#include "scene_loads_laws.cpp"
 #include "scene_membership_laws.cpp"
 #include "scene_membership_reason_laws.cpp"
 #include "scene_membership_window_laws.cpp"

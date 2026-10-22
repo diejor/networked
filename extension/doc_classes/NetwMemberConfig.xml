@@ -103,6 +103,13 @@
 				Only the server may send it.
 			</description>
 		</method>
+		<method name="timeout">
+			<return type="NetwMemberConfig" />
+			<param index="0" name="seconds" type="float" />
+			<description>
+				A request to this method waits [param seconds] for the reply, then fails with [constant @GlobalScope.ERR_TIMEOUT]. A method that declares none waits 5 seconds. Invalid for properties and signals.
+			</description>
+		</method>
 		<method name="unreliable">
 			<return type="NetwMemberConfig" />
 			<description>

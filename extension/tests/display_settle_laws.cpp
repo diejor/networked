@@ -328,9 +328,12 @@ TEST_CASE(
     "record, so a setting authored before the session knew the entity is what "
     "the book publishes and a flat write reads back on the handle"
 ) {
-    const Ref<NetwMultiplayer> core = netw_test::clocked_session();
-    const netw_test::DisplaySubject subject = netw_test::stand_subject(core, 0);
-    const RID entity = subject.entity->get_rid_handle();
+    const Ref<NetwMultiplayer> clocked = netw_test::clocked_session();
+    const netw_test::DisplaySubject subject
+        = netw_test::stand_subject(clocked, 0);
+    NetwMultiplayer *core = netw::NetwEntity::session_core_for(subject.body);
+    REQUIRE(core != nullptr);
+    const RID entity = core->entity_of(subject.body);
 
     CHECK(
         NodePath(core->display_get_param(

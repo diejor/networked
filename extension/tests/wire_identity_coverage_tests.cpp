@@ -206,8 +206,8 @@ TEST_CASE(
     unrevised.payload_revision = 0;
     NETW_CHECK_EQ(identity_of(unrevised), identity_of(probe()));
 
-    const bool the_format_is_v11 = netw::wire::FORMAT_VERSION == 11;
-    CHECK(the_format_is_v11);
+    const bool the_format_is_v12 = netw::wire::FORMAT_VERSION == 12;
+    CHECK(the_format_is_v12);
 }
 
 TEST_CASE(
@@ -239,6 +239,11 @@ TEST_CASE(
         = identity_oracle(11, v10_rows, v10_count)
         != identity_oracle(11, v11_rows, v11_count);
     CHECK(the_row_table_alone_moves_identity);
+
+    const bool a_v11_peer_cannot_answer_this_identity
+        = identity_oracle(11, v11_rows, v11_count)
+        != registered_identity(v11_rows, v11_count);
+    CHECK(a_v11_peer_cannot_answer_this_identity);
 }
 
 TEST_CASE(

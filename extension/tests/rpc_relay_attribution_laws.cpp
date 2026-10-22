@@ -6,7 +6,9 @@
 #include <godot_cpp/classes/script.hpp>
 
 #include "godot/node.hpp"
+#include "netw/api/context.hpp"
 #include "netw/api/entity.hpp"
+#include "netw/api/group_promise.hpp"
 #include "netw/api/interest_layer.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/promise.hpp"
@@ -434,6 +436,328 @@ TEST_CASE(
 
     core->session_publish_control(channel, MESH_SERVER, PackedByteArray());
     NETW_CHECK_EQ(seen.count(StringName("unpaused")), 1);
+}
+
+constexpr const char *ANSWERING_SINK = R"(extends Node
+
+
+@rpc("authority", "call_remote", "reliable")
+func guarded(tag: int) -> int:
+	return tag
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func echo(tag: int) -> int:
+	return tag * 2
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func closed(_tag: int) -> NetwPromise:
+	return NetwPromise.rejected(ERR_BUSY, "the shop is closed")
+)";
+
+constexpr const char *UNDECLARED_SINK = R"(extends Node
+
+
+func guarded(tag: int) -> int:
+	return tag
+
+
+func echo(tag: int) -> int:
+	return tag * 2
+
+
+func closed(_tag: int) -> NetwPromise:
+	return NetwPromise.rejected(ERR_BUSY, "the shop is closed")
+)";
+
+struct Refusal {
+    const char *label;
+    const char *hub;
+    const char *second;
+    int caller;
+    const char *method;
+    Error code;
+    const char *detail;
+    const char *receiver_warning;
+};
+
+const Refusal REFUSALS[] = {
+    {"RR1 a sender the method refuses",
+     ANSWERING_SINK,
+     ANSWERING_SINK,
+     0,
+     "guarded",
+     ERR_UNAUTHORIZED,
+     nullptr,
+     "[warn][transport] Peer * may not call 'guarded' on 'Sink', so the call "
+     "was dropped."},
+    {"RR2 a method that is not an RPC on the receiver",
+     UNDECLARED_SINK,
+     ANSWERING_SINK,
+     0,
+     "echo",
+     ERR_METHOD_NOT_FOUND,
+     nullptr,
+     "[warn][transport] A call on 'Sink' was dropped, because it names no RPC "
+     "on this peer. Declare it the same way on every peer."},
+    {"RR3 a method whose promise rejects",
+     ANSWERING_SINK,
+     ANSWERING_SINK,
+     0,
+     "closed",
+     ERR_BUSY,
+     "the shop is closed",
+     nullptr},
+    {"RR4 a group with one peer that refuses",
+     ANSWERING_SINK,
+     UNDECLARED_SINK,
+     -1,
+     "echo",
+     ERR_METHOD_NOT_FOUND,
+     nullptr,
+     "[warn][transport] A call on 'Sink' was dropped, because it names no RPC "
+     "on this peer. Declare it the same way on every peer."},
+};
+
+Node *sink_of(const char *p_source) {
+    const Ref<Script> script = script_from(p_source);
+    REQUIRE(script.is_valid());
+    Node *made = Object::cast_to<Node>(script->call("new"));
+    REQUIRE(made != nullptr);
+    made->set_name("Sink");
+    return made;
+}
+
+Seated seat_sources(
+    LoopbackRig &p_rig,
+    const char *p_hub,
+    const char *p_first,
+    const char *p_second
+) {
+    Seated made;
+    made.hub = sink_of(p_hub);
+    p_rig.branch(-1)->add_child(made.hub);
+    NetwMultiplayer *server = p_rig.server();
+    const RID at_hub = server->entity_create();
+    made.route = server->entity_admit(at_hub);
+    REQUIRE(made.route > 0);
+    REQUIRE(server->entity_bind_node(at_hub, made.hub) == OK);
+    Node *seats[2] = {sink_of(p_first), sink_of(p_second)};
+    for (int index = 0; index < 2; ++index) {
+        p_rig.branch(index)->add_child(seats[index]);
+        NetwMultiplayer *client = p_rig.client(index);
+        const RID here = client->entity_create();
+        REQUIRE(client->entity_bind_route(here, made.route) == OK);
+        REQUIRE(client->entity_bind_node(here, seats[index]) == OK);
+    }
+    made.first = seats[0];
+    made.second = seats[1];
+    p_rig.pump(4);
+    return made;
+}
+
+TEST_CASE(
+    "[Networked][Rpc] RR1 to RR4 a request the receiver does not run is "
+    "answered with the reason, never left to time out"
+) {
+    for (const Refusal &row : REFUSALS) {
+        NETW_FORMAT_TEXT(netw_cell_text, row.label);
+        CAPTURE(netw_cell_text);
+        netw_test::FaultWatch faults;
+        if (row.receiver_warning != nullptr) {
+            faults.expect_warning(row.receiver_warning, 1);
+        }
+        LoopbackRig rig(2);
+        rig.mount();
+        const Seated seated
+            = seat_sources(rig, row.hub, ANSWERING_SINK, row.second);
+        Array args;
+        args.push_back(3);
+        Node *caller = row.caller < 0 ? seated.hub : seated.first;
+        const Callable method(caller, StringName(row.method));
+        const Ref<NetwPromise> single = row.caller < 0
+            ? Ref<NetwPromise>()
+            : netw::Netw::request(method, args);
+        const Ref<netw::NetwGroupPromise> group = row.caller < 0
+            ? netw::Netw::request_all(method, args)
+            : Ref<netw::NetwGroupPromise>();
+        const CallLog caught;
+        if (group.is_valid()) {
+            group->catch_error(caught.callable(StringName("caught")));
+        }
+        rig.pump(6);
+
+        if (single.is_valid()) {
+            CHECK(single->get_is_failed());
+            NETW_CHECK_EQ(int(single->get_code()), int(row.code));
+            if (row.detail != nullptr) {
+                CHECK(single->get_detail() == String(row.detail));
+            }
+        } else {
+            REQUIRE(group.is_valid());
+            CHECK(group->get_is_failed());
+            NETW_CHECK_EQ(caught.count(StringName("caught")), 1);
+            NETW_CHECK_EQ(int(group->get_code()), int(row.code));
+            const Dictionary results = group->get_results();
+            NETW_CHECK_EQ(results.size(), 1);
+            NETW_CHECK_EQ(int(results.get(rig.peer_id(0), 0)), 6);
+        }
+        retire_star(seated);
+    }
+}
+
+constexpr const char *DEADLINE_SINK = R"(extends Node
+
+var held: NetwPromise
+var hp := 0
+
+
+func _init() -> void:
+	Netw.configure_rpc(patient).timeout(60.0)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func patient(_tag: int) -> NetwPromise:
+	held = NetwPromise.new()
+	return held
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func hasty(_tag: int) -> NetwPromise:
+	held = NetwPromise.new()
+	return held
+
+
+@rpc("authority", "call_local", "reliable")
+func everyone(tag: int) -> int:
+	return tag * 2
+
+
+@rpc("authority", "call_remote", "reliable")
+func others(tag: int) -> int:
+	return tag * 2
+)";
+
+struct Deadline {
+    const char *label;
+    const char *method;
+    int pumps;
+    bool times_out;
+};
+
+const Deadline DEADLINES[] = {
+    {"RT1 timeout(60) on the method, a reply at 10 seconds",
+     "patient",
+     300,
+     false},
+    {"RT2 no timeout declared, still waiting at 4.5 seconds",
+     "hasty",
+     135,
+     false},
+    {"RT2 no timeout declared, ERR_TIMEOUT at 5.5 seconds",
+     "hasty",
+     165,
+     true},
+};
+
+TEST_CASE(
+    "[Networked][Rpc] RT1 and RT2 a request waits as long as its method "
+    "declares with NetwMemberConfig.timeout, and 5 seconds otherwise"
+) {
+    for (const Deadline &row : DEADLINES) {
+        NETW_FORMAT_TEXT(netw_cell_text, row.label);
+        CAPTURE(netw_cell_text);
+        LoopbackRig rig(2);
+        rig.mount();
+        const Seated seated
+            = seat_sources(rig, DEADLINE_SINK, DEADLINE_SINK, DEADLINE_SINK);
+        Array args;
+        args.push_back(3);
+        const Ref<NetwPromise> asked = netw::Netw::request(
+            Callable(seated.first, StringName(row.method)),
+            args
+        );
+        rig.pump(row.pumps);
+        if (row.times_out) {
+            CHECK(asked->get_is_failed());
+            NETW_CHECK_EQ(int(asked->get_code()), int(ERR_TIMEOUT));
+        } else {
+            CHECK_FALSE(asked->get_is_settled());
+            const Ref<NetwPromise> held = seated.hub->get("held");
+            REQUIRE(held.is_valid());
+            held->resolve(9);
+            rig.pump(4);
+            CHECK(asked->get_is_completed());
+            NETW_CHECK_EQ(int(asked->get_result()), 9);
+        }
+        retire_star(seated);
+    }
+}
+
+TEST_CASE(
+    "[Networked][Rpc] RT3 NetwMemberConfig.timeout on a property warns that "
+    "it does nothing, and a timeout of zero or less is refused"
+) {
+    netw_test::FaultWatch faults;
+    faults.expect_warning(
+        "[warn][session] NetwMemberConfig.timeout does nothing on 'hp', "
+        "because only a requested method waits for a reply. Remove the call.",
+        1
+    );
+    faults.expect_error(
+        "[error][session] NetwMemberConfig.timeout got * seconds for 'hasty'. "
+        "Pass a number of seconds above zero.",
+        1
+    );
+    Node *sink = sink_of(DEADLINE_SINK);
+    netw::Netw::configure_property(sink, StringName("hp"))->timeout(2.0);
+    netw::Netw::configure_rpc(Callable(sink, StringName("hasty")))
+        ->timeout(-1.0);
+    memdelete(sink);
+}
+
+struct Asked {
+    const char *label;
+    const char *method;
+    bool asks_caller;
+};
+
+const Asked ASKED[] = {
+    {"RT4 a call_local method", "everyone", true},
+    {"RT5 a method without call_local", "others", false},
+};
+
+TEST_CASE(
+    "[Networked][Rpc] RT4 and RT5 request_all asks the caller too only when "
+    "the method is call_local, and its value joins under its own peer id"
+) {
+    for (const Asked &row : ASKED) {
+        NETW_FORMAT_TEXT(netw_cell_text, row.label);
+        CAPTURE(netw_cell_text);
+        LoopbackRig rig(2);
+        rig.mount();
+        const Seated seated
+            = seat_sources(rig, DEADLINE_SINK, DEADLINE_SINK, DEADLINE_SINK);
+        Array args;
+        args.push_back(3);
+        const Ref<netw::NetwGroupPromise> group = netw::Netw::request_all(
+            Callable(seated.hub, StringName(row.method)),
+            args
+        );
+        rig.pump(6);
+        REQUIRE(group->get_is_completed());
+        const Dictionary results = group->get_results();
+        NETW_CHECK_EQ(results.size(), row.asks_caller ? 3 : 2);
+        NETW_CHECK_EQ(int(results.has(1)), int(row.asks_caller));
+        for (int at = 0; at < 2; ++at) {
+            NETW_CHECK_EQ(int(results.get(rig.peer_id(at), 0)), 6);
+        }
+        if (row.asks_caller) {
+            NETW_CHECK_EQ(int(results.get(1, 0)), 6);
+        }
+        retire_star(seated);
+    }
 }
 
 } // namespace TestRpcRelayAttributionLaws

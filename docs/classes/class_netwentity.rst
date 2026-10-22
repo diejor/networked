@@ -52,7 +52,7 @@ A root declares itself in ``_init``. A child marks its own spawn properties in i
     func _ready() -> void:
         NetwEntity.of(self).despawning.connect(_on_despawning)
 
-\ A node placed in a scene by hand sets its own :ref:`name<class_NetwEntity_property_name>`. A spawned copy receives it with the spawn.
+\ A node placed in a scene by hand can set its own :ref:`name<class_NetwEntity_property_name>`. A spawned copy receives it with the spawn.
 
 ::
 
@@ -651,9 +651,9 @@ During a prediction replay these calls return :godot:`@GlobalScope.ERR_BUSY <@Gl
 - |void| **set_name**\ (\ value\: :godot:`StringName`\ )
 - :godot:`StringName` **get_name**\ (\ )
 
-The name that identifies this entity on every peer, and in saves and logs.
+The name that identifies this entity on every peer and in logs. A save finds its row by :ref:`NetwPersistenceConfig.record_id()<class_NetwPersistenceConfig_method_record_id>`.
 
-A node placed in a scene sets it in :godot:`Object._init() <Object#class_Object_private_method__init>`, since an entity without one stays inactive. :ref:`Netw.spawn_player()<class_Netw_method_spawn_player>` sets it to the player's :ref:`NetwPlayer.username<class_NetwPlayer_property_username>`, so a game giving one player several entities sets a distinct name on each.
+An entity left without one is named after the scene, spawn function or node it came from, followed by ``@`` and its route, such as ``Crate@3``. :ref:`Netw.spawn_player()<class_Netw_method_spawn_player>` sets it to the player's :ref:`NetwPlayer.username<class_NetwPlayer_property_username>`, so a game giving one player several entities sets a distinct name on each.
 
 .. rst-class:: classref-item-separator
 

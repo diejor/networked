@@ -4,21 +4,24 @@
 
 #include "godot/templates.hpp"
 #include "godot/variant.hpp"
+#include "netw/liveness_core.hpp"
 
 namespace netw::spawn {
 
 class Park {
 public:
-    enum Wait {
-        WAIT_ROUTE = 0,
-        WAIT_SCENE = 1,
-        WAIT_ADOPT = 2,
+    enum Wait : uint8_t {
+        WAIT_NONE,
+        WAIT_ROUTE,
+        WAIT_SPAWNER,
+        WAIT_ADOPT,
+        WAIT_LOAD,
     };
 
 private:
     struct Row {
         godot::PackedByteArray payload;
-        int32_t wait = WAIT_ROUTE;
+        Wait wait = WAIT_ROUTE;
         int64_t deadline = 0;
         int64_t sender = 0;
     };
@@ -31,8 +34,11 @@ private:
 
     godot::HashMap<int64_t, Row> rows;
     godot::HashMap<int64_t, Reparent> reparents;
+    godot::Ref<NetwLivenessCore> liveness;
 
 public:
+    void hold_routes_in(const godot::Ref<NetwLivenessCore> &p_liveness);
+
     bool park(
         int64_t route,
         const godot::PackedByteArray &payload,

@@ -345,7 +345,8 @@ void NetwMultiplayer::interest_receive_awareness(
                     edge.observer_peer,
                     edge.kind
                 ),
-            origin + timeout,
+            origin,
+            timeout,
             clocked,
             Callable()
         );

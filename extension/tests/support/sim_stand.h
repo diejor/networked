@@ -40,8 +40,11 @@ class SimStand {
     }
 
 public:
-    explicit SimStand(int p_clients) {
+    explicit SimStand(int p_clients, bool p_migrates = false) {
         link.instantiate();
+        if (p_migrates) {
+            link->enable_server_transfer();
+        }
         apis.push_back(make(link->get_server_peer()));
         for (int at = 0; at < p_clients; ++at) {
             const godot::Ref<netw::LocalMultiplayerPeer> peer

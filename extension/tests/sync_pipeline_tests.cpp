@@ -171,12 +171,12 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Sync][Hosted] a send verb on a node in no entity is dropped "
-    "as unroutable and counted, and warns exactly once"
+    "as unroutable and counted, and reports exactly once"
 ) {
     netw_test::FaultWatch expected_faults;
-    expected_faults.expect_warning(
-        "[warn][wire] Netw.sync_property got '*', which is not part"
-        " of a NetwEntity. Call Netw.configure_entity on its root.",
+    expected_faults.expect_error(
+        "[error][session] 'Loose' is not part of a NetwEntity, so the call "
+        "to 'position' was dropped. Call Netw.configure_entity on its root.",
         1
     );
 
@@ -189,7 +189,6 @@ TEST_CASE(
 
     stand.pipeline->send_property(node, StringName("position"));
     NETW_CHECK_EQ(stand.counter("sends_dropped_unroutable"), int64_t(2));
-    CHECK(node->has_meta(StringName("_netw_unroutable_warned")));
 
     memdelete(node);
 }

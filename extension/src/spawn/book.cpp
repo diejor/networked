@@ -202,27 +202,38 @@ bool Book::spawn_is_duplicate(int64_t route, int64_t state) const {
         || state == NetwLivenessCore::STATE_LINGERING;
 }
 
-String Book::recipe_base(
-    const Record *record,
-    const String &fallback_scene_path,
-    const String &fallback_name
-) {
+namespace {
+
+String recipe_base(const Record *record, const Node *node) {
     if (record != nullptr) {
-        switch (Recipe(record->get_recipe())) {
-            case RECIPE_SCENE:
+        switch (Book::Recipe(record->get_recipe())) {
+            case Book::RECIPE_SCENE:
                 return record->get_scene_path().get_file().get_basename();
-            case RECIPE_FN:
+            case Book::RECIPE_FN:
                 return String(record->get_fn_method());
-            case RECIPE_FN_REGISTRY:
+            case Book::RECIPE_FN_REGISTRY:
                 return String(record->get_fn_registry_id());
             default:
                 break;
         }
     }
-    if (!fallback_scene_path.is_empty()) {
-        return fallback_scene_path.get_file().get_basename();
+    const String scene_path = node->get_scene_file_path();
+    if (!scene_path.is_empty()) {
+        return scene_path.get_file().get_basename();
     }
-    return fallback_name;
+    return String(node->get_name());
+}
+
+} // namespace
+
+StringName Book::default_entity_id(
+    const Record *record,
+    const Node *node,
+    int64_t route
+) {
+    return StringName(
+        recipe_base(record, node) + String("@") + String::num_int64(route)
+    );
 }
 
 Book::Received Book::received_of(const Record &record) {

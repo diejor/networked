@@ -4,6 +4,7 @@
 #if defined(NETW_TIER_HOSTED)
 
 #include "godot/node.hpp"
+#include "godot/packed_scene.hpp"
 #include "godot/spatial_node.hpp"
 #include "godot/viewport.hpp"
 #include "netw/api/entity.hpp"
@@ -366,11 +367,13 @@ TEST_CASE(
     "[Networked][Spawn] SN9 a received isolated scene is wrapped like the "
     "authored one, and its container is shown and takes input"
 ) {
+    const String path("res://tests/support/declared_level.tscn");
+    const Ref<PackedScene> warm = netw::gd::load_scene(path);
     LoopbackRig rig(1);
     rig.mount();
     netw::NetwMultiplayer *api = rig.server();
     Node *authored = api->scene_spawn(
-        String("res://tests/support/declared_level.tscn"),
+        path,
         netw::NetwMultiplayer::SCENE_ISOLATION_OWN_WORLD
     );
     const bool spawned = authored != nullptr;

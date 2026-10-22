@@ -488,11 +488,4 @@ void NetwEntityRecord::readmit() {
     projected_follower = 0;
 }
 
-bool NetwEntityRecord::classify_activation() {
-    if (stage != int64_t(entity::Stage::UNBOUND)) {
-        return true;
-    }
-    return entity_id != StringName();
-}
-
 } // namespace netw

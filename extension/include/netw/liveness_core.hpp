@@ -38,6 +38,7 @@ private:
         godot::Callable callback;
         godot::Callable on_timeout;
         int32_t deadline = 0;
+        int32_t span = 0;
         bool on_clock = false;
     };
 
@@ -50,6 +51,9 @@ private:
     };
 
     godot::HashMap<int32_t, godot::LocalVector<Pending>> pending;
+    godot::HashSet<int32_t> held;
+    int32_t flushes_deferred = 0;
+    godot::LocalVector<int32_t> deferred_flushes;
     godot::LocalVector<LeaseBlock> lease;
     godot::LocalVector<LeaseBlock> grants;
     bool leased = false;
@@ -125,13 +129,20 @@ public:
     void when_live(
         int route,
         const godot::Callable &callback,
-        int deadline,
+        int origin,
+        int timeout,
         bool on_clock,
         const godot::Callable &on_timeout
     );
     void flush_live(int route);
+    void defer_flushes();
+    void resume_flushes();
     void fail_live(int route);
     int pending_live_count() const;
+
+    void hold(int route);
+    void release(int route);
+    bool is_held(int route) const;
 
     godot::PackedInt32Array poll(int clock_tick);
     int frame() const;

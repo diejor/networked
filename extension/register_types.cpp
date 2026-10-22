@@ -90,6 +90,7 @@
 #include "netw/prediction_core.hpp"
 #include "netw/replication_send.hpp"
 #include "netw/scene_core.hpp"
+#include "netw/scene_loads.hpp"
 #include "netw/schema_model.hpp"
 #include "netw/script/model.hpp"
 #include "netw/session_core.hpp"
@@ -300,6 +301,7 @@ void uninitialize_networked_module(ModuleInitializationLevel level) {
     netw::NetwEntityRecord::clear_part_factories();
     netw::NetwMultiplayer::clear_wrapper_factory();
     netw::connect::TransportBook::shared().clear();
+    netw::SceneLoads::shared().clear();
     netw::schema_model::clear();
     netw::script::model::clear();
     netw::entity::shutdown();

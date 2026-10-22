@@ -52,6 +52,10 @@ public:
         godot::Error p_code,
         const godot::String &p_detail
     );
+    static godot::Ref<NetwPromise> refused(
+        godot::Error p_code,
+        const godot::String &p_detail
+    );
 
     bool get_is_completed() const {
         return completed;

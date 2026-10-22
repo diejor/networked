@@ -70,6 +70,12 @@ Ref<NetwPromise> NetwPromise::rejected(Error p_code, const String &p_detail) {
     return out;
 }
 
+Ref<NetwPromise> NetwPromise::refused(Error p_code, const String &p_detail) {
+    Ref<NetwPromise> out = rejected(p_code, p_detail);
+    out->failure_read = true;
+    return out;
+}
+
 Ref<NetwPromise> NetwPromise::then(const Callable &callback) {
     if (completed) {
         Array args;

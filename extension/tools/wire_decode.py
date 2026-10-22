@@ -684,7 +684,8 @@ AGAINST_SPEC = [
 
 # A capture names its own format, and a format owns its three datagram magics.
 # Every other byte of the carrier is described by the header's own record sheet,
-# so this table is the one thing a format bump moves that the sheet cannot say.
+# so this table and REPLY_FAILED_BIT_SINCE are the two things a format bump
+# moves that the sheet cannot say.
 # A capture whose format is absent here is refused rather than guessed at.
 # Reading a magic against the wrong table names a record of the wrong shape and
 # then decodes plausible garbage out of every frame behind it.
@@ -699,7 +700,37 @@ CAPTURE_MAGICS_BY_FORMAT = {
         0x78: "DatagramUnreliable",
         0x98: "DatagramAcked",
     },
+    12: {
+        0x58: "DatagramReliable",
+        0x78: "DatagramUnreliable",
+        0x98: "DatagramAcked",
+    },
 }
+
+REPLY_FAILED_BIT_SINCE = 12
+STRING_CAP = 1023
+
+
+def read_reply(payload, fmt):
+    """One REPLY payload, from WIRE.md 18.
+
+    From format 12 a reply carries a failed bit. A failed reply carries an
+    Error code and the receiver's reason, and a successful one carries value
+    slots this reader counts but does not decode.
+    """
+    stream = ReadStream(payload)
+    out = {"txn": stream.varuint(5)}
+    if int(fmt) < REPLY_FAILED_BIT_SINCE or not stream.bool1():
+        out["failed"] = False
+        out["value_bits"] = stream.remaining()
+        return out
+    out["failed"] = True
+    out["code"] = stream.varuint(2)
+    out["detail"] = stream.bytes_capped(STRING_CAP).decode("utf-8")
+    stream.align_verify()
+    if stream.remaining():
+        raise Poisoned("a failed reply carries %d bits past its detail" % stream.remaining())
+    return out
 
 
 def datagram_magics(fmt):
@@ -799,6 +830,13 @@ def capture(path, verbose):
         for frame in walked:
             key = "%d %s" % (frame["channel"], frame["channel_name"])
             lane[key] = lane.get(key, 0) + len(frame["payload"])
+            if frame["channel_name"] != "REPLY":
+                continue
+            try:
+                frame["reply"] = read_reply(frame["payload"], header.get("format"))
+            except Poisoned as stopped:
+                errors += 1
+                print("ERROR record %d: a REPLY %s" % (index, stopped))
         if verbose:
             print(
                 "  %s peer=%d wall=%dms tick=%s bytes=%d frames=%d"
@@ -822,6 +860,8 @@ def capture(path, verbose):
                         len(frame["payload"]),
                     )
                 )
+                if "reply" in frame:
+                    print("        %s" % frame["reply"])
 
     for direction, label in ((0, "OUT"), (1, "IN ")):
         lane = per_channel.get(direction, {})
@@ -925,6 +965,29 @@ def self_test(spec_path=None):
                 {"request": 2, "route": 300, "family": 0, "ordinal": 2, "tenure": 8, "check": 0x10},
             )
         ],
+    )
+    check(
+        "an 18 v12 failed REPLY carries its code and reason",
+        read_reply(bytes([0x07, 0x01, 0x2C, 0x02, 0x00, 0x6E, 0x6F]), 12),
+        {"txn": 7, "failed": True, "code": 44, "detail": "no"},
+    )
+    check(
+        "an 18 v12 answered REPLY counts its value slots",
+        read_reply(bytes([0x07, 0x00, 0x01]), 12),
+        {"txn": 7, "failed": False, "value_bits": 15},
+    )
+    check(
+        "an 18 v11 REPLY has no failed bit",
+        read_reply(bytes([0x07, 0x01, 0x00]), 11),
+        {"txn": 7, "failed": False, "value_bits": 16},
+    )
+    rejects(
+        "an 18 v12 failed REPLY refuses a trailing byte",
+        lambda: read_reply(bytes([0x07, 0x01, 0x2C, 0x02, 0x00, 0x6E, 0x6F, 0x00]), 12),
+    )
+    rejects(
+        "an 18 v12 failed REPLY refuses a reason cut short",
+        lambda: read_reply(bytes([0x07, 0x01, 0x2C, 0x02, 0x00, 0x6E]), 12),
     )
     rejects("a 10 frame refuses an empty payload", lambda: read_control(b""))
     rejects(

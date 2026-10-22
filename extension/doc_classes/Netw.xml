@@ -22,7 +22,7 @@
 			<param index="1" name="path" type="String" />
 			<param index="2" name="scope" type="int" enum="NetwScene.SceneChange" default="0" />
 			<description>
-				Opens [param path] and moves players to it. [param scope] says who moves. Their nodes do not move, so spawn them in the [NetwScene] the promise gives.
+				Opens [param path] and moves players to it. [param scope] says who moves. Their nodes do not move, so spawn them in the [NetwScene] the promise gives. The scene loads in the background, and the promise settles when it is in place.
 				[codeblock]
 				func start_match() -&gt; void:
 				    Netw.change_scene_to_file(self, "res://match.tscn").then(spawn_players)
@@ -379,24 +379,113 @@
 			<param index="0" name="callable" type="Callable" />
 			<description>
 				Calls [param callable] on the server and returns a [NetwPromise] with its return value.
-				[codeblock]
-				var sold: bool = await Netw.request(shop.buy, &amp;"shield").wait()
-				[/codeblock]
-				The method must be an RPC, as for [method rpc].
+				[codeblocks]
+				[gdscript]
+				func buy_shield() -&gt; void:
+				    var sold: bool = await Netw.request(shop.buy, &amp;"shield").wait()
+
+				@rpc("any_peer")
+				func buy(item: StringName) -&gt; bool:
+				    return await stock.take(item)
+				[/gdscript]
+				[csharp]
+				public async void BuyShield()
+				{
+				    bool sold = (await Netw.Request(shop, MethodName.Buy, "shield")).AsBool();
+				}
+
+				[Rpc(MultiplayerApi.RpcMode.AnyPeer)]
+				public Variant Buy(StringName item) =&gt; NetwPromise.FromTask(stock.Take(item));
+				[/csharp]
+				[/codeblocks]
+				The method must be an RPC, as for [method rpc]. The promise fails at once when the node is not part of a spawned [NetwEntity].
+				The method may [code]await[/code], and the reply is sent when it returns. A method whose node is freed while it waits never replies, so the promise fails when it times out.
 			</description>
 		</method>
 		<method name="request_all" qualifiers="vararg static">
 			<return type="NetwGroupPromise" />
 			<param index="0" name="callable" type="Callable" />
 			<description>
-				Calls [param callable] on every peer that can see the node, and returns a [NetwGroupPromise] with each return value.
+				Calls [param callable] on every peer that can see the node, and returns a [NetwGroupPromise] with each return value. The promise fails at once when the node is not part of a spawned [NetwEntity].
+				A method declared with [method NetwMemberConfig.call_local] or a [code]call_local[/code] [annotation @GDScript.@rpc] also runs on this peer, and its value joins [member NetwGroupPromise.results] under this peer's id. Otherwise this peer is not asked. The method may [code]await[/code], as for [method request]. A method that takes longer than 5 seconds declares its own deadline with [method NetwMemberConfig.timeout].
+				[codeblocks]
+				[gdscript]
+				extends Node
+
+				const MATCH := "res://match.tscn"
+
+				var warm: PackedScene
+
+				func _init() -&gt; void:
+				    Netw.configure_entity(self)
+				    Netw.configure_rpc(preload_level).timeout(60.0)
+				    Netw.configure_spawn(make_player)
+
+				func start_match() -&gt; void:
+				    var loads := Netw.request_all(preload_level, MATCH)
+				    await loads.wait()
+				    if loads.is_failed or false in loads.results.values():
+				        return
+				    Netw.change_scene_to_file(self, MATCH).then(open_match)
+
+				func open_match(arena: NetwScene) -&gt; void:
+				    for player: NetwPlayer in arena.viewers:
+				        arena.root.add_child(Netw.spawn_player(player, make_player))
+
+				@rpc("authority")
+				func preload_level(path: String) -&gt; bool:
+				    ResourceLoader.load_threaded_request(path)
+				    while ResourceLoader.load_threaded_get_status(path) \
+				            == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+				        await get_tree().process_frame
+				    warm = ResourceLoader.load_threaded_get(path)
+				    return warm != null
+				[/gdscript]
+				[csharp]
+				public partial class SceneManager : Node
+				{
+				    const string Match = "res://match.tscn";
+
+				    PackedScene warm;
+
+				    public SceneManager()
+				    {
+				        Netw.ConfigureEntity(this);
+				        Netw.ConfigureRpc(this, MethodName.PreloadLevel).Timeout(60.0);
+				        Netw.ConfigureSpawn(this, MethodName.MakePlayer);
+				    }
+
+				    public async void StartMatch()
+				    {
+				        NetwGroupPromise loads = await Netw.RequestAll(this, MethodName.PreloadLevel, Match);
+				        if (loads.IsFailed || loads.Results.Values.Any(loaded =&gt; !loaded.AsBool()))
+				            return;
+				        NetwScene arena = await Netw.ChangeSceneToFile(this, Match).AsTask(NetwScene.From);
+				        foreach (NetwPlayer player in arena.Viewers)
+				            arena.Root.AddChild(Netw.SpawnPlayer(player, this, MethodName.MakePlayer));
+				    }
+
+				    public Variant PreloadLevel(string path) =&gt; NetwPromise.FromTask(Preload(path));
+
+				    async Task&lt;bool&gt; Preload(string path)
+				    {
+				        ResourceLoader.LoadThreadedRequest(path);
+				        while (ResourceLoader.LoadThreadedGetStatus(path)
+				                == ResourceLoader.ThreadLoadStatus.InProgress)
+				            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+				        warm = ResourceLoader.LoadThreadedGet(path) as PackedScene;
+				        return warm != null;
+				    }
+				}
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="request_controller" qualifiers="vararg static">
 			<return type="NetwPromise" />
 			<param index="0" name="callable" type="Callable" />
 			<description>
-				Calls [param callable] on the peer of the node's [member NetwEntity.controller].
+				Calls [param callable] on the peer of the node's [member NetwEntity.controller], and on the server when no peer steers it. The promise fails at once when the node is not part of a spawned [NetwEntity]. The method may [code]await[/code], as for [method request].
 			</description>
 		</method>
 		<method name="request_id" qualifiers="vararg static">
@@ -404,7 +493,7 @@
 			<param index="0" name="peer_id" type="int" />
 			<param index="1" name="callable" type="Callable" />
 			<description>
-				Calls [param callable] on [param peer_id] and returns a [NetwPromise] with its return value. Use [method request_all] to call every peer.
+				Calls [param callable] on [param peer_id] and returns a [NetwPromise] with its return value. Use [method request_all] to call every peer. The promise fails at once when the node is not part of a spawned [NetwEntity]. The method may [code]await[/code], as for [method request].
 			</description>
 		</method>
 		<method name="rewind" qualifiers="static">
@@ -433,7 +522,7 @@
 			<return type="void" />
 			<param index="0" name="callable" type="Callable" />
 			<description>
-				Calls [param callable] on every peer that can see the node.
+				Calls [param callable] on every peer that can see the node. The node must be part of a spawned [NetwEntity].
 				[codeblock]
 				Netw.rpc(turret.aim, yaw)
 				[/codeblock]
@@ -443,7 +532,7 @@
 			<return type="void" />
 			<param index="0" name="callable" type="Callable" />
 			<description>
-				Calls [param callable] on the peer of the node's [member NetwEntity.controller].
+				Calls [param callable] on the peer of the node's [member NetwEntity.controller], and on the server when no peer steers it. The node must be part of a spawned [NetwEntity].
 			</description>
 		</method>
 		<method name="rpc_id" qualifiers="vararg static">
@@ -451,7 +540,7 @@
 			<param index="0" name="peer_id" type="int" />
 			<param index="1" name="callable" type="Callable" />
 			<description>
-				Calls [param callable] on [param peer_id], or on every peer when [code]0[/code].
+				Calls [param callable] on [param peer_id], or on every peer when [code]0[/code]. The node must be part of a spawned [NetwEntity].
 			</description>
 		</method>
 		<method name="sample" qualifiers="static">
@@ -501,6 +590,13 @@
 				muzzle.add_child(Netw.spawn(_spawn_bullet, dir, 2))
 				[/codeblock]
 				Register [param fn] with [method configure_spawn] first, and add the node to the tree before the next tick.
+				[param fn] must return the node without waiting. Load a scene that takes a while on every peer first with [method request_all].
+				[codeblock]
+				var loads := Netw.request_all(preload_level, path)
+				await loads.wait()
+				if not loads.is_failed:
+				    add_child(Netw.spawn(make_level, path))
+				[/codeblock]
 				A client can call it when the node sets [member NetwEntity.lifecycle] to [constant NetwEntity.LIFECYCLE_CONTROLLER]. That client's player becomes its [member NetwEntity.controller]. The client sees it at once and loses it if the server refuses.
 			</description>
 		</method>

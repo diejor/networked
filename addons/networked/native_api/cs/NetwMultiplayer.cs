@@ -2875,20 +2875,22 @@ public sealed class NetwMultiplayer : NetwRefCounted
     }
 
     private static readonly IntPtr _bindRpcRequestCall =
-        NetwApi.MethodBind("NetwMultiplayer", "rpc_request_call", 984182926UL);
+        NetwApi.MethodBind("NetwMultiplayer", "rpc_request_call", 1061611337UL);
 
     /// <summary>
     /// Calls <paramref name="callable"/> on <paramref name="peer"/> and returns
     /// a <see cref="NetwPromise"/> that resolves with its return value. The
-    /// promise is rejected after <paramref name="timeoutSeconds"/>. Returns
-    /// <c>null</c> when <see cref="NetwMultiplayer.RpcCall"/> would reject the
-    /// call.
+    /// promise is rejected after <paramref name="timeoutSeconds"/>, and at once
+    /// with the reason when <see cref="NetwMultiplayer.RpcCall"/> would refuse
+    /// the call. A <paramref name="timeoutSeconds"/> of <c>0.0</c> waits as
+    /// long as the method's <see cref="NetwMemberConfig.Timeout"/>, or 5
+    /// seconds when it declares none.
     /// </summary>
     public NetwPromise RpcRequestCall(
         long peer,
         Callable callable,
         Godot.Collections.Array args,
-        double timeoutSeconds = 5.0)
+        double timeoutSeconds = 0.0)
     {
         godot_variant slot0 = VariantUtils.CreateFromInt((long)peer);
         godot_variant slot1 = VariantUtils.CreateFromCallable(callable);
@@ -2919,18 +2921,21 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind(
             "NetwMultiplayer",
             "rpc_request_call_group",
-            3342056643UL);
+            2906301317UL);
 
     /// <summary>
     /// Calls <paramref name="callable"/> on every peer that sees its entity,
     /// and returns a <see cref="NetwGroupPromise"/> of their replies. A peer
-    /// that disconnects counts as rejected. Returns <c>null</c> when
-    /// <see cref="NetwMultiplayer.RpcRequestCall"/> would.
+    /// that disconnects counts as rejected. The promise fails at once when
+    /// <see cref="NetwMultiplayer.RpcRequestCall"/> would refuse the call.
+    /// <paramref name="timeoutSeconds"/> works as in
+    /// <see cref="NetwMultiplayer.RpcRequestCall"/>. A <c>call_local</c> method
+    /// also runs on this peer, as for <see cref="Netw.RequestAll"/>.
     /// </summary>
     public NetwGroupPromise RpcRequestCallGroup(
         Callable callable,
         Godot.Collections.Array args,
-        double timeoutSeconds = 5.0)
+        double timeoutSeconds = 0.0)
     {
         godot_variant slot0 = VariantUtils.CreateFromCallable(callable);
         godot_variant slot1 = VariantUtils.CreateFromArray(args);

@@ -385,11 +385,7 @@ void NetwMultiplayer::entity_enter_tree(
 
     if (!is_reparent
         && p_record->get_stage() == int64_t(entity::Stage::UNBOUND)) {
-        NETW_ZONE_NC("entity enter classify and arm", colors::LIVENESS);
-        if (!p_record->classify_activation()) {
-            publish(int64_t(entity::Stage::UNBOUND));
-            return;
-        }
+        NETW_ZONE_NC("entity enter arm", colors::LIVENESS);
         NetwEntity *armed = Object::cast_to<NetwEntity>(p_wrapper);
         if (armed != nullptr) {
             armed->arm(Ref<NetwMultiplayer>());
@@ -403,6 +399,16 @@ void NetwMultiplayer::entity_enter_tree(
     if (!is_reparent && p_record->get_route() == 0 && p_session != nullptr
         && p_is_authority) {
         p_record->set_route(p_session->liveness_allocate_route(p_wrapper));
+    }
+    if (p_record->get_entity_id() == StringName()
+        && p_record->get_route() > 0) {
+        p_record->set_entity_id(
+            spawn::Book::default_entity_id(
+                nullptr,
+                owner,
+                p_record->get_route()
+            )
+        );
     }
     if (p_record->get_route() > 0 && p_session != nullptr) {
         {
@@ -467,6 +473,12 @@ void NetwMultiplayer::entity_enter_tree(
         }
         if (p_record->get_declares_scene() && p_session != nullptr) {
             p_session->scene_root_online(owner);
+        }
+        spawn::Pipeline *pipeline
+            = p_session != nullptr ? p_session->spawn_plane() : nullptr;
+        if (wrapper != nullptr && pipeline != nullptr
+            && pipeline->is_booked(p_record->get_route())) {
+            p_session->membership_place_entity(Ref<NetwEntity>(wrapper));
         }
     }
 }
@@ -1376,14 +1388,16 @@ TypedArray<NetwEntity> NetwMultiplayer::liveness_get_entities() const {
 void NetwMultiplayer::liveness_schedule_when_live(
     int64_t p_route,
     const Callable &p_callback,
-    int64_t p_deadline,
+    int64_t p_origin,
+    int64_t p_timeout,
     bool p_on_clock,
     const Callable &p_on_timeout
 ) {
     liveness_core->when_live(
         int(p_route),
         p_callback,
-        int(p_deadline),
+        int(p_origin),
+        int(p_timeout),
         p_on_clock,
         p_on_timeout
     );
@@ -2070,13 +2084,8 @@ Ref<NetwEntity> NetwMultiplayer::spawn_arm_identity(
                 p_node->set_name(String(claimed));
             }
         } else {
-            const String stem = spawn::Book::recipe_base(
-                p_record,
-                p_node->get_scene_file_path(),
-                String(p_node->get_name())
-            );
             entity->set_name(
-                StringName(stem + String("@") + String::num_int64(route))
+                spawn::Book::default_entity_id(p_record, p_node, route)
             );
             const String seated = String(p_node->get_name());
             if (!p_node->is_inside_tree()
@@ -3049,23 +3058,13 @@ Error NetwMultiplayer::entity_call(
     if (String(p_method).is_empty() || !node->has_method(p_method)) {
         return ERR_DOES_NOT_EXIST;
     }
-    const Ref<Script> script = node->get_script();
-    if (script.is_null()) {
-        return ERR_UNCONFIGURED;
+    const CallTarget target = rpc_target(node, p_method);
+    if (target.code != OK) {
+        return target.code;
     }
-    const bool declared
-        = netw::script::model::get_rpc_options(script, p_method).is_valid();
-    if (!declared) {
-        const Dictionary annotated = script->get_rpc_config();
-        if (!annotated.has(p_method)) {
-            NETW_WARN(
-                sys::ENTITY,
-                "NetwMultiplayer.entity_call refused '%s', because it is not "
-                "an RPC. Declare it with Netw.configure_rpc or @rpc.",
-                String(p_method)
-            );
-            return ERR_UNCONFIGURED;
-        }
+    String refusal;
+    if (rpc_declared(node, p_method, refusal) != OK) {
+        return ERR_UNCONFIGURED;
     }
     rpc_call(Callable(node, p_method), p_args, p_peer);
     return OK;
@@ -3088,7 +3087,8 @@ void NetwMultiplayer::liveness_when_live(
     liveness_schedule_when_live(
         p_route,
         p_callback,
-        origin + timeout,
+        origin,
+        timeout,
         clocked,
         p_on_timeout
     );

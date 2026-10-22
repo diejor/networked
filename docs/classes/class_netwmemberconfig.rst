@@ -97,6 +97,8 @@ Methods
    +-------------------------------------------------+-------------------------------------------------------------------------------------------------+
    | :ref:`NetwMemberConfig<class_NetwMemberConfig>` | :ref:`server<class_NetwMemberConfig_method_server>`\ (\ )                                       |
    +-------------------------------------------------+-------------------------------------------------------------------------------------------------+
+   | :ref:`NetwMemberConfig<class_NetwMemberConfig>` | :ref:`timeout<class_NetwMemberConfig_method_timeout>`\ (\ seconds\: :godot:`float`\ )           |
+   +-------------------------------------------------+-------------------------------------------------------------------------------------------------+
    | :ref:`NetwMemberConfig<class_NetwMemberConfig>` | :ref:`unreliable<class_NetwMemberConfig_method_unreliable>`\ (\ )                               |
    +-------------------------------------------------+-------------------------------------------------------------------------------------------------+
 
@@ -518,6 +520,18 @@ Sends reliably.
 :ref:`NetwMemberConfig<class_NetwMemberConfig>` **server**\ (\ ) :ref:`🔗<class_NetwMemberConfig_method_server>`
 
 Only the server may send it.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwMemberConfig_method_timeout:
+
+.. rst-class:: classref-method
+
+:ref:`NetwMemberConfig<class_NetwMemberConfig>` **timeout**\ (\ seconds\: :godot:`float`\ ) :ref:`🔗<class_NetwMemberConfig_method_timeout>`
+
+A request to this method waits ``seconds`` for the reply, then fails with :godot:`@GlobalScope.ERR_TIMEOUT <@GlobalScope#class_@GlobalScope_constant_ERR_TIMEOUT>`. A method that declares none waits 5 seconds. Invalid for properties and signals.
 
 .. rst-class:: classref-item-separator
 

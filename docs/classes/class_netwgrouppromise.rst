@@ -30,7 +30,9 @@ Description
             start_when_all_ready(votes)
         )
 
-\ On timeout, :ref:`catch_error()<class_NetwGroupPromise_method_catch_error>` runs with :godot:`@GlobalScope.ERR_TIMEOUT <@GlobalScope#class_@GlobalScope_constant_ERR_TIMEOUT>`, and the results that did arrive stay in :ref:`results<class_NetwGroupPromise_property_results>`. It works like :ref:`NetwPromise<class_NetwPromise>` otherwise.
+\ On timeout, :ref:`catch_error()<class_NetwGroupPromise_method_catch_error>` runs with :godot:`@GlobalScope.ERR_TIMEOUT <@GlobalScope#class_@GlobalScope_constant_ERR_TIMEOUT>`, and the results that did arrive stay in :ref:`results<class_NetwGroupPromise_property_results>`. A peer that refuses the call has no entry in :ref:`results<class_NetwGroupPromise_property_results>`, and once every other peer answers, the group fails with that peer's :ref:`code<class_NetwGroupPromise_property_code>` and :ref:`detail<class_NetwGroupPromise_property_detail>`. It works like :ref:`NetwPromise<class_NetwPromise>` otherwise.
+
+C# can ``await`` the group itself, which gives back the settled group.
 
 .. rst-class:: classref-reftable-group
 

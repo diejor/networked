@@ -437,26 +437,60 @@ void NetwLivenessCore::tombstone_routes_data(const PackedInt64Array &routes) {
 void NetwLivenessCore::when_live(
     int route,
     const Callable &callback,
-    int deadline,
+    int origin,
+    int timeout,
     bool on_clock,
     const Callable &on_timeout
 ) {
-    if (route_state(route) == STATE_LIVE) {
+    if (route_state(route) == STATE_LIVE
+        && deferred_flushes.find(route) < 0) {
         callback.call();
         return;
     }
     Pending entry;
     entry.callback = callback;
     entry.on_timeout = on_timeout;
-    entry.deadline = int32_t(deadline);
+    entry.deadline = int32_t(origin + timeout);
+    entry.span = int32_t(timeout);
     entry.on_clock = on_clock;
     pending[route].push_back(entry);
+}
+
+void NetwLivenessCore::hold(int route) {
+    held.insert(route);
+}
+
+void NetwLivenessCore::release(int route) {
+    held.erase(route);
+}
+
+bool NetwLivenessCore::is_held(int route) const {
+    return held.has(route);
+}
+
+void NetwLivenessCore::defer_flushes() {
+    flushes_deferred += 1;
+}
+
+void NetwLivenessCore::resume_flushes() {
+    flushes_deferred -= 1;
+    while (flushes_deferred == 0 && !deferred_flushes.is_empty()) {
+        const int32_t route = deferred_flushes[0];
+        deferred_flushes.remove_at(0);
+        flush_live(route);
+    }
 }
 
 void NetwLivenessCore::flush_live(int route) {
     const godot::HashMap<int32_t, LocalVector<Pending>>::Iterator found
         = pending.find(route);
     if (found == pending.end()) {
+        return;
+    }
+    if (flushes_deferred > 0) {
+        if (deferred_flushes.find(route) < 0) {
+            deferred_flushes.push_back(route);
+        }
         return;
     }
     const LocalVector<Pending> waiting(found->value);
@@ -507,10 +541,13 @@ PackedInt32Array NetwLivenessCore::sweep_pending(int clock_tick) {
     LocalVector<int32_t> emptied;
 
     for (godot::KeyValue<int32_t, LocalVector<Pending>> &row : pending) {
+        const bool route_held = held.has(row.key);
         LocalVector<Pending> remaining;
-        for (const Pending &entry : row.value) {
+        for (Pending &entry : row.value) {
             const int current = entry.on_clock ? clock_tick : frame_counter;
-            if (current >= entry.deadline) {
+            if (route_held) {
+                entry.deadline = current + entry.span;
+            } else if (current >= entry.deadline) {
                 if (entry.on_timeout.is_valid()) {
                     fired.push_back(entry.on_timeout);
                 }
@@ -545,6 +582,8 @@ void NetwLivenessCore::clear() {
     records.clear();
     by_route.clear();
     pending.clear();
+    held.clear();
+    deferred_flushes.clear();
     lease.clear();
     grants.clear();
     leased = false;

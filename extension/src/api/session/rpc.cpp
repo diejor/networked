@@ -615,22 +615,97 @@ void NetwMultiplayer::rpc_note_dropped_not_live() {
     ++rpc_dropped_not_live;
 }
 
-void NetwMultiplayer::rpc_warn_dropped_once(Node *p_target) {
-    if (p_target == nullptr) {
-        return;
+bool NetwMultiplayer::call_fault_first(Node *p_node, Error p_code) {
+    const uint8_t bit = p_code == ERR_UNCONFIGURED ? 1 : 2;
+    const uint64_t node_id = uint64_t(gd::instance_id(p_node));
+    uint8_t &reported = call_faults_reported[node_id];
+    if ((reported & bit) != 0) {
+        return false;
     }
-    const uint64_t held = uint64_t(gd::instance_id(p_target));
-    if (rpc_drop_warned.has(held)) {
-        return;
+    reported |= bit;
+    return true;
+}
+
+NetwMultiplayer::CallTarget NetwMultiplayer::call_target(
+    Node *p_node,
+    const StringName &p_member
+) {
+    CallTarget out;
+    if (p_node == nullptr) {
+        out.code = ERR_INVALID_PARAMETER;
+        out.detail = String("A Netw RPC needs a method of a Node.");
+        NETW_ERROR(sys::SESSION, "%s", out.detail);
+        return out;
     }
-    rpc_drop_warned.insert(held);
-    NETW_WARN(
-        sys::TRANSPORT,
-        "An RPC to '%s' was dropped, because it is not spawned on the "
-        "network. Wait for the entity_live signal before calling it, and stop "
-        "calling it after despawn.",
-        String(p_target->get_name()).utf8().get_data()
+    out.entity = NetwEntity::of(p_node);
+    if (out.entity.is_null()) {
+        out.code = ERR_UNCONFIGURED;
+        out.detail = vformat(
+            "'%s' is not part of a NetwEntity, so the call to '%s' was "
+            "dropped. Call Netw.configure_entity on its root.",
+            String(p_node->get_name()),
+            String(p_member)
+        );
+        if (call_fault_first(p_node, out.code)) {
+            NETW_ERROR(sys::SESSION, "%s", out.detail);
+        }
+        return out;
+    }
+    out.route = liveness_route_of(out.entity.ptr());
+    if (out.route <= 0) {
+        out.code = ERR_UNAVAILABLE;
+        out.detail = vformat(
+            "'%s' is not spawned on the network yet, so the call to '%s' was "
+            "dropped. Call it from _ready or later.",
+            String(p_node->get_name()),
+            String(p_member)
+        );
+        if (call_fault_first(p_node, out.code)) {
+            NETW_WARN(sys::TRANSPORT, "%s", out.detail);
+        }
+    }
+    return out;
+}
+
+NetwMultiplayer::CallTarget NetwMultiplayer::rpc_target(
+    Node *p_node,
+    const StringName &p_method
+) {
+    const CallTarget target = call_target(p_node, p_method);
+    if (target.code == ERR_UNAVAILABLE) {
+        ++rpc_dropped_not_live;
+    } else if (target.code != OK) {
+        ++rpc_dropped_unroutable;
+    }
+    return target;
+}
+
+Error NetwMultiplayer::rpc_declared(
+    Node *p_node,
+    const StringName &p_method,
+    String &r_detail
+) const {
+    const Ref<Script> script = p_node->get_script();
+    if (netw::script::model::get_rpc_options(script, p_method).is_valid()
+        || (script.is_valid()
+            && Dictionary(script->get_rpc_config()).has(p_method))) {
+        return OK;
+    }
+    r_detail = vformat(
+        "Method '%s' on '%s' is not an RPC. Declare it with "
+        "Netw.configure_rpc or @rpc.",
+        String(p_method),
+        String(p_node->get_name())
     );
+    NETW_WARN(sys::TRANSPORT, "%s", r_detail);
+    return ERR_METHOD_NOT_FOUND;
+}
+
+int64_t NetwMultiplayer::rpc_controller_peer(
+    const Ref<NetwEntity> &p_entity
+) const {
+    const int64_t controller = p_entity->get_controller();
+    return controller > 0 ? controller : int64_t(SERVER_PEER);
 }
 
 int64_t NetwMultiplayer::rpc_sends_dropped_unroutable() const {
@@ -663,7 +738,7 @@ void NetwMultiplayer::rpc_defer_call(
         ? int64_t(clock_engine().get_tickrate())
         : 30;
     const int64_t id
-        = rpc_park.park(p_sender, p_route, receive_tick() + timeout);
+        = rpc_park.park(p_sender, p_route, receive_tick(), timeout);
     if (id < 0) {
         return;
     }
@@ -677,7 +752,7 @@ void NetwMultiplayer::rpc_defer_call(
 }
 
 void NetwMultiplayer::rpc_sweep_deferred_calls() {
-    rpc_park.sweep(receive_tick());
+    rpc_park.sweep(receive_tick(), *liveness_core.ptr());
 }
 
 void NetwMultiplayer::rpc_sweep_transactions(int64_t p_current) {
@@ -716,7 +791,7 @@ void NetwMultiplayer::rpc_handle_disconnect(int64_t p_peer) {
         }
         if (settle.group.is_valid()) {
             settle.group->remove_peer(p_peer);
-            if (settle.group->get_is_completed()) {
+            if (settle.group->get_is_settled()) {
                 rpc_settle_close(txn);
             }
         }
@@ -993,34 +1068,21 @@ void NetwMultiplayer::rpc_call(
     int64_t p_peer
 ) {
     Node *node = Object::cast_to<Node>(p_callable.get_object());
-    const Ref<NetwEntity> entity = NetwEntity::of(node);
-    if (entity.is_null()) {
-        ++rpc_dropped_unroutable;
-        return;
-    }
-    const int64_t route = liveness_route_of(entity.ptr());
-    if (route <= 0) {
-        ++rpc_dropped_not_live;
-        rpc_warn_dropped_once(node);
-        return;
-    }
-
     const StringName method = p_callable.get_method();
+    const CallTarget target = rpc_target(node, method);
+    if (target.code != OK) {
+        return;
+    }
+    const Ref<NetwEntity> &entity = target.entity;
+    const int64_t route = target.route;
+
+    String refusal;
+    if (rpc_declared(node, method, refusal) != OK) {
+        return;
+    }
     const Ref<Script> script = node->get_script();
     const Ref<NetwMemberConfig> options
         = netw::script::model::get_rpc_options(script, method);
-    if (options.is_null()
-        && (script.is_null()
-            || !Dictionary(script->get_rpc_config()).has(method))) {
-        NETW_WARN(
-            sys::TRANSPORT,
-            "Method '%s' on '%s' is not an RPC. Declare it with "
-            "Netw.configure_rpc or @rpc.",
-            String(method),
-            String(node->get_name())
-        );
-        return;
-    }
 
     const Variant method_token = rpc_method_token(entity, node, method);
     const bool reliable = options.is_valid() && options->is_transfer_declared()
@@ -1090,45 +1152,42 @@ void NetwMultiplayer::rpc_call(
     }
 }
 
-bool NetwMultiplayer::rpc_request_prepare(
+Error NetwMultiplayer::rpc_request_prepare(
     const Callable &p_callable,
     const Array &p_args,
     double p_timeout_seconds,
-    RpcRequest &r_out
+    RpcRequest &r_out,
+    String &r_detail
 ) {
     Node *node = Object::cast_to<Node>(p_callable.get_object());
-    const Ref<NetwEntity> entity = NetwEntity::of(node);
-    if (entity.is_null()) {
-        ++rpc_dropped_unroutable;
-        return false;
-    }
-    const int64_t route = liveness_route_of(entity.ptr());
-    if (route <= 0) {
-        ++rpc_dropped_not_live;
-        rpc_warn_dropped_once(node);
-        return false;
-    }
-
     const StringName method = p_callable.get_method();
+    const CallTarget target = rpc_target(node, method);
+    if (target.code != OK) {
+        r_detail = target.detail;
+        return target.code;
+    }
+    const Ref<NetwEntity> &entity = target.entity;
+    const int64_t route = target.route;
+
+    const Error declared = rpc_declared(node, method, r_detail);
+    if (declared != OK) {
+        return declared;
+    }
     const Ref<Script> script = node->get_script();
     const Ref<NetwMemberConfig> options
         = netw::script::model::get_rpc_options(script, method);
-    if (options.is_null()
-        && (script.is_null()
-            || !Dictionary(script->get_rpc_config()).has(method))) {
-        NETW_WARN(
-            sys::TRANSPORT,
-            "Method '%s' on '%s' is not an RPC. Declare it with "
-            "Netw.configure_rpc or @rpc.",
-            String(method),
-            String(node->get_name())
-        );
-        return false;
-    }
 
     const bool timed = clock_engine().get_configured();
     const int64_t current = timed ? clock_engine().get_tick() : receive_tick();
     const int64_t tickrate = timed ? clock_engine().get_tickrate() : 30;
+    const double declared_seconds
+        = options.is_valid() ? options->get_timeout_seconds() : 0.0;
+    double timeout_seconds = rpc_request_timeout_default();
+    if (p_timeout_seconds > 0.0) {
+        timeout_seconds = p_timeout_seconds;
+    } else if (declared_seconds > 0.0) {
+        timeout_seconds = declared_seconds;
+    }
 
     r_out.entity = entity;
     r_out.node = node;
@@ -1140,8 +1199,11 @@ bool NetwMultiplayer::rpc_request_prepare(
     r_out.encoded_args = rpc_encoded_args(p_args);
     r_out.quantizers = options.is_valid() ? options->get_quantizers() : Array();
     r_out.arg_types = netw::script::model::get_method_arg_types(script, method);
-    r_out.deadline = current + int64_t(p_timeout_seconds * double(tickrate));
-    return true;
+    r_out.deadline = current + int64_t(timeout_seconds * double(tickrate));
+    r_out.call_local = options.is_valid()
+        ? options->get_is_call_local()
+        : netw::script::model::get_method_call_local(script, method);
+    return OK;
 }
 
 void NetwMultiplayer::rpc_open_txn(
@@ -1161,8 +1223,16 @@ Ref<NetwPromise> NetwMultiplayer::rpc_request_call(
     double p_timeout_seconds
 ) {
     RpcRequest request;
-    if (!rpc_request_prepare(p_callable, p_args, p_timeout_seconds, request)) {
-        return Ref<NetwPromise>();
+    String refusal;
+    const Error prepared = rpc_request_prepare(
+        p_callable,
+        p_args,
+        p_timeout_seconds,
+        request,
+        refusal
+    );
+    if (prepared != OK) {
+        return NetwPromise::refused(prepared, refusal);
     }
 
     const int64_t txn = rpc_txns.mint();
@@ -1217,19 +1287,34 @@ Ref<NetwGroupPromise> NetwMultiplayer::rpc_request_call_group(
     double p_timeout_seconds
 ) {
     RpcRequest request;
-    if (!rpc_request_prepare(p_callable, p_args, p_timeout_seconds, request)) {
-        return Ref<NetwGroupPromise>();
+    String refusal;
+    const Error prepared = rpc_request_prepare(
+        p_callable,
+        p_args,
+        p_timeout_seconds,
+        request,
+        refusal
+    );
+    if (prepared != OK) {
+        return NetwGroupPromise::refused(prepared, refusal);
     }
 
     const PackedInt32Array peers = rpc_get_recipients(request.entity);
+    const int64_t local_id = get_unique_id();
+    const bool asks_caller
+        = request.call_local && !peers.has(int32_t(local_id));
+    PackedInt32Array expected = peers;
+    if (asks_caller) {
+        expected.push_back(int32_t(local_id));
+    }
     const int64_t txn = rpc_txns.mint();
-    const Ref<NetwGroupPromise> promise = NetwGroupPromise::create(peers);
+    const Ref<NetwGroupPromise> promise = NetwGroupPromise::create(expected);
     PackedInt64Array owed;
-    for (int at = 0; at < peers.size(); ++at) {
-        owed.push_back(peers[at]);
+    for (int at = 0; at < expected.size(); ++at) {
+        owed.push_back(expected[at]);
     }
     rpc_open_txn(txn, owed, promise, request.deadline);
-    if (peers.is_empty()) {
+    if (expected.is_empty()) {
         session_defer(
             Callable(promise.ptr(), StringName("resolve_all")),
             StringName()
@@ -1273,7 +1358,62 @@ Ref<NetwGroupPromise> NetwMultiplayer::rpc_request_call_group(
             false
         );
     }
+    if (asks_caller) {
+        const int64_t previous = dispatching_sender;
+        dispatching_sender = local_id;
+        rpc_execute_call(
+            request.entity,
+            request.node,
+            request.method,
+            p_args,
+            txn,
+            local_id,
+            transfer_generation
+        );
+        dispatching_sender = previous;
+    }
     return promise;
+}
+
+void NetwMultiplayer::rpc_call_controller(
+    const Callable &p_callable,
+    const Array &p_args
+) {
+    Node *node = Object::cast_to<Node>(p_callable.get_object());
+    const CallTarget target = rpc_target(node, p_callable.get_method());
+    if (target.code != OK) {
+        return;
+    }
+    const int64_t peer = rpc_controller_peer(target.entity);
+    const int64_t local_id = get_unique_id();
+    String refusal;
+    if (peer != local_id) {
+        rpc_call(p_callable, p_args, peer);
+        return;
+    }
+    if (rpc_declared(node, p_callable.get_method(), refusal) != OK) {
+        return;
+    }
+    const int64_t previous = dispatching_sender;
+    dispatching_sender = local_id;
+    p_callable.callv(p_args);
+    dispatching_sender = previous;
+}
+
+Ref<NetwPromise> NetwMultiplayer::rpc_request_controller(
+    const Callable &p_callable,
+    const Array &p_args
+) {
+    Node *node = Object::cast_to<Node>(p_callable.get_object());
+    const CallTarget target = rpc_target(node, p_callable.get_method());
+    if (target.code != OK) {
+        return NetwPromise::refused(target.code, target.detail);
+    }
+    return rpc_request_call(
+        rpc_controller_peer(target.entity),
+        p_callable,
+        p_args
+    );
 }
 
 void NetwMultiplayer::rpc_send_reply(
@@ -1284,13 +1424,72 @@ void NetwMultiplayer::rpc_send_reply(
 ) {
     wire::WriteStream stream;
     uint64_t txn = uint64_t(MAX(p_txn, int64_t(0)));
+    bool failed = false;
     LocalVector<call_args::Slot> slots;
     slots.push_back(rpc_encoded_arg(p_value));
-    if (!stream.varuint(txn, 5)
+    if (!stream.varuint(txn, 5) || !stream.bool1(failed)
         || !call_args::write(stream, slots, Array(), Array())
         || !stream.align_verify()) {
         return;
     }
+    rpc_post_reply(p_peer, p_route, p_txn, stream.to_bytes());
+}
+
+void NetwMultiplayer::rpc_send_refusal(
+    int64_t p_peer,
+    int64_t p_route,
+    int64_t p_txn,
+    Error p_code,
+    const String &p_detail
+) {
+    if (p_txn <= 0) {
+        return;
+    }
+    wire::WriteStream stream;
+    uint64_t txn = uint64_t(p_txn);
+    bool failed = true;
+    uint64_t code = uint64_t(p_code);
+    String detail = p_detail.left(255);
+    if (!stream.varuint(txn, 5) || !stream.bool1(failed)
+        || !stream.varuint(code, 2) || !wire::string_field(stream, detail)
+        || !stream.align_verify()) {
+        return;
+    }
+    rpc_post_reply(p_peer, p_route, p_txn, stream.to_bytes());
+}
+
+void NetwMultiplayer::rpc_refuse_unrouted_call(
+    int64_t p_peer,
+    int64_t p_route,
+    const PackedByteArray &p_payload
+) {
+    wire::ReadStream reader(p_payload);
+    uint64_t flag = 0;
+    uint64_t txn = 0;
+    if (!reader.bits(flag, 8) || (flag & CALL_AWAITS_REPLY) == 0
+        || !reader.varuint(txn, 5)) {
+        return;
+    }
+    rpc_send_refusal(
+        p_peer,
+        p_route,
+        int64_t(txn),
+        ERR_DOES_NOT_EXIST,
+        vformat(
+            "Peer %d holds no node for route %d, so the call was dropped. "
+            "Build the same scene tree on every peer.",
+            int(get_unique_id()),
+            int(p_route)
+        )
+    );
+}
+
+void NetwMultiplayer::rpc_post_reply(
+    int64_t p_peer,
+    int64_t p_route,
+    int64_t p_txn,
+    const PackedByteArray &p_payload
+) {
     NETW_NETWORK_PROFILE(
         wire::ProfileSubjectScope observation(
             profiler_outgoing,
@@ -1301,12 +1500,35 @@ void NetwMultiplayer::rpc_send_reply(
         p_peer,
         p_route,
         wire::builtin_channel("REPLY"),
-        stream.to_bytes(),
+        p_payload,
         true,
         0,
         String(),
         false
     );
+}
+
+void NetwMultiplayer::rpc_handle_reply_failed(
+    int64_t p_txn,
+    int64_t p_sender,
+    Error p_code,
+    const String &p_detail
+) {
+    if (!rpc_txns.admits(p_txn, p_sender)) {
+        return;
+    }
+    const RpcSettle settle = rpc_settle_of(p_txn);
+    if (settle.single.is_valid()) {
+        settle.single->reject(p_code, p_detail);
+        rpc_settle_close(p_txn);
+        return;
+    }
+    if (settle.group.is_valid()) {
+        settle.group->refuse_peer(p_sender, p_code, p_detail);
+        if (settle.group->get_is_settled()) {
+            rpc_settle_close(p_txn);
+        }
+    }
 }
 
 void NetwMultiplayer::rpc_handle_reply(
@@ -1325,7 +1547,7 @@ void NetwMultiplayer::rpc_handle_reply(
     }
     if (settle.group.is_valid()) {
         settle.group->resolve_peer(p_sender, p_value);
-        if (settle.group->get_is_completed()) {
+        if (settle.group->get_is_settled()) {
             rpc_settle_close(p_txn);
         }
     }
@@ -1355,7 +1577,7 @@ void NetwMultiplayer::rpc_reply_rejected(
     if (p_generation != transfer_generation) {
         return;
     }
-    rpc_send_reply(p_peer, p_route, p_txn, Variant());
+    rpc_send_refusal(p_peer, p_route, p_txn, Error(p_code), p_detail);
 }
 
 void NetwMultiplayer::rpc_reply_when_settled(
@@ -1370,6 +1592,37 @@ void NetwMultiplayer::rpc_reply_when_settled(
         callable_mp(this, &NetwMultiplayer::rpc_reply_rejected)
             .bind(p_peer, p_route, p_txn, transfer_generation)
     );
+}
+
+void NetwMultiplayer::rpc_reply_returned(
+    const Variant &p_value,
+    const Variant &p_held_until_return,
+    int64_t p_peer,
+    int64_t p_route,
+    int64_t p_txn,
+    uint64_t p_generation
+) {
+    rpc_reply_resolved(p_value, p_peer, p_route, p_txn, p_generation);
+}
+
+bool NetwMultiplayer::rpc_reply_when_returned(
+    const Variant &p_result,
+    int64_t p_peer,
+    int64_t p_route,
+    int64_t p_txn
+) {
+    Object *suspended = gd::live_object(p_result);
+    if (suspended == nullptr
+        || !suspended->is_class(StringName("GDScriptFunctionState"))) {
+        return false;
+    }
+    suspended->connect(
+        StringName("completed"),
+        callable_mp(this, &NetwMultiplayer::rpc_reply_returned)
+            .bind(p_result, p_peer, p_route, p_txn, transfer_generation),
+        Object::CONNECT_ONE_SHOT
+    );
+    return true;
 }
 
 bool NetwMultiplayer::rpc_defer_signal_fired(
@@ -1471,6 +1724,9 @@ void NetwMultiplayer::rpc_execute_call(
         rpc_reply_when_settled(promise, p_sender, route, p_txn);
         return;
     }
+    if (rpc_reply_when_returned(result, p_sender, route, p_txn)) {
+        return;
+    }
     rpc_send_reply(p_sender, route, p_txn, result);
 }
 
@@ -1509,6 +1765,12 @@ void NetwMultiplayer::rpc_handle_call(
         }
         txn = int64_t(staged);
     }
+    const int64_t route = liveness_route_of(p_entity.ptr());
+    const auto refuse = [&](Error p_code, const String &p_detail) {
+        rpc_send_refusal(p_sender, route, txn, p_code, p_detail);
+    };
+    const String unreadable
+        = String("A call could not be read, so it was dropped.");
 
     int64_t target_peer = 0;
     if (target_type == CALL_TARGET_SERVER) {
@@ -1516,26 +1778,22 @@ void NetwMultiplayer::rpc_handle_call(
     } else if (target_type == CALL_TARGET_PEER) {
         uint64_t staged = 0;
         if (!reader.bits(staged, 32)) {
+            refuse(ERR_INVALID_DATA, unreadable);
             return;
         }
         target_peer = int64_t(staged);
     }
 
     const Ref<Script> script = p_comp_node->get_script();
-    if (script.is_null()) {
-        return;
-    }
-
     Variant token;
     if (!netw::script::model::read_token(reader, token)) {
+        refuse(ERR_INVALID_DATA, unreadable);
         return;
     }
-    const StringName method = token.get_type() == Variant::INT
+    const bool numbered = script.is_valid() && token.get_type() == Variant::INT;
+    const StringName method = numbered
         ? netw::script::model::get_method_name_by_id(script, token)
         : StringName(token);
-    if (String(method).is_empty()) {
-        return;
-    }
 
     NETW_NETWORK_PROFILE(
         const uint32_t subject = profiler_member(
@@ -1553,14 +1811,22 @@ void NetwMultiplayer::rpc_handle_call(
     const Ref<NetwMemberConfig> options
         = netw::script::model::get_rpc_options(script, method);
     if (options.is_null()
-        && !Dictionary(script->get_rpc_config()).has(method)) {
-        NETW_WARN(
-            sys::TRANSPORT,
-            "A call for '%s' on '%s' was dropped, because it is not an RPC on "
-            "this peer. Declare it the same way on every peer.",
-            String(method),
-            String(p_comp_node->get_name())
-        );
+        && (script.is_null()
+            || !Dictionary(script->get_rpc_config()).has(method))) {
+        const String detail = String(method).is_empty()
+            ? vformat(
+                  "A call on '%s' was dropped, because it names no RPC on "
+                  "this peer. Declare it the same way on every peer.",
+                  String(p_comp_node->get_name())
+              )
+            : vformat(
+                  "A call for '%s' on '%s' was dropped, because it is not an "
+                  "RPC on this peer. Declare it the same way on every peer.",
+                  String(method),
+                  String(p_comp_node->get_name())
+              );
+        NETW_WARN(sys::TRANSPORT, "%s", detail);
+        refuse(ERR_METHOD_NOT_FOUND, detail);
         return;
     }
 
@@ -1572,12 +1838,13 @@ void NetwMultiplayer::rpc_handle_call(
         encoded_args
     );
     if (!decoded || !reader.align_verify() || reader.bits_remaining() != 0) {
-        NETW_WARN(
-            sys::TRANSPORT,
+        const String detail = vformat(
             "A call for '%s' could not be read, so it was dropped. Declare the "
             "RPC with the same arguments on every peer.",
             String(method)
         );
+        NETW_WARN(sys::TRANSPORT, "%s", detail);
+        refuse(ERR_INVALID_DATA, detail);
         return;
     }
 
@@ -1589,13 +1856,14 @@ void NetwMultiplayer::rpc_handle_call(
             p_comp_node,
             p_sender
         )) {
-        NETW_WARN(
-            sys::TRANSPORT,
+        const String detail = vformat(
             "Peer %d may not call '%s' on '%s', so the call was dropped.",
             p_sender,
             String(method),
             String(p_comp_node->get_name())
         );
+        NETW_WARN(sys::TRANSPORT, "%s", detail);
+        refuse(ERR_UNAUTHORIZED, detail);
         return;
     }
 
@@ -1604,13 +1872,14 @@ void NetwMultiplayer::rpc_handle_call(
             method,
             encoded_args.size()
         )) {
-        NETW_WARN(
-            sys::TRANSPORT,
+        const String detail = vformat(
             "A call for '%s' on '%s' had the wrong number of arguments, so it "
             "was dropped.",
             String(method),
             String(p_comp_node->get_name())
         );
+        NETW_WARN(sys::TRANSPORT, "%s", detail);
+        refuse(ERR_INVALID_DATA, detail);
         return;
     }
 
@@ -1641,15 +1910,16 @@ void NetwMultiplayer::rpc_handle_call(
         }
         if (is_host() && arg_entity.is_valid()
             && !send_admits(p_sender, arg_entity)) {
+            const String detail = vformat(
+                "Peer %d sent a call naming route %d, which it cannot see, so "
+                "the call was dropped.",
+                p_sender,
+                slot.node.route
+            );
             if (warn_verdict(ERR_UNAUTHORIZED, slot.node.route)) {
-                NETW_WARN(
-                    sys::TRANSPORT,
-                    "Peer %d sent a call naming route %d, which it cannot see, "
-                    "so the call was dropped.",
-                    p_sender,
-                    slot.node.route
-                );
+                NETW_WARN(sys::TRANSPORT, "%s", detail);
             }
+            refuse(ERR_UNAUTHORIZED, detail);
             return;
         }
         Node *arg_node = nullptr;

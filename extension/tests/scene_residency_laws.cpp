@@ -434,6 +434,10 @@ TEST_CASE(
     avatar->reparent(level_of(rig, arena));
     rig.pump(8);
 
+    spawn_into(rig, level_of(rig, annex), ana, "ana-twin", false);
+    spawn_into(rig, level_of(rig, annex), bo, "bo-twin", false);
+    rig.pump(8);
+
 #if defined(NETW_TESTS)
     const int64_t audited
         = netw::residency_audit::ledger().observations - opened;

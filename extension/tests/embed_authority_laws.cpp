@@ -54,6 +54,7 @@ TEST_CASE(
     "and a member receives that world, so the bare copy is replaced rather "
     "than presented"
 ) {
+    const Ref<PackedScene> warm = netw::gd::load_scene(String(LEVEL_PATH));
     MeshStand stand;
     stand.seat_server();
     stand.seat_member(MEMBER);
@@ -348,6 +349,7 @@ TEST_CASE(
     "joined member at 9 one scene and the one entity seated for that "
     "player, so the authoritative world arrives whole"
 ) {
+    const Ref<PackedScene> warm = netw::gd::load_scene(String(LEVEL_PATH));
     MeshStand stand;
     stand.seat_server();
     stand.seat_member(MEMBER);

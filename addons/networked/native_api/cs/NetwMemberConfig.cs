@@ -584,6 +584,26 @@ public class NetwMemberConfig : NetwRefCounted
         return result;
     }
 
+    private static readonly IntPtr _bindTimeout =
+        NetwApi.MethodBind("NetwMemberConfig", "timeout", 857170813UL);
+
+    /// <summary>
+    /// A request to this method waits <paramref name="seconds"/> for the reply,
+    /// then fails with <c>@GlobalScope.ERR_TIMEOUT</c>. A method that declares
+    /// none waits 5 seconds. Invalid for properties and signals.
+    /// </summary>
+    public NetwMemberConfig Timeout(double seconds)
+    {
+        double slot0 = seconds;
+        IntPtr answered = default;
+        NetwThunks.Ptrcall1_Double_IntPtr(
+            _bindTimeout,
+            Checked,
+            in slot0,
+            ref answered);
+        return NetwMemberConfig.Adopt(answered);
+    }
+
     private static readonly IntPtr _bindQuantize =
         NetwApi.MethodBind("NetwMemberConfig", "quantize", 2087025817UL);
 

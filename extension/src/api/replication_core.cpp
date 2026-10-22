@@ -724,13 +724,29 @@ void ReplicationCore::dispatch_reply(
     }
     wire::ReadStream reader(p_payload);
     uint64_t staged = 0;
-    LocalVector<call_args::Slot> slots;
-    if (!reader.varuint(staged, 5)
-        || !call_args::read(reader, Array(), Array(), slots)
-        || !reader.align_verify() || reader.bits_remaining() != 0) {
+    bool failed = false;
+    if (!reader.varuint(staged, 5) || !reader.bool1(failed)) {
         return;
     }
     const int64_t txn = int64_t(staged);
+    if (failed) {
+        uint64_t code = 0;
+        String detail;
+        if (!reader.varuint(code, 2) || !wire::string_field(reader, detail)
+            || !reader.align_verify() || reader.bits_remaining() != 0) {
+            return;
+        }
+        NETW_NETWORK_PROFILE(plane->profiler().name_arrival(
+            plane->profiler().take_reply(p_sender, txn, false)
+        ));
+        plane->rpc_handle_reply_failed(txn, p_sender, Error(code), detail);
+        return;
+    }
+    LocalVector<call_args::Slot> slots;
+    if (!call_args::read(reader, Array(), Array(), slots)
+        || !reader.align_verify() || reader.bits_remaining() != 0) {
+        return;
+    }
     NETW_NETWORK_PROFILE(plane->profiler().name_arrival(
         plane->profiler().take_reply(p_sender, txn, false)
     ));
@@ -874,6 +890,9 @@ void ReplicationCore::dispatch_frame(
 
     Node *comp_node = plane->repl_comp_node(p_route, p_comp, p_path);
     if (comp_node == nullptr) {
+        if (p_channel == ids.call) {
+            plane->rpc_refuse_unrouted_call(p_sender, p_route, p_payload);
+        }
         return;
     }
     const Ref<NetwEntity> entity = plane->wrapper_for_route(p_route);
@@ -1050,7 +1069,8 @@ void ReplicationCore::send_property(
 ) {
     NetwMultiplayer *plane = core();
     const Ref<NetwEntity> entity = NetwEntity::of(p_node);
-    if (plane == nullptr || entity.is_null()) {
+    if (plane == nullptr || entity.is_null()
+        || plane->liveness_route_of(entity.ptr()) <= 0) {
         sync_pipeline.send_property(p_node, p_property);
         return;
     }
@@ -1069,7 +1089,8 @@ void ReplicationCore::send_signal(
 ) {
     NetwMultiplayer *plane = core();
     const Ref<NetwEntity> entity = NetwEntity::of(p_node);
-    if (plane == nullptr || entity.is_null()) {
+    if (plane == nullptr || entity.is_null()
+        || plane->liveness_route_of(entity.ptr()) <= 0) {
         sync_pipeline.send_signal(p_node, p_signal, p_args);
         return;
     }

@@ -30,6 +30,7 @@
 #include "netw/log.hpp"
 #include "netw/prediction_core.hpp"
 #include "netw/profile.hpp"
+#include "netw/scene_loads.hpp"
 #include "netw/script/model.hpp"
 #include "netw/session/frames.hpp"
 #include "netw/synchronizers.hpp"
@@ -65,6 +66,14 @@ bool running_under_gdunit() {
         return false;
     }();
     return answer;
+}
+
+void settle_like(const Ref<NetwPromise> &p_from, const Ref<NetwPromise> &p_to) {
+    if (p_from->get_is_completed()) {
+        p_to->resolve(p_from->get_result());
+    } else {
+        p_to->reject(p_from->get_code(), p_from->get_detail());
+    }
 }
 
 } // namespace
@@ -339,8 +348,11 @@ Node *NetwMultiplayer::scene_spawn_node(
     NETW_ZONE_NC("session scene constructor", colors::SCENE);
     Node *level = nullptr;
     if (p_data.get_type() == Variant::STRING) {
-        const Ref<PackedScene> packed
-            = NetwSceneCore::packed_at(String(p_data));
+        Ref<PackedScene> packed
+            = SceneLoads::shared().scene(gd::ensure_path(String(p_data)));
+        if (packed.is_null()) {
+            packed = NetwSceneCore::packed_at(String(p_data));
+        }
         NETW_ERR_COND_V(
             packed.is_null(),
             nullptr,
@@ -613,6 +625,7 @@ void NetwMultiplayer::scene_dispose() {
             retired->queue_free();
         }
     }
+    scene_drop_loading_change();
     scene_core->clear();
 }
 
@@ -909,7 +922,28 @@ Ref<NetwPromise> NetwMultiplayer::scene_front_door_change(
             String("a scene change needs a scene file path")
         );
     }
-    const Ref<PackedScene> packed = scene_packed_at(p_path);
+    if (scene_core->change_loading()) {
+        return NetwPromise::rejected(
+            ERR_BUSY,
+            String("a scene change is already open")
+        );
+    }
+    SceneLoads &loads = SceneLoads::shared();
+    const SceneLoads::Status status = gd::resource_available(p_path)
+        ? loads.begin(p_path)
+        : SceneLoads::STATUS_FAILED;
+    if (status == SceneLoads::STATUS_LOADING) {
+        loads.hold(p_path);
+        NetwSceneCore::LoadingChange change;
+        change.path = p_path;
+        change.promise.instantiate();
+        change.requester = gd::instance_id(p_requester);
+        change.scope = p_scope;
+        change.generation = transfer_generation;
+        scene_core->change_wait_for_load(change);
+        return change.promise;
+    }
+    const Ref<PackedScene> packed = loads.scene(p_path);
     if (packed.is_null()) {
         return NetwPromise::rejected(
             ERR_UNAVAILABLE,
@@ -921,6 +955,57 @@ Ref<NetwPromise> NetwMultiplayer::scene_front_door_change(
         packed,
         p_scope,
         p_requester
+    );
+}
+
+void NetwMultiplayer::scene_poll_loading_change() {
+    if (!scene_core->change_loading()) {
+        return;
+    }
+    SceneLoads &loads = SceneLoads::shared();
+    const String path = scene_core->loading_path();
+    if (loads.status(path) == SceneLoads::STATUS_LOADING) {
+        return;
+    }
+    const NetwSceneCore::LoadingChange change
+        = scene_core->change_take_loaded();
+    const Ref<PackedScene> packed = loads.scene(path);
+    if (change.generation != transfer_generation || !is_host()) {
+        change.promise->reject(
+            ERR_UNAVAILABLE,
+            String("the session ended before the scene loaded")
+        );
+    } else if (packed.is_null()) {
+        change.promise->reject(
+            ERR_UNAVAILABLE,
+            String("no scene loads from ") + path
+        );
+    } else {
+        Node *requester
+            = Object::cast_to<Node>(gd::instance_from_id(change.requester));
+        const Ref<NetwPromise> applied = scene_apply_change(
+            scene_caller_player(requester),
+            packed,
+            change.scope,
+            requester
+        );
+        applied->when_settled(
+            callable_mp_static(&settle_like).bind(applied, change.promise)
+        );
+    }
+    loads.release(path);
+}
+
+void NetwMultiplayer::scene_drop_loading_change() {
+    if (scene_core.is_null() || !scene_core->change_loading()) {
+        return;
+    }
+    const NetwSceneCore::LoadingChange change
+        = scene_core->change_take_loaded();
+    SceneLoads::shared().release(change.path);
+    change.promise->reject(
+        ERR_UNAVAILABLE,
+        String("the session ended before the scene loaded")
     );
 }
 

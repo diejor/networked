@@ -1,7 +1,7 @@
-# WIRE v11, the carrier format
+# WIRE v12, the carrier format
 
 The byte layout of every datagram, frame and payload Networked writes.
-`FORMAT_VERSION` is 11. `src/wire/registry.cpp` is the one declaration of the
+`FORMAT_VERSION` is 12. `src/wire/registry.cpp` is the one declaration of the
 channel table and `tools/wire_decode.py` reads a capture against this page.
 
 ---
@@ -1068,7 +1068,10 @@ CALL           [flags bits 8]              bit0 bit1 target, bit2 awaits reply
                [txn varuint 5]             iff bit2
                [target bits 32]            iff target = 2
                [method token][args slots][align_verify]
-REPLY          [txn varuint 5][value slots][align_verify]
+REPLY          [txn varuint 5][failed bool]
+               [value slots]               iff not failed
+               [code varuint 2][detail string]  iff failed
+               [align_verify]
 SIGNAL         [signal token][args slots][align_verify]
 PROPERTY_SYNC  [property token][values slots][align_verify]
 ACTION         [method string][view_tick svarint 5]
@@ -1081,7 +1084,11 @@ entity is live for, `1` the server and `2` the peer named by `target`. Bit 2
 says the sender opened a transaction, and `txn` is the number the reply comes
 back under.
 
-A call frame is refused whole, and a refused frame calls nothing.
+A call frame is refused whole, and a refused frame calls nothing. A refused
+call that opened a transaction is answered with a failed REPLY, whose `code` is
+an `Error` value and whose `detail` is the reason the receiver printed. A
+method whose returned promise fails answers the same way with its own code and
+detail.
 
 ---
 
@@ -1227,9 +1234,10 @@ its datagrams, its frame envelopes and every channel's byte account. What it
 cannot do is decompose a row into columns, because a mask indexes a compiled
 column list no `describe()` layout carries.
 
-`format` decides how the first byte of each datagram is read and nothing else
-in the file depends on it, so `tools/wire_decode.py` reads a v10 capture and a
-v11 capture without being told which it holds.
+`format` decides how the first byte of each datagram is read and whether a
+REPLY carries the failed bit, and nothing else in the file depends on it, so
+`tools/wire_decode.py` reads a v10, v11 or v12 capture without being told which
+it holds.
 
 The armed path is claimed once per process by the first session to move a
 datagram. A process that wants two peers captured runs two processes.

@@ -52,6 +52,7 @@
 #include "netw/log.hpp"
 #include "netw/prediction_core.hpp"
 #include "netw/profile.hpp"
+#include "netw/scene_loads.hpp"
 #include "netw/script/model.hpp"
 #include "netw/session/frames.hpp"
 #include "netw/stage.hpp"
@@ -2159,7 +2160,7 @@ void NetwMultiplayer::session_clear_roster() {
     join_roster.clear();
     unreachable_peers.clear();
     settled_peer_departures.clear();
-    rpc_drop_warned.clear();
+    call_faults_reported.clear();
 }
 
 PackedInt32Array NetwMultiplayer::reachable_peer_ids() const {
@@ -3182,6 +3183,11 @@ Error NetwMultiplayer::NETW_API_VIRTUAL(poll)() {
     const Error err = embed_poll_transport();
     session_poll_shutdown();
     session_poll_turned_away();
+    SceneLoads::shared().poll(engine->get_process_frames());
+    if (spawn::Pipeline *spawning = spawn_plane()) {
+        spawning->retry_load_parked();
+    }
+    scene_poll_loading_change();
     const bool clocked = clock_engine().get_configured();
     if (!clocked) {
         settle_advance();
@@ -5254,6 +5260,7 @@ bool NetwMultiplayer::disconnect_once(
 
 void NetwMultiplayer::clear_flat_family_state() {
     layer_forget_all();
+    scene_drop_loading_change();
     scene_clear_pending_facets();
     store_world.arrays.clear_session();
     display_clear_declarations();

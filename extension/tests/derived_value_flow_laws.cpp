@@ -298,7 +298,7 @@ public:
         record_rings(rig, pair);
         NETW_CHECK_EQ(
             faults.warnings_containing(
-                "FlowBody declares state and input properties but no prediction"
+                "declares state and input properties but no prediction"
             ),
             body_path() == DERIVED_BODY ? p_scenario.clients + 1 : 0
         );

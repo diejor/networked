@@ -71,12 +71,6 @@ struct SpawnBuild {
         DROPPED,
         WAITS,
     };
-    enum Wait : uint8_t {
-        WAIT_NONE,
-        WAIT_ROUTE,
-        WAIT_ADOPT,
-        WAIT_SCENE,
-    };
 
     SpawnFrame frame;
     godot::Node *node = nullptr;
@@ -90,8 +84,9 @@ struct SpawnBuild {
     bool strict = false;
     bool names_a_freed_node = false;
     bool adopted = false;
-    Wait wait = WAIT_NONE;
+    Park::Wait wait = Park::WAIT_NONE;
     int64_t wait_route = 0;
+    godot::String scene;
 };
 
 class Pipeline {
@@ -121,6 +116,8 @@ private:
     godot::HashMap<godot::StringName, godot::Callable> constructors;
     godot::HashMap<godot::StringName, godot::Array> constructor_schemas;
     godot::HashMap<int64_t, int64_t> first_recipients;
+    godot::HashMap<int64_t, godot::String> scene_holds;
+    bool host_fn_waited = false;
 
     int64_t drops_spawn_bad_sender = 0;
     int64_t drops_spawn_duplicate = 0;
@@ -318,7 +315,20 @@ private:
     );
     void retry_parked(int64_t p_route);
     void expire_parked(int64_t p_route);
+    bool cancel_parked(int64_t p_route);
     void drop_scene_park_retry();
+    void expire_spawner_parked();
+
+    SpawnBuild::Outcome wait_for_scene(
+        const godot::String &p_path,
+        SpawnBuild &r_built
+    );
+    SpawnBuild::Outcome drop_missing_scene(
+        int64_t p_route,
+        const godot::String &p_path
+    );
+    void release_scene(int64_t p_route);
+    void release_scenes();
 
     int64_t gate_display_tick() const;
     void apply_action_gate(
@@ -332,6 +342,11 @@ private:
 
 public:
     double park_timeout_seconds = 5.0;
+
+    Pipeline() = default;
+    ~Pipeline();
+    Pipeline(const Pipeline &) = delete;
+    Pipeline &operator=(const Pipeline &) = delete;
 
     bool retries_scene_parks() const {
         return retrying_scene_parks;
@@ -398,6 +413,7 @@ public:
         int64_t p_sender
     );
     void retry_adopt_parked();
+    void retry_load_parked();
 
     godot::Ref<NetwEntity> replicate(
         godot::Node *p_node,

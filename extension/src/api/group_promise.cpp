@@ -26,6 +26,18 @@ Ref<NetwGroupPromise> NetwGroupPromise::create(
     return out;
 }
 
+Ref<NetwGroupPromise> NetwGroupPromise::refused(
+    Error p_code,
+    const String &p_detail
+) {
+    Ref<NetwGroupPromise> out;
+    out.instantiate();
+    out->failed = true;
+    out->code = p_code;
+    out->detail = p_detail;
+    return out;
+}
+
 bool NetwGroupPromise::forget(int64_t p_peer) {
     for (uint32_t at = 0; at < expected.size(); ++at) {
         if (expected[at] == p_peer) {
@@ -78,18 +90,42 @@ void NetwGroupPromise::resolve_peer(int64_t p_peer, const Variant &p_value) {
     }
     results[p_peer] = p_value;
     emit_signal(StringName(SIG_PEER_COMPLETED), p_peer, p_value);
-    if (expected.is_empty()) {
-        resolve_all();
+    settle_when_answered();
+}
+
+void NetwGroupPromise::refuse_peer(
+    int64_t p_peer,
+    Error p_code,
+    const String &p_detail
+) {
+    if (completed || failed || !forget(p_peer)) {
+        return;
     }
+    if (refusal == OK) {
+        refusal = p_code;
+        refusal_detail = p_detail;
+    }
+    settle_when_answered();
 }
 
 void NetwGroupPromise::remove_peer(int64_t p_peer) {
     if (completed || failed) {
         return;
     }
-    if (forget(p_peer) && expected.is_empty()) {
-        resolve_all();
+    if (forget(p_peer)) {
+        settle_when_answered();
     }
+}
+
+void NetwGroupPromise::settle_when_answered() {
+    if (!expected.is_empty()) {
+        return;
+    }
+    if (refusal != OK) {
+        reject(refusal, refusal_detail);
+        return;
+    }
+    resolve_all();
 }
 
 Variant NetwGroupPromise::answer() const {

@@ -137,7 +137,7 @@ See :ref:`NetwAction<class_NetwAction>` for requests and prediction.
 
 :ref:`NetwPromise<class_NetwPromise>` **change_scene_to_file**\ (\ node\: :godot:`Node`, path\: :godot:`String`, scope\: :ref:`SceneChange<enum_NetwScene_SceneChange>` = 0\ ) |static| :ref:`🔗<class_Netw_method_change_scene_to_file>`
 
-Opens ``path`` and moves players to it. ``scope`` says who moves. Their nodes do not move, so spawn them in the :ref:`NetwScene<class_NetwScene>` the promise gives.
+Opens ``path`` and moves players to it. ``scope`` says who moves. Their nodes do not move, so spawn them in the :ref:`NetwScene<class_NetwScene>` the promise gives. The scene loads in the background, and the promise settles when it is in place.
 
 ::
 
@@ -663,11 +663,33 @@ Spawns ``node`` on every peer from its :godot:`Node.scene_file_path <Node#class_
 
 Calls ``callable`` on the server and returns a :ref:`NetwPromise<class_NetwPromise>` with its return value.
 
-::
 
-    var sold: bool = await Netw.request(shop.buy, &"shield").wait()
+.. tabs::
 
-\ The method must be an RPC, as for :ref:`rpc()<class_Netw_method_rpc>`.
+ .. code-tab:: gdscript
+
+    func buy_shield() -> void:
+        var sold: bool = await Netw.request(shop.buy, &"shield").wait()
+
+    @rpc("any_peer")
+    func buy(item: StringName) -> bool:
+        return await stock.take(item)
+
+ .. code-tab:: csharp
+
+    public async void BuyShield()
+    {
+        bool sold = (await Netw.Request(shop, MethodName.Buy, "shield")).AsBool();
+    }
+
+    [Rpc(MultiplayerApi.RpcMode.AnyPeer)]
+    public Variant Buy(StringName item) => NetwPromise.FromTask(stock.Take(item));
+
+\ 
+
+The method must be an RPC, as for :ref:`rpc()<class_Netw_method_rpc>`. The promise fails at once when the node is not part of a spawned :ref:`NetwEntity<class_NetwEntity>`.
+
+The method may ``await``, and the reply is sent when it returns. A method whose node is freed while it waits never replies, so the promise fails when it times out.
 
 .. rst-class:: classref-item-separator
 
@@ -679,7 +701,85 @@ Calls ``callable`` on the server and returns a :ref:`NetwPromise<class_NetwPromi
 
 :ref:`NetwGroupPromise<class_NetwGroupPromise>` **request_all**\ (\ callable\: :godot:`Callable`, ...\ ) |vararg| |static| :ref:`🔗<class_Netw_method_request_all>`
 
-Calls ``callable`` on every peer that can see the node, and returns a :ref:`NetwGroupPromise<class_NetwGroupPromise>` with each return value.
+Calls ``callable`` on every peer that can see the node, and returns a :ref:`NetwGroupPromise<class_NetwGroupPromise>` with each return value. The promise fails at once when the node is not part of a spawned :ref:`NetwEntity<class_NetwEntity>`.
+
+A method declared with :ref:`NetwMemberConfig.call_local()<class_NetwMemberConfig_method_call_local>` or a ``call_local`` :godot:`@GDScript.@rpc <@GDScript#class_@GDScript_annotation_@rpc>` also runs on this peer, and its value joins :ref:`NetwGroupPromise.results<class_NetwGroupPromise_property_results>` under this peer's id. Otherwise this peer is not asked. The method may ``await``, as for :ref:`request()<class_Netw_method_request>`. A method that takes longer than 5 seconds declares its own deadline with :ref:`NetwMemberConfig.timeout()<class_NetwMemberConfig_method_timeout>`.
+
+
+.. tabs::
+
+ .. code-tab:: gdscript
+
+    extends Node
+
+    const MATCH := "res://match.tscn"
+
+    var warm: PackedScene
+
+    func _init() -> void:
+        Netw.configure_entity(self)
+        Netw.configure_rpc(preload_level).timeout(60.0)
+        Netw.configure_spawn(make_player)
+
+    func start_match() -> void:
+        var loads := Netw.request_all(preload_level, MATCH)
+        await loads.wait()
+        if loads.is_failed or false in loads.results.values():
+            return
+        Netw.change_scene_to_file(self, MATCH).then(open_match)
+
+    func open_match(arena: NetwScene) -> void:
+        for player: NetwPlayer in arena.viewers:
+            arena.root.add_child(Netw.spawn_player(player, make_player))
+
+    @rpc("authority")
+    func preload_level(path: String) -> bool:
+        ResourceLoader.load_threaded_request(path)
+        while ResourceLoader.load_threaded_get_status(path) \
+                == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+            await get_tree().process_frame
+        warm = ResourceLoader.load_threaded_get(path)
+        return warm != null
+
+ .. code-tab:: csharp
+
+    public partial class SceneManager : Node
+    {
+        const string Match = "res://match.tscn";
+
+        PackedScene warm;
+
+        public SceneManager()
+        {
+            Netw.ConfigureEntity(this);
+            Netw.ConfigureRpc(this, MethodName.PreloadLevel).Timeout(60.0);
+            Netw.ConfigureSpawn(this, MethodName.MakePlayer);
+        }
+
+        public async void StartMatch()
+        {
+            NetwGroupPromise loads = await Netw.RequestAll(this, MethodName.PreloadLevel, Match);
+            if (loads.IsFailed || loads.Results.Values.Any(loaded => !loaded.AsBool()))
+                return;
+            NetwScene arena = await Netw.ChangeSceneToFile(this, Match).AsTask(NetwScene.From);
+            foreach (NetwPlayer player in arena.Viewers)
+                arena.Root.AddChild(Netw.SpawnPlayer(player, this, MethodName.MakePlayer));
+        }
+
+        public Variant PreloadLevel(string path) => NetwPromise.FromTask(Preload(path));
+
+        async Task<bool> Preload(string path)
+        {
+            ResourceLoader.LoadThreadedRequest(path);
+            while (ResourceLoader.LoadThreadedGetStatus(path)
+                    == ResourceLoader.ThreadLoadStatus.InProgress)
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            warm = ResourceLoader.LoadThreadedGet(path) as PackedScene;
+            return warm != null;
+        }
+    }
+
+\ 
 
 .. rst-class:: classref-item-separator
 
@@ -691,7 +791,7 @@ Calls ``callable`` on every peer that can see the node, and returns a :ref:`Netw
 
 :ref:`NetwPromise<class_NetwPromise>` **request_controller**\ (\ callable\: :godot:`Callable`, ...\ ) |vararg| |static| :ref:`🔗<class_Netw_method_request_controller>`
 
-Calls ``callable`` on the peer of the node's :ref:`NetwEntity.controller<class_NetwEntity_property_controller>`.
+Calls ``callable`` on the peer of the node's :ref:`NetwEntity.controller<class_NetwEntity_property_controller>`, and on the server when no peer steers it. The promise fails at once when the node is not part of a spawned :ref:`NetwEntity<class_NetwEntity>`. The method may ``await``, as for :ref:`request()<class_Netw_method_request>`.
 
 .. rst-class:: classref-item-separator
 
@@ -703,7 +803,7 @@ Calls ``callable`` on the peer of the node's :ref:`NetwEntity.controller<class_N
 
 :ref:`NetwPromise<class_NetwPromise>` **request_id**\ (\ peer_id\: :godot:`int`, callable\: :godot:`Callable`, ...\ ) |vararg| |static| :ref:`🔗<class_Netw_method_request_id>`
 
-Calls ``callable`` on ``peer_id`` and returns a :ref:`NetwPromise<class_NetwPromise>` with its return value. Use :ref:`request_all()<class_Netw_method_request_all>` to call every peer.
+Calls ``callable`` on ``peer_id`` and returns a :ref:`NetwPromise<class_NetwPromise>` with its return value. Use :ref:`request_all()<class_Netw_method_request_all>` to call every peer. The promise fails at once when the node is not part of a spawned :ref:`NetwEntity<class_NetwEntity>`. The method may ``await``, as for :ref:`request()<class_Netw_method_request>`.
 
 .. rst-class:: classref-item-separator
 
@@ -742,7 +842,7 @@ Moves every entity in ``entities`` back to ``tick``, calls ``body``, moves them 
 
 |void| **rpc**\ (\ callable\: :godot:`Callable`, ...\ ) |vararg| |static| :ref:`🔗<class_Netw_method_rpc>`
 
-Calls ``callable`` on every peer that can see the node.
+Calls ``callable`` on every peer that can see the node. The node must be part of a spawned :ref:`NetwEntity<class_NetwEntity>`.
 
 ::
 
@@ -758,7 +858,7 @@ Calls ``callable`` on every peer that can see the node.
 
 |void| **rpc_controller**\ (\ callable\: :godot:`Callable`, ...\ ) |vararg| |static| :ref:`🔗<class_Netw_method_rpc_controller>`
 
-Calls ``callable`` on the peer of the node's :ref:`NetwEntity.controller<class_NetwEntity_property_controller>`.
+Calls ``callable`` on the peer of the node's :ref:`NetwEntity.controller<class_NetwEntity_property_controller>`, and on the server when no peer steers it. The node must be part of a spawned :ref:`NetwEntity<class_NetwEntity>`.
 
 .. rst-class:: classref-item-separator
 
@@ -770,7 +870,7 @@ Calls ``callable`` on the peer of the node's :ref:`NetwEntity.controller<class_N
 
 |void| **rpc_id**\ (\ peer_id\: :godot:`int`, callable\: :godot:`Callable`, ...\ ) |vararg| |static| :ref:`🔗<class_Netw_method_rpc_id>`
 
-Calls ``callable`` on ``peer_id``, or on every peer when ``0``.
+Calls ``callable`` on ``peer_id``, or on every peer when ``0``. The node must be part of a spawned :ref:`NetwEntity<class_NetwEntity>`.
 
 .. rst-class:: classref-item-separator
 
@@ -845,7 +945,16 @@ Calls ``fn`` with the arguments after it on every peer, and returns the node it 
 
 \ Register ``fn`` with :ref:`configure_spawn()<class_Netw_method_configure_spawn>` first, and add the node to the tree before the next tick.
 
-A client can call it when the node sets :ref:`NetwEntity.lifecycle<class_NetwEntity_property_lifecycle>` to :ref:`NetwEntity.LIFECYCLE_CONTROLLER<class_NetwEntity_constant_LIFECYCLE_CONTROLLER>`. That client's player becomes its :ref:`NetwEntity.controller<class_NetwEntity_property_controller>`. The client sees it at once and loses it if the server refuses.
+\ ``fn`` must return the node without waiting. Load a scene that takes a while on every peer first with :ref:`request_all()<class_Netw_method_request_all>`.
+
+::
+
+    var loads := Netw.request_all(preload_level, path)
+    await loads.wait()
+    if not loads.is_failed:
+        add_child(Netw.spawn(make_level, path))
+
+\ A client can call it when the node sets :ref:`NetwEntity.lifecycle<class_NetwEntity_property_lifecycle>` to :ref:`NetwEntity.LIFECYCLE_CONTROLLER<class_NetwEntity_constant_LIFECYCLE_CONTROLLER>`. That client's player becomes its :ref:`NetwEntity.controller<class_NetwEntity_property_controller>`. The client sees it at once and loses it if the server refuses.
 
 .. rst-class:: classref-item-separator
 

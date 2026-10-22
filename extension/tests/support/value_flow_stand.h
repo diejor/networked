@@ -106,10 +106,8 @@ inline FlowPair stand_flow_pair(
     const godot::Ref<netw::NetwEntity> authored
         = netw::NetwEntity::of(pair.authored);
     REQUIRE_MESSAGE(authored.is_valid(), "the authored body has no record");
-    pair.route = server->liveness_allocate_route(authored.ptr());
-    REQUIRE_MESSAGE(pair.route > 0, "the session minted no route");
-    server->liveness_bind_route(pair.route, authored.ptr());
-    authored->arm(godot::Ref<netw::NetwMultiplayer>(server));
+    pair.route = server->liveness_route_of(authored.ptr());
+    REQUIRE_MESSAGE(pair.route > 0, "the authored body went live unrouted");
     for (int index = 0; index < pair.mirrors.size(); ++index) {
         if (!binds_mirror(p_binding, index)) {
             continue;

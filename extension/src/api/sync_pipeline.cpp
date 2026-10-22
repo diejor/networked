@@ -34,9 +34,7 @@ using repl::PropertySet;
 
 namespace {
 
-const char *SIG_ENTITY_LIVE = "entity_live";
 const char *CONTRACT_KEY_PREFIX = "sync-prediction-contract?";
-const char *UNROUTABLE_META = "_netw_unroutable_warned";
 
 const int LANE_ROW = 0;
 const int LANE_WINDOW = 1;
@@ -1133,22 +1131,27 @@ void SyncPipeline::note_peer_ack(
     );
 }
 
-Dictionary SyncPipeline::resolve_send(Node *p_node) {
+Dictionary SyncPipeline::resolve_send(
+    Node *p_node,
+    const StringName &p_member
+) {
     Dictionary out;
     NetwMultiplayer *plane = core();
-    const Ref<NetwEntity> entity = NetwEntity::of(p_node);
-    if (entity.is_null()) {
-        sends_dropped_unroutable += 1;
-        return out;
-    }
     if (plane == nullptr) {
         return out;
     }
-    const int64_t route = plane->liveness_route_of(entity.ptr());
-    if (route <= 0) {
+    const NetwMultiplayer::CallTarget target
+        = plane->call_target(p_node, p_member);
+    if (target.code == ERR_UNAVAILABLE) {
         sends_dropped_not_live += 1;
         return out;
     }
+    if (target.code != OK) {
+        sends_dropped_unroutable += 1;
+        return out;
+    }
+    const Ref<NetwEntity> &entity = target.entity;
+    const int64_t route = target.route;
     const int64_t comp = entity->comp_of(p_node);
     out[StringName("entity")] = entity;
     out[StringName("route")] = route;
@@ -1204,18 +1207,8 @@ void SyncPipeline::send_property(Node *p_node, const StringName &p_property) {
     if (p_node == nullptr || plane == nullptr) {
         return;
     }
-    const Dictionary frame = resolve_send(p_node);
+    const Dictionary frame = resolve_send(p_node, p_property);
     if (frame.is_empty()) {
-        if (NetwEntity::of(p_node).is_null()
-            && !p_node->has_meta(StringName(UNROUTABLE_META))) {
-            p_node->set_meta(StringName(UNROUTABLE_META), true);
-            NETW_WARN(
-                sys::WIRE,
-                "Netw.sync_property got '%s', which is not part of a "
-                "NetwEntity. Call Netw.configure_entity on its root.",
-                p_node->get_name()
-            );
-        }
         return;
     }
     if (!gd::has_property(p_node, p_property)) {
@@ -1310,20 +1303,6 @@ void SyncPipeline::send_signal(
     if (p_node == nullptr || plane == nullptr) {
         return;
     }
-    const Dictionary frame = resolve_send(p_node);
-    if (frame.is_empty()) {
-        if (NetwEntity::of(p_node).is_null()
-            && !p_node->has_meta(StringName(UNROUTABLE_META))) {
-            p_node->set_meta(StringName(UNROUTABLE_META), true);
-            NETW_WARN(
-                sys::WIRE,
-                "Netw.emit_entity_signal got '%s', which is not part of a "
-                "NetwEntity. Call Netw.configure_entity on its root.",
-                p_node->get_name()
-            );
-        }
-        return;
-    }
     if (!p_node->has_signal(p_signal)) {
         NETW_WARN(
             sys::WIRE,
@@ -1364,6 +1343,10 @@ void SyncPipeline::send_signal(
         call_args.push_back(p_signal);
         call_args.append_array(p_args);
         Callable(p_node, StringName("emit_signal")).callv(call_args);
+    }
+    const Dictionary frame = resolve_send(p_node, p_signal);
+    if (frame.is_empty()) {
+        return;
     }
 
     wire::WriteStream stream;

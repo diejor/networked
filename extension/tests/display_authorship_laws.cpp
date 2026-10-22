@@ -137,12 +137,12 @@ class AuthorshipRun {
         const Ref<NetwEntity> entity = NetwEntity::ensure(body);
         entity->get_display()->set_visual_root(NodePath("Visual"));
         const uint64_t set = declare_stream(p_core->property_set_book(), body);
+        entity->set_controller(p_controller);
         p_branch->add_child(body);
         NETW_CHECK_EQ(
             int(p_core->sync_pipeline()->register_property_set(body, set)),
             int(OK)
         );
-        entity->set_controller(p_controller);
         p_core->liveness_bind_route(SUBJECT_ROUTE, entity.ptr());
         p_core->display_mark_dirty(
             entity->get_rid_handle(),

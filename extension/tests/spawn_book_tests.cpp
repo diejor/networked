@@ -275,9 +275,13 @@ TEST_CASE(
     registered.set_recipe(Book::RECIPE_FN_REGISTRY);
     registered.set_fn_registry_id(StringName("bot"));
 
-    CHECK(Book::recipe_base(&scene, "res://x/Y.tscn", "N") == "Arena");
-    CHECK(Book::recipe_base(&fn, "res://x/Y.tscn", "N") == "make_player");
-    CHECK(Book::recipe_base(&registered, "res://x/Y.tscn", "N") == "bot");
+    Node *node = memnew(Node);
+    node->set_name("N");
+    node->set_scene_file_path("res://x/Y.tscn");
+    CHECK(Book::default_entity_id(&scene, node, 7) == StringName("Arena@7"));
+    CHECK(Book::default_entity_id(&fn, node, 7) == StringName("make_player@7"));
+    CHECK(Book::default_entity_id(&registered, node, 7) == StringName("bot@7"));
+    memdelete(node);
 }
 
 TEST_CASE(
@@ -286,10 +290,15 @@ TEST_CASE(
 ) {
     Record spawner = at(1);
     spawner.set_recipe(Book::RECIPE_SPAWNER);
+    Node *node = memnew(Node);
+    node->set_name("Node2");
+    node->set_scene_file_path("res://x/Body.tscn");
 
-    CHECK(Book::recipe_base(&spawner, "res://x/Body.tscn", "Node2") == "Body");
-    CHECK(Book::recipe_base(&spawner, "", "Node2") == "Node2");
-    CHECK(Book::recipe_base(nullptr, "", "Node2") == "Node2");
+    CHECK(Book::default_entity_id(&spawner, node, 3) == StringName("Body@3"));
+    node->set_scene_file_path("");
+    CHECK(Book::default_entity_id(&spawner, node, 3) == StringName("Node2@3"));
+    CHECK(Book::default_entity_id(nullptr, node, 3) == StringName("Node2@3"));
+    memdelete(node);
 }
 
 TEST_CASE(

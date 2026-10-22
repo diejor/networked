@@ -30,7 +30,7 @@
 		func _ready() -&gt; void:
 		    NetwEntity.of(self).despawning.connect(_on_despawning)
 		[/codeblock]
-		A node placed in a scene by hand sets its own [member name]. A spawned copy receives it with the spawn.
+		A node placed in a scene by hand can set its own [member name]. A spawned copy receives it with the spawn.
 		[codeblock]
 		func _init() -&gt; void:
 		    Netw.configure_entity(self).name = &amp;"ball"
@@ -157,8 +157,8 @@
 			[/codeblock]
 		</member>
 		<member name="name" type="StringName" setter="set_name" getter="get_name">
-			The name that identifies this entity on every peer, and in saves and logs.
-			A node placed in a scene sets it in [method Object._init], since an entity without one stays inactive. [method Netw.spawn_player] sets it to the player's [member NetwPlayer.username], so a game giving one player several entities sets a distinct name on each.
+			The name that identifies this entity on every peer and in logs. A save finds its row by [method NetwPersistenceConfig.record_id].
+			An entity left without one is named after the scene, spawn function or node it came from, followed by [code]@[/code] and its route, such as [code]Crate@3[/code]. [method Netw.spawn_player] sets it to the player's [member NetwPlayer.username], so a game giving one player several entities sets a distinct name on each.
 		</member>
 		<member name="on_controller_disconnect" type="int" setter="set_on_controller_disconnect" getter="get_on_controller_disconnect" enum="NetwEntity.DisconnectRule">
 			What happens to the entity when its [member controller] disconnects. An entity spawned for a player still despawns with its [member peer_id].

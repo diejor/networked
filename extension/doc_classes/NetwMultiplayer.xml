@@ -2088,18 +2088,20 @@
 			<param index="0" name="peer" type="int" />
 			<param index="1" name="callable" type="Callable" />
 			<param index="2" name="args" type="Array" />
-			<param index="3" name="timeout_seconds" type="float" default="5.0" />
+			<param index="3" name="timeout_seconds" type="float" default="0.0" />
 			<description>
-				Calls [param callable] on [param peer] and returns a [NetwPromise] that resolves with its return value. The promise is rejected after [param timeout_seconds]. Returns [code]null[/code] when [method rpc_call] would reject the call.
+				Calls [param callable] on [param peer] and returns a [NetwPromise] that resolves with its return value. The promise is rejected after [param timeout_seconds], and at once with the reason when [method rpc_call] would refuse the call.
+				A [param timeout_seconds] of [code]0.0[/code] waits as long as the method's [method NetwMemberConfig.timeout], or 5 seconds when it declares none.
 			</description>
 		</method>
 		<method name="rpc_request_call_group">
 			<return type="NetwGroupPromise" />
 			<param index="0" name="callable" type="Callable" />
 			<param index="1" name="args" type="Array" />
-			<param index="2" name="timeout_seconds" type="float" default="5.0" />
+			<param index="2" name="timeout_seconds" type="float" default="0.0" />
 			<description>
-				Calls [param callable] on every peer that sees its entity, and returns a [NetwGroupPromise] of their replies. A peer that disconnects counts as rejected. Returns [code]null[/code] when [method rpc_request_call] would.
+				Calls [param callable] on every peer that sees its entity, and returns a [NetwGroupPromise] of their replies. A peer that disconnects counts as rejected. The promise fails at once when [method rpc_request_call] would refuse the call.
+				[param timeout_seconds] works as in [method rpc_request_call]. A [code]call_local[/code] method also runs on this peer, as for [method Netw.request_all].
 			</description>
 		</method>
 		<method name="rpc_send_reply">

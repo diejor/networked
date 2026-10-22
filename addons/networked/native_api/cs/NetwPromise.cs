@@ -25,11 +25,20 @@ namespace Networked;
 /// <code>
 /// var receipt = await Netw.request(server.buy_item, item_id).wait()
 /// </code>
+/// </para>
+/// <para>
+/// C# can <c>await</c> the promise itself, which gives the value or throws the
+/// failure.
 /// <code>
 /// Error
-/// ┠╴ERR_TIMEOUT       no reply in time
-/// ┠╴ERR_UNAVAILABLE   the other peer disconnected
-/// ┖╴ERR_UNAUTHORIZED  the other peer refused
+/// ┠╴ERR_TIMEOUT           no reply in time
+/// ┠╴ERR_UNAVAILABLE       the other peer disconnected, or the node is not spawned yet
+/// ┠╴ERR_UNAUTHORIZED      the other peer refused this sender
+/// ┠╴ERR_UNCONFIGURED      the node is not part of a NetwEntity inside a session
+/// ┠╴ERR_METHOD_NOT_FOUND  the method is not an RPC on one of the two peers
+/// ┠╴ERR_INVALID_DATA      the other peer could not read the arguments
+/// ┠╴ERR_DOES_NOT_EXIST    the other peer holds no such node
+/// ┖╴any other code        the NetwPromise the method returned failed with it
 /// </code>
 /// </para>
 /// <para>
@@ -37,7 +46,7 @@ namespace Networked;
 /// <see cref="NetwGroupPromise"/> for requests to many peers.
 /// </para>
 /// </remarks>
-public sealed class NetwPromise : NetwRefCounted
+public sealed partial class NetwPromise : NetwRefCounted
 {
     public NetwPromise() : this(NetwApi.Construct("NetwPromise", true))
     {

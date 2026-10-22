@@ -7,6 +7,8 @@
 
 namespace netw {
 
+class NetwLivenessCore;
+
 class NetwCallPark {
 public:
     static constexpr int BUDGET = 100;
@@ -17,6 +19,7 @@ private:
         int64_t sender = 0;
         int64_t route = 0;
         int64_t deadline = 0;
+        int64_t span = 0;
         bool active = true;
     };
 
@@ -25,9 +28,9 @@ private:
     int64_t refused_calls = 0;
 
 public:
-    int64_t park(int64_t sender, int64_t route, int64_t deadline);
+    int64_t park(int64_t sender, int64_t route, int64_t now, int64_t timeout);
     bool resolve(int64_t id);
-    void sweep(int64_t now);
+    void sweep(int64_t now, const NetwLivenessCore &liveness);
 
     int active_count(int64_t sender) const;
     int size() const;

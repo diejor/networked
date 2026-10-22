@@ -31,7 +31,6 @@ namespace {
 
 const char *SIG_CHANGED = "changed";
 const char *SIG_VISIBILITY_CHANGED = "visibility_changed";
-const char *SIG_ENTITY_LIVE = "entity_live";
 const char *SIG_SYNCHRONIZED = "synchronized";
 const char *SIG_DELTA_SYNCHRONIZED = "delta_synchronized";
 const char *SIG_NODE_REMOVED = "node_removed";

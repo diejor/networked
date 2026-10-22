@@ -340,6 +340,16 @@ void NetwSceneCore::transition_close() {
     transition = Transition();
 }
 
+void NetwSceneCore::change_wait_for_load(const LoadingChange &p_change) {
+    loading = p_change;
+}
+
+NetwSceneCore::LoadingChange NetwSceneCore::change_take_loaded() {
+    const LoadingChange taken = loading;
+    loading = LoadingChange();
+    return taken;
+}
+
 String NetwSceneCore::verify_scene_path(const String &path) {
     const bool bounded = !path.is_empty()
         && path.length() <= MAX_SCENE_PATH_LENGTH && path.begins_with("res://");

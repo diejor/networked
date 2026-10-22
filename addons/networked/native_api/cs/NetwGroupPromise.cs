@@ -24,11 +24,16 @@ namespace Networked;
 /// <para>
 /// On timeout, <see cref="NetwGroupPromise.CatchError"/> runs with
 /// <c>@GlobalScope.ERR_TIMEOUT</c>, and the results that did arrive stay in
-/// <see cref="NetwGroupPromise.Results"/>. It works like
-/// <see cref="NetwPromise"/> otherwise.
+/// <see cref="NetwGroupPromise.Results"/>. A peer that refuses the call has no
+/// entry in <see cref="NetwGroupPromise.Results"/>, and once every other peer
+/// answers, the group fails with that peer's
+/// <see cref="NetwGroupPromise.Code"/> and
+/// <see cref="NetwGroupPromise.Detail"/>. It works like
+/// <see cref="NetwPromise"/> otherwise. C# can <c>await</c> the group itself,
+/// which gives back the settled group.
 /// </para>
 /// </remarks>
-public sealed class NetwGroupPromise : NetwRefCounted
+public sealed partial class NetwGroupPromise : NetwRefCounted
 {
     public NetwGroupPromise(IntPtr native) : base(native)
     {

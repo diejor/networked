@@ -125,6 +125,7 @@ public:
         NetwMultiplayer *client = netw_test::flow_core(rig.client(0));
         const FlowPair pair
             = netw_test::stand_flow_pair(rig, DRAWN_ON_A_VISUAL, "Followed");
+        netw_test::steer(pair, rig.peer_id(0));
         rig.step_ticks(4);
 
         for (int step = 1; step <= declared.ticks; ++step) {

@@ -33,6 +33,7 @@ private:
     int64_t context_type = 0;
     godot::Variant context_node_ref;
     godot::StringName defer_signal_name;
+    double timeout_seconds = 0.0;
     godot::Array quantizers;
     godot::Array interpolators;
 
@@ -104,6 +105,10 @@ public:
         return defer_signal_name;
     }
 
+    double get_timeout_seconds() const {
+        return timeout_seconds;
+    }
+
     void set_quantizers(const godot::Array &p_quantizers) {
         quantizers = p_quantizers;
     }
@@ -125,6 +130,7 @@ public:
     godot::Ref<NetwMemberConfig> call_local();
     godot::Ref<NetwMemberConfig> call_remote();
     godot::Ref<NetwMemberConfig> defer_until(const godot::Signal &p_signal);
+    godot::Ref<NetwMemberConfig> timeout(double p_seconds);
     godot::Ref<NetwMemberConfig> quantize(const godot::Array &p_quantizers);
     godot::Ref<NetwMemberConfig> interpolate(
         const godot::Array &p_interpolators

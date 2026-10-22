@@ -12,7 +12,8 @@
 		        start_when_all_ready(votes)
 		    )
 		[/codeblock]
-		On timeout, [method catch_error] runs with [constant @GlobalScope.ERR_TIMEOUT], and the results that did arrive stay in [member results]. It works like [NetwPromise] otherwise.
+		On timeout, [method catch_error] runs with [constant @GlobalScope.ERR_TIMEOUT], and the results that did arrive stay in [member results]. A peer that refuses the call has no entry in [member results], and once every other peer answers, the group fails with that peer's [member code] and [member detail]. It works like [NetwPromise] otherwise.
+		C# can [code]await[/code] the group itself, which gives back the settled group.
 	</description>
 	<tutorials>
 	</tutorials>

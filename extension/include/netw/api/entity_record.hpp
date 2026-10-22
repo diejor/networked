@@ -210,8 +210,6 @@ public:
     bool complete_departure(godot::Object *p_wrapper);
     void readmit();
 
-    bool classify_activation();
-
     godot::Variant part(int64_t p_part, godot::Object *p_wrapper);
     godot::Variant minted_part(int64_t p_part) const;
     uint32_t minted_part_count() const {
