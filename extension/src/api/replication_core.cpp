@@ -1354,18 +1354,6 @@ Dictionary ReplicationCore::counters() const {
     return out;
 }
 
-Ref<NetwEntity> ReplicationCore::replicate(
-    Node *p_node,
-    const Ref<NetwPlayer> &p_owner
-) {
-    NetwMultiplayer *plane = core();
-    if (plane == nullptr) {
-        return Ref<NetwEntity>();
-    }
-    const RID handle = plane->entity_replicate(p_node, p_owner.ptr());
-    return plane->entity_get_view(handle);
-}
-
 Node *ReplicationCore::spawn(
     const Callable &p_fn,
     const Array &p_args,

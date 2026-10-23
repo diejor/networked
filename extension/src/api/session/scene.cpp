@@ -414,9 +414,6 @@ void NetwMultiplayer::scene_root_online(Node *p_root) {
         return;
     }
     const RID live = entity_of(p_root);
-    if (embed_phase_value == EMBED_PHASE_LIVE) {
-        scene_warn_unwrapped(p_root);
-    }
     scene_open_admission(p_root);
     scene_drain_parked_viewers(live);
     const Ref<NetwEntity> record = NetwEntity::of(p_root);
@@ -431,24 +428,6 @@ void NetwMultiplayer::scene_root_online(Node *p_root) {
         return;
     }
     p_root->connect(StringName("ready"), publish, Object::CONNECT_ONE_SHOT);
-}
-
-void NetwMultiplayer::scene_warn_unwrapped(Node *p_root) {
-    if (p_root == nullptr || !scene_root_is_isolated(p_root)
-        || scene_world_of(p_root) != nullptr) {
-        return;
-    }
-    const uint64_t root_id = uint64_t(gd::instance_id(p_root));
-    if (scene_unwrapped_warned.has(root_id)) {
-        return;
-    }
-    scene_unwrapped_warned.insert(root_id);
-    NETW_WARN(
-        sys::SCENE,
-        "'%s' is declared isolated but was added outside Netw.spawn, so it "
-        "shares a world. Spawn it with Netw.spawn.",
-        String(p_root->get_name())
-    );
 }
 
 void NetwMultiplayer::scene_root_offline(Object *p_root) {

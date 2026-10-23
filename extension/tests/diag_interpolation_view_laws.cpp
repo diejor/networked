@@ -207,6 +207,7 @@ TurningPair stand_turning_pair(LoopbackRig &p_rig) {
     TurningPair pair;
     pair.authored = turning_body(script);
     p_rig.branch(-1)->add_child(pair.authored);
+    pair.authored->set_owner(p_rig.branch(-1));
     pair.mirror = turning_body(script);
     p_rig.branch(0)->add_child(pair.mirror);
     NetwMultiplayer *server = netw_test::flow_core(p_rig.server());

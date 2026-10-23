@@ -264,10 +264,6 @@ public:
     void dispose();
     godot::Dictionary counters() const;
 
-    godot::Ref<NetwEntity> replicate(
-        godot::Node *p_node,
-        const godot::Ref<NetwPlayer> &p_owner
-    );
     godot::Node *spawn(
         const godot::Callable &p_fn,
         const godot::Array &p_args,

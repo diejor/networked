@@ -256,11 +256,27 @@ bool NetwLivenessCore::bind_route(const RID &entity, int route) {
         record->anchor = 1;
         record->anchor_author = 0;
     }
+    if (record->route > 0 && record->route != route
+        && rid_from_route(record->route) == entity) {
+        by_route.erase(record->route);
+    }
 
     record->route = route;
     record->state = STATE_LIVE;
     by_route[route] = entity;
     note_moved(route);
+    return true;
+}
+
+bool NetwLivenessCore::unbind_route(const RID &entity) {
+    Record *record = record_of(entity);
+    if (record == nullptr || record->route <= 0) {
+        return false;
+    }
+    if (rid_from_route(record->route) == entity) {
+        by_route.erase(record->route);
+    }
+    record->route = 0;
     return true;
 }
 

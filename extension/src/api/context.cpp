@@ -880,16 +880,6 @@ Ref<NetwDatabaseConfig> Netw::configure_database(
     return draft;
 }
 
-Ref<NetwEntity> Netw::replicate(Node *p_node, const Ref<NetwPlayer> &p_owner) {
-    NetwMultiplayer *api = sole_session("replicate");
-    if (api == nullptr) {
-        return Ref<NetwEntity>();
-    }
-    ReplicationCore *plane = api->get_replication_plane();
-    return plane != nullptr ? plane->replicate(p_node, p_owner)
-                            : Ref<NetwEntity>();
-}
-
 Node *Netw::spawn(const Callable &p_fn, const Array &p_args) {
     return spawn_player(Ref<NetwPlayer>(), p_fn, p_args);
 }
@@ -1290,12 +1280,6 @@ void Netw::_bind_methods() {
         &Netw::configure_database
     );
 
-    ClassDB::bind_static_method(
-        "Netw",
-        D_METHOD("replicate", "node", "owner"),
-        &Netw::replicate,
-        DEFVAL(Ref<NetwPlayer>())
-    );
     gd::bind_static_vararg("Netw", D_METHOD("spawn", "fn"), &Netw::spawn);
     gd::bind_static_vararg(
         "Netw",

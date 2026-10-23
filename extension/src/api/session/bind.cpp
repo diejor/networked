@@ -816,11 +816,6 @@ void NetwMultiplayer::_bind_methods() {
         &NetwMultiplayer::core_of
     );
     ClassDB::bind_method(
-        D_METHOD("entity_replicate", "node", "owner"),
-        &NetwMultiplayer::entity_replicate,
-        DEFVAL(Variant())
-    );
-    ClassDB::bind_method(
         D_METHOD(
             "spawn_register_constructor",
             "id",

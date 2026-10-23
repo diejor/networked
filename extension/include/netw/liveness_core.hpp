@@ -99,6 +99,7 @@ public:
     void abandon_lease(int peer);
 
     bool bind_route(const godot::RID &entity, int route);
+    bool unbind_route(const godot::RID &entity);
     int route_of(const godot::RID &entity) const;
     godot::RID rid_from_route(int route) const;
 

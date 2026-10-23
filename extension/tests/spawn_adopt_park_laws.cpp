@@ -98,9 +98,9 @@ TEST_CASE(
 ) {
     netw_test::FaultWatch expected_faults;
     expected_faults.expect_warning(
-        "[warn][spawn] Route 1 was dropped, because the node the "
-        "server named for it never appeared on this peer. Build the"
-        " same scene tree on every peer.",
+        "[warn][spawn] 'Shared' at Shared exists on the server but not on "
+        "this peer. Place it in the same scene on every peer, or spawn it "
+        "with Netw.spawn.",
         1
     );
 
@@ -116,6 +116,56 @@ TEST_CASE(
     NETW_CHECK_EQ(counter_of(rig, 0, "spawn_park_expired"), int64_t(1));
     NETW_CHECK_EQ(counter_of(rig, 0, "drops_spawn_unresolved"), int64_t(1));
     NETW_CHECK_EQ(int64_t(rig.spawn_plane(0)->get_park().size()), int64_t(0));
+}
+
+constexpr const char *PLACED_ENTITY = R"(extends Node2D
+
+func _init() -> void:
+	Netw.configure_entity(self)
+)";
+
+Node *placed_level(LoopbackRig &p_rig, int p_client, bool p_with_crate) {
+    Node *level = netw_test::scripted_root(PLACED_ENTITY, "Level");
+    Node2D *props = memnew(Node2D);
+    props->set_name("Props");
+    level->add_child(props);
+    props->set_owner(level);
+    if (p_with_crate) {
+        Node *crate = netw_test::scripted_root(PLACED_ENTITY, "Crate");
+        props->add_child(crate);
+        crate->set_owner(level);
+    }
+    p_rig.branch(p_client)->add_child(level);
+    level->set_owner(p_rig.branch(p_client));
+    return level;
+}
+
+TEST_CASE(
+    "[Networked][Spawn][SceneTree] a placed entity the receiver lacks is "
+    "reported by its name and its path from the session root, and the rest "
+    "of its level still binds"
+) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][spawn] 'Crate' at Level/Props/Crate exists on the server but "
+        "not on this peer. Place it in the same scene on every peer, or spawn "
+        "it with Netw.spawn.",
+        1
+    );
+
+    LoopbackRig rig(1);
+    rig.mount();
+    netw_test::flow_clocks(rig, TICKRATE);
+    rig.spawn_plane(0)->set_park_timeout_seconds(0.2);
+
+    Node *hosted = placed_level(rig, -1, true);
+    Node *seated = placed_level(rig, 0, false);
+    rig.step_ticks(12);
+
+    const int64_t route = netw::NetwEntity::of(hosted)->get_route();
+    REQUIRE(route > 0);
+    NETW_CHECK_EQ(netw::NetwEntity::of(seated)->get_route(), route);
+    NETW_CHECK_EQ(counter_of(rig, 0, "spawn_park_expired"), int64_t(1));
 }
 
 TEST_CASE(

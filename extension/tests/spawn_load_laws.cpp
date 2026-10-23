@@ -25,7 +25,6 @@ constexpr int SETTLE = 4;
 
 enum Recipe {
     SCENE_ROOT,
-    REPLICATED,
     FROM_SPAWNER,
 };
 
@@ -33,8 +32,6 @@ const char *recipe_name(Recipe p_recipe) {
     switch (p_recipe) {
         case SCENE_ROOT:
             return "a scene root";
-        case REPLICATED:
-            return "Netw.replicate";
         case FROM_SPAWNER:
             return "a MultiplayerSpawner scene";
     }
@@ -129,12 +126,7 @@ struct LoadStand {
         }
         Node *root = level->instantiate();
         root->set_name(p_name);
-        if (recipe == REPLICATED) {
-            REQUIRE(rig.spawn_plane()->replicate(root, {}).is_valid());
-            rig.branch(-1)->add_child(root);
-        } else {
-            world.arena(-1)->add_child(root, true);
-        }
+        world.arena(-1)->add_child(root, true);
         return root;
     }
 
@@ -177,7 +169,7 @@ TEST_CASE(
     "waits for it past every park deadline, and its children arrive under it "
     "once it loads, built by a spawn function that finds it ready"
 ) {
-    const Recipe RECIPES[] = {SCENE_ROOT, REPLICATED, FROM_SPAWNER};
+    const Recipe RECIPES[] = {SCENE_ROOT, FROM_SPAWNER};
     for (const Recipe recipe : RECIPES) {
         INFO(doctest::String(recipe_name(recipe)));
         LoadStand stand(recipe);
@@ -210,7 +202,7 @@ TEST_CASE(
     for (const char *ending : ENDINGS) {
         INFO(doctest::String(ending));
         const bool lost = String(ending) == "server lost";
-        LoadStand stand(REPLICATED, lost);
+        LoadStand stand(FROM_SPAWNER, lost);
         const Loading loading = stand.spawn();
         if (String(ending) == "despawned") {
             stand.despawn(loading.root);
@@ -238,7 +230,7 @@ TEST_CASE(
     "[Networked][Spawn] LC6 a scene that fails to load drops its spawn with "
     "one warning, and its children with it"
 ) {
-    LoadStand stand(REPLICATED);
+    LoadStand stand(FROM_SPAWNER);
     const Loading loading = stand.spawn();
     const FaultWatch watch;
 
@@ -259,7 +251,7 @@ TEST_CASE(
     "[Networked][Spawn] LC7 a scene stays loaded while an entity built from "
     "it lives, so a second spawn of it builds at once"
 ) {
-    LoadStand stand(REPLICATED);
+    LoadStand stand(FROM_SPAWNER);
     const Loading first = stand.spawn(false);
     stand.loads.finish();
     stand.rig.pump(SETTLE);

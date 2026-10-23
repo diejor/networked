@@ -252,6 +252,52 @@ TEST_CASE(
     CHECK_FALSE(published);
 }
 
+Node *build_named(const String &p_name) {
+    Node *made = memnew(Node);
+    made->set_name(p_name);
+    return made;
+}
+
+Node *spawn_named(NetwMultiplayer *p_server, const char *p_name) {
+    Array args;
+    args.push_back(String(p_name));
+    const RID spawned
+        = p_server->spawn_registered(StringName("named"), args, nullptr);
+    Node *node = p_server->entity_get_node(spawned);
+    REQUIRE(node != nullptr);
+    return node;
+}
+
+TEST_CASE(
+    "[Networked][Spawn][SceneTree] SM9 a spawned node still out of the tree "
+    "a tick later is reported once, and one added in time is not"
+) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][spawn] Netw.spawn returned 'Late' but it never entered the "
+        "tree. Add it before the next tick.",
+        1
+    );
+    netw_test::LoopbackRig rig(0);
+    rig.mount();
+    NetwMultiplayer *server = rig.server();
+    Array types;
+    types.push_back(int(Variant::STRING));
+    rig.register_constructor(
+        server,
+        StringName("named"),
+        callable_mp_static(&build_named),
+        types
+    );
+
+    Node *late = spawn_named(server, "Late");
+    Node *kept = spawn_named(server, "Kept");
+    rig.branch(-1)->add_child(kept);
+    rig.step_ticks(4);
+    rig.branch(-1)->add_child(late);
+    rig.step_ticks(2);
+}
+
 uint64_t built_crate = 0;
 
 Node *build_crate(int64_t p_slot) {

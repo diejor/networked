@@ -1,0 +1,8 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/support/placed_crate.gd" id="1_crate"]
+
+[node name="CrateLevel" type="Node2D"]
+
+[node name="Crate" type="Node2D" parent="."]
+script = ExtResource("1_crate")

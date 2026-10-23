@@ -50,7 +50,6 @@ private:
     int64_t parent_route = 0;
     int32_t recipe = 0;
     int32_t scene_index = -1;
-    godot::String scene_path;
     godot::String node_name;
     godot::StringName fn_method;
     godot::StringName fn_registry_id;
@@ -160,12 +159,6 @@ public:
     }
     int get_scene_index() const {
         return scene_index;
-    }
-    void set_scene_path(const godot::String &value) {
-        scene_path = value;
-    }
-    godot::String get_scene_path() const {
-        return scene_path;
     }
     void set_node_name(const godot::String &value) {
         node_name = value;

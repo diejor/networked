@@ -109,6 +109,7 @@
 			<param index="0" name="node" type="Node" />
 			<description>
 				Declares [param node] as a root before it enters the tree.
+				A node placed in a scene that every peer opens needs no [method spawn]. Every peer finds it by its path from [member NetwSession.root], and a peer that does not have it reports it by name and path.
 				[method NetwEntity.of] finds an existing [NetwEntity].
 			</description>
 		</method>
@@ -188,7 +189,6 @@
 				func _init() -&gt; void:
 				    Netw.configure_scene(self).labeled(&amp;"Arena")
 				[/codeblock]
-				A declared scene placed in the editor as a child of the session's root is freed when the session starts, and the server spawns it from its file.
 			</description>
 		</method>
 		<method name="configure_schema" qualifiers="static">
@@ -282,7 +282,7 @@
 			<param index="0" name="node" type="Node" />
 			<param index="1" name="opts" type="NetwDespawnOpts" default="null" />
 			<description>
-				Removes the node [method spawn] or [method replicate] made, on every peer.
+				Removes the node [method spawn] or [method spawn_player] made, on every peer.
 				[codeblock]
 				Netw.despawn(bullet)
 				[/codeblock]
@@ -357,21 +357,6 @@
 				Unlike [method Node.reparent], it does not fire [Area3D] and [Area2D] enter and exit signals during the move, which works around [url=https://github.com/godotengine/godot/issues/14578]this issue[/url]. Otherwise [method Node.reparent] works fine.
 				The promise fails with [constant @GlobalScope.ERR_DOES_NOT_EXIST] when [param node] has no entity, and [constant @GlobalScope.ERR_UNAVAILABLE] outside a session.
 				A client can call it when its player is the [member NetwEntity.controller] and [member NetwEntity.lifecycle] is [constant NetwEntity.LIFECYCLE_CONTROLLER]. The node moves on that client at once, and moves back if the server refuses.
-			</description>
-		</method>
-		<method name="replicate" qualifiers="static">
-			<return type="NetwEntity" />
-			<param index="0" name="node" type="Node" />
-			<param index="1" name="owner" type="NetwPlayer" default="null" />
-			<description>
-				Spawns [param node] on every peer from its [member Node.scene_file_path], and returns its [NetwEntity]. Call it before adding [param node] to the tree. Peers receive it when it enters the tree, so set its starting values in between.
-				[codeblock]
-				var avatar := PlayerScene.instantiate()
-				var entity := Netw.replicate(avatar, player)
-				avatar.position = spawn_point
-				scene.add_child(avatar)
-				[/codeblock]
-				A client can call it without [param owner] when [param node] sets [member NetwEntity.lifecycle] to [constant NetwEntity.LIFECYCLE_CONTROLLER]. That client's player becomes its [member NetwEntity.controller].
 			</description>
 		</method>
 		<method name="request" qualifiers="vararg static">
@@ -590,6 +575,8 @@
 				muzzle.add_child(Netw.spawn(_spawn_bullet, dir, 2))
 				[/codeblock]
 				Register [param fn] with [method configure_spawn] first, and add the node to the tree before the next tick.
+				The entity has no [member NetwEntity.player], so it stays when any player leaves. [method spawn_player] makes one that is despawned with its player.
+				A client can call it when the node sets [member NetwEntity.lifecycle] to [constant NetwEntity.LIFECYCLE_CONTROLLER]. That client's player becomes its [member NetwEntity.controller].
 				[param fn] must return the node without waiting. Load a scene that takes a while on every peer first with [method request_all].
 				[codeblock]
 				var loads := Netw.request_all(preload_level, path)

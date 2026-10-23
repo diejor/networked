@@ -146,10 +146,6 @@ public:
         const godot::StringName &p_name
     );
 
-    static godot::Ref<NetwEntity> replicate(
-        godot::Node *p_node,
-        const godot::Ref<NetwPlayer> &p_owner
-    );
     static godot::Node *spawn(
         const godot::Callable &p_fn,
         const godot::Array &p_args

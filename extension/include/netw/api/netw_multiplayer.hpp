@@ -740,7 +740,6 @@ private:
     bool scene_player_display_pending = false;
     godot::RID scene_presentation;
     bool scene_presentation_split_warned = false;
-    godot::HashSet<uint64_t> scene_unwrapped_warned;
     bool scene_constructor_registered = false;
     godot::HashMap<godot::StringName, godot::RID> table_by_name;
     godot::HashMap<int64_t, godot::RID> table_schema;
@@ -854,8 +853,6 @@ private:
     bool embed_disposing = false;
     void embed_set_phase(EmbedPhase p_phase);
     void embed_settle_on_first_poll();
-    godot::Node *embed_declared_child();
-    void scene_adopt_bare_level(godot::Node *p_level);
     godot::Callable session_root_reader;
     mutable godot::ObjectID session_root_last_live;
     struct SessionSettings {
@@ -2603,7 +2600,6 @@ public:
         godot::Object *p_parent,
         const godot::String &p_name
     );
-    godot::Node *spawn_build_scene(const godot::Variant &p_packed);
     godot::Node *spawn_build_spawner(
         godot::Object *p_spawner,
         int64_t p_index,
@@ -4636,8 +4632,6 @@ public:
         const godot::Array &p_args
     );
 
-    godot::RID entity_replicate(godot::Object *p_node, godot::Object *p_owner);
-
     godot::RID spawn_fn(
         const godot::Callable &p_function,
         const godot::Array &p_args,
@@ -4670,6 +4664,8 @@ public:
         NetwMultiplayer *p_session,
         bool p_is_authority
     );
+    void entity_publish_placed();
+    void entity_demote_placed();
 
     ReplicationCore *get_replication_plane() const;
     void replication_flush_all_buffers();
@@ -4813,7 +4809,6 @@ public:
     void scene_presentation_settle();
     void scene_register_constructor();
     void scene_root_online(godot::Node *p_root);
-    void scene_warn_unwrapped(godot::Node *p_root);
     void scene_root_offline(godot::Object *p_root);
     godot::Node *scene_containing(godot::Node *p_node);
     godot::Node *scene_spawn(

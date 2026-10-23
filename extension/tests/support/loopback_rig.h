@@ -896,6 +896,15 @@ public:
         REQUIRE_MESSAGE(scenes != nullptr, "the session has no scene core");
         godot::Node *root = node_of(entity_of(p_name));
         REQUIRE_MESSAGE(root != nullptr, "the scene has no root");
+        for (const godot::KeyValue<godot::StringName, godot::RID> &held :
+             declared) {
+            godot::Node *placed = node_of(held.value);
+            if (placed != nullptr && scenes->scene_is_declared(held.value)
+                && placed->get_parent() != nullptr
+                && placed->get_owner() == nullptr) {
+                placed->set_owner(placed->get_parent());
+            }
+        }
         scenes->scene_root_online(root);
         pump();
         return scenes;

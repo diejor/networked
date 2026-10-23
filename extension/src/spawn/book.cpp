@@ -207,8 +207,6 @@ namespace {
 String recipe_base(const Record *record, const Node *node) {
     if (record != nullptr) {
         switch (Book::Recipe(record->get_recipe())) {
-            case Book::RECIPE_SCENE:
-                return record->get_scene_path().get_file().get_basename();
             case Book::RECIPE_FN:
                 return String(record->get_fn_method());
             case Book::RECIPE_FN_REGISTRY:
@@ -258,8 +256,6 @@ Book::Received Book::received_of(const Record &record) {
         case RECIPE_ADOPT:
             out.source = gd::instance_id(record.origin());
             break;
-        case RECIPE_SCENE:
-            break;
     }
     return out;
 }
@@ -290,11 +286,6 @@ bool Book::take_recv(int64_t route, Record &out) {
     out.set_scene_index(recipe.scene_index);
     out.bind_node(node);
     switch (Recipe(recipe.recipe)) {
-        case RECIPE_SCENE:
-            if (node != nullptr) {
-                out.set_scene_path(node->get_scene_file_path());
-            }
-            break;
         case RECIPE_FN:
             out.bind_fn_host(source);
             out.set_fn_method(recipe.fn);
@@ -378,16 +369,6 @@ LocalVector<ObjectID> Book::session_nodes() const {
         }
     }
     return out;
-}
-
-bool Book::armed_scene_path(ObjectID p_node, String &r_path) const {
-    for (const KeyValue<int64_t, Record> &row : armed) {
-        if (row.value.get_node_id() == p_node) {
-            r_path = row.value.get_scene_path();
-            return true;
-        }
-    }
-    return false;
 }
 
 void Book::clear() {

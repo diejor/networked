@@ -144,6 +144,12 @@ TEST_CASE(
     "branch is never booked by that session, and its own session books it "
     "again once it is back"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][spawn] 'Wanderer' was added to the tree without Netw.spawn, "
+        "so no other peer has it. Spawn it with Netw.spawn.",
+        1
+    );
     LoopbackRig rig(1);
     rig.mount();
     Node *node = memnew(Node);

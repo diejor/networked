@@ -596,7 +596,7 @@ public:
             default: {
                 close_seats();
                 seen.orphan_warnings = faults->warnings_containing(
-                    "was replicated but never entered the tree"
+                    "but it never entered the tree"
                 );
                 delete faults;
                 faults = nullptr;
@@ -701,8 +701,8 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Session][Frame] SR9 a replicated node that never entered the "
-    "tree is reported once when the session ends"
+    "[Networked][Session][Frame] SR9 a spawned node that never entered the "
+    "tree is reported once, though the session then ends"
 ) {
     NETW_CHECK_EQ(driven().orphan_warnings, 1);
 }

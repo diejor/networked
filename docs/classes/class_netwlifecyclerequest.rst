@@ -84,7 +84,7 @@ enum **Kind**: :ref:`🔗<enum_NetwLifecycleRequest_Kind>`
 
 :ref:`Kind<enum_NetwLifecycleRequest_Kind>` **KIND_SPAWN** = ``0``
 
-The controller spawned the entity with :ref:`Netw.spawn()<class_Netw_method_spawn>` or :ref:`Netw.replicate()<class_Netw_method_replicate>`.
+The controller spawned the entity with :ref:`Netw.spawn()<class_Netw_method_spawn>`.
 
 .. _class_NetwLifecycleRequest_constant_KIND_DESPAWN:
 

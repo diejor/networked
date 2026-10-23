@@ -528,8 +528,12 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "configure_entity", 1743742259UL);
 
     /// <summary>
-    /// Declares <paramref name="node"/> as a root before it enters the tree.
-    /// <see cref="NetwEntity.Of"/> finds an existing <see cref="NetwEntity"/>.
+    /// Declares <paramref name="node"/> as a root before it enters the tree. A
+    /// node placed in a scene that every peer opens needs no
+    /// <see cref="Netw.Spawn"/>. Every peer finds it by its path from
+    /// <see cref="NetwSession.Root"/>, and a peer that does not have it reports
+    /// it by name and path. <see cref="NetwEntity.Of"/> finds an existing
+    /// <see cref="NetwEntity"/>.
     /// </summary>
     public static NetwEntity ConfigureEntity(Node node)
     {
@@ -1186,42 +1190,6 @@ public sealed class Netw : NetwRefCounted
         return result;
     }
 
-    private static readonly IntPtr _bindReplicate =
-        NetwApi.MethodBind("Netw", "replicate", 707187235UL);
-
-    /// <summary>
-    /// Spawns <paramref name="node"/> on every peer from its
-    /// <see cref="Node.SceneFilePath"/>, and returns its
-    /// <see cref="NetwEntity"/>. Call it before adding <paramref name="node"/>
-    /// to the tree. Peers receive it when it enters the tree, so set its
-    /// starting values in between.
-    /// <code>
-    /// var avatar := PlayerScene.instantiate()
-    /// var entity := Netw.replicate(avatar, player)
-    /// avatar.position = spawn_point
-    /// scene.add_child(avatar)
-    /// </code>
-    /// <para>
-    /// A client can call it without <paramref name="owner"/> when
-    /// <paramref name="node"/> sets <see cref="NetwEntity.Lifecycle"/> to
-    /// <see cref="NetwEntity.LifecycleEnum.Controller"/>. That client's player
-    /// becomes its <see cref="NetwEntity.Controller"/>.
-    /// </para>
-    /// </summary>
-    public static NetwEntity Replicate(Node node, NetwPlayer owner = null)
-    {
-        IntPtr slot0 = node?.NativeInstance ?? IntPtr.Zero;
-        IntPtr slot1 = owner?.Native ?? IntPtr.Zero;
-        IntPtr answered = default;
-        NetwThunks.Ptrcall2_IntPtr_IntPtr_IntPtr(
-            _bindReplicate,
-            IntPtr.Zero,
-            in slot0,
-            in slot1,
-            ref answered);
-        return NetwEntity.Adopt(answered);
-    }
-
     private static readonly IntPtr _bindSpawn =
         NetwApi.MethodBind("Netw", "spawn", 3345110683UL);
 
@@ -1233,10 +1201,15 @@ public sealed class Netw : NetwRefCounted
     /// </code>
     /// <para>
     /// Register <paramref name="fn"/> with <see cref="Netw.ConfigureSpawn"/>
-    /// first, and add the node to the tree before the next tick.
-    /// <paramref name="fn"/> must return the node without waiting. Load a scene
-    /// that takes a while on every peer first with
-    /// <see cref="Netw.RequestAll"/>.
+    /// first, and add the node to the tree before the next tick. The entity has
+    /// no <see cref="NetwEntity.Player"/>, so it stays when any player leaves.
+    /// <see cref="Netw.SpawnPlayer"/> makes one that is despawned with its
+    /// player. A client can call it when the node sets
+    /// <see cref="NetwEntity.Lifecycle"/> to
+    /// <see cref="NetwEntity.LifecycleEnum.Controller"/>. That client's player
+    /// becomes its <see cref="NetwEntity.Controller"/>. <paramref name="fn"/>
+    /// must return the node without waiting. Load a scene that takes a while on
+    /// every peer first with <see cref="Netw.RequestAll"/>.
     /// <code>
     /// var loads := Netw.request_all(preload_level, path)
     /// await loads.wait()
@@ -1363,7 +1336,7 @@ public sealed class Netw : NetwRefCounted
 
     /// <summary>
     /// Removes the node <see cref="Netw.Spawn"/> or
-    /// <see cref="Netw.Replicate"/> made, on every peer.
+    /// <see cref="Netw.SpawnPlayer"/> made, on every peer.
     /// <code>
     /// Netw.despawn(bullet)
     /// </code>
@@ -1644,11 +1617,6 @@ public sealed class Netw : NetwRefCounted
     /// func _init() -&gt; void:
     ///     Netw.configure_scene(self).labeled(&amp;"Arena")
     /// </code>
-    /// <para>
-    /// A declared scene placed in the editor as a child of the session's root
-    /// is freed when the session starts, and the server spawns it from its
-    /// file.
-    /// </para>
     /// </summary>
     public static NetwSceneConfig ConfigureScene(Node node)
     {

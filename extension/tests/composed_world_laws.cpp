@@ -154,14 +154,6 @@ void drop(Node *p_mount) {
     memdelete(p_mount);
 }
 
-Node *a_declared_level() {
-    const Ref<PackedScene> packed = netw::gd::load_scene(String(LEVEL_PATH));
-    REQUIRE(packed.is_valid());
-    Node *level = packed->instantiate();
-    REQUIRE(level != nullptr);
-    return level;
-}
-
 RID first_scene(NetwMultiplayer *p_session) {
     const TypedArray<RID> held = p_session->scene_list();
     return held.is_empty() ? RID() : RID(held[0]);
@@ -242,9 +234,14 @@ struct ComposedWorld {
         NETW_CHECK_EQ(int(seven->embed_settle()), int(OK));
         NETW_CHECK_EQ(int(nine->embed_settle()), int(OK));
 
-        Node *level = a_declared_level();
-        held->add_child(level);
         NETW_CHECK_EQ(int(host->embed_settle()), int(OK));
+        REQUIRE(
+            host->scene_spawn(
+                String(LEVEL_PATH),
+                NetwMultiplayer::SCENE_ISOLATION_NONE
+            )
+            != nullptr
+        );
         stand.step_ticks(6);
 
         REQUIRE(stand.join(SERVER, StringName("one")).is_valid());
@@ -373,7 +370,7 @@ Node *route_node_at(NetwMultiplayer *p_session, int64_t p_route) {
 
 TEST_CASE(
     "[Networked][Session][SceneTree] CW1 the server admits two members, "
-    "adopts one world and publishes it to both, so the world every peer "
+    "opens one world and publishes it to both, so the world every peer "
     "presents is the one the server holds"
 ) {
     ComposedWorld cw;

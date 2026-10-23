@@ -206,8 +206,8 @@ TEST_CASE(
     unrevised.payload_revision = 0;
     NETW_CHECK_EQ(identity_of(unrevised), identity_of(probe()));
 
-    const bool the_format_is_v12 = netw::wire::FORMAT_VERSION == 12;
-    CHECK(the_format_is_v12);
+    const bool the_format_is_v13 = netw::wire::FORMAT_VERSION == 13;
+    CHECK(the_format_is_v13);
 }
 
 TEST_CASE(

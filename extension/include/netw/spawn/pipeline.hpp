@@ -45,7 +45,6 @@ struct SpawnFrame {
     godot::Dictionary parent_anchor;
     bool moved_from_origin = false;
     godot::Dictionary origin_anchor;
-    godot::String scene_path;
     godot::Dictionary spawner_anchor;
     int64_t scene_index = 0;
     godot::PackedByteArray custom;
@@ -117,6 +116,13 @@ private:
     godot::HashMap<godot::StringName, godot::Array> constructor_schemas;
     godot::HashMap<int64_t, int64_t> first_recipients;
     godot::HashMap<int64_t, godot::String> scene_holds;
+    godot::HashSet<uint64_t> refused_placed;
+    godot::HashSet<int64_t> placed_before_host;
+    struct Unadded {
+        godot::ObjectID node;
+        int64_t armed_at_ticks_run = 0;
+    };
+    godot::HashMap<int64_t, Unadded> unadded;
     bool host_fn_waited = false;
 
     int64_t drops_spawn_bad_sender = 0;
@@ -192,6 +198,9 @@ private:
     );
     bool is_booked(int64_t p_route) const;
     void publish_nested(godot::Node *p_node);
+    void note_placed_before_host(int64_t p_route);
+    void publish_placed(godot::Node *p_node, int64_t p_route);
+    godot::String adopt_place_of(const godot::PackedByteArray &p_payload);
     void reconcile_nested(int64_t p_owner_route);
     void reconcile_nested_child(int64_t p_route);
     void settle_move(int64_t p_route, int64_t p_author = 0);
@@ -239,7 +248,6 @@ private:
         godot::Object *p_parent,
         const godot::String &p_name
     );
-    godot::Node *build_scene(const godot::Variant &p_packed);
     godot::Node *build_spawner(
         godot::Object *p_spawner,
         int64_t p_index,
@@ -357,6 +365,10 @@ public:
     bool reveals_action_gates() const {
         return revealing_action_gates;
     }
+    bool awaits_unadded() const {
+        return !unadded.is_empty();
+    }
+    void report_unadded(int64_t p_ticks_run);
     void set_park_timeout_seconds(double p_seconds) {
         park_timeout_seconds = p_seconds;
     }
@@ -415,10 +427,6 @@ public:
     void retry_adopt_parked();
     void retry_load_parked();
 
-    godot::Ref<NetwEntity> replicate(
-        godot::Node *p_node,
-        const godot::Ref<NetwPlayer> &p_owner
-    );
     godot::Node *spawn(
         const godot::Callable &p_fn,
         const godot::Array &p_args,
@@ -461,15 +469,6 @@ public:
         return spawn_state_asked;
     }
 #endif
-
-    static bool put_scene_recipe(
-        wire::WriteStream &p_stream,
-        const godot::String &p_path
-    );
-    static bool get_scene_recipe(
-        wire::ReadStream &p_stream,
-        godot::String &r_path
-    );
 
     godot::PackedByteArray encode_spawn_frame(
         int64_t p_route,

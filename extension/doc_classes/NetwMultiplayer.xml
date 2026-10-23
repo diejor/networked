@@ -882,7 +882,7 @@
 			<return type="RID" />
 			<param index="0" name="root" type="Object" />
 			<description>
-				Replicates a node that is already in the scene tree, and returns its entity. Returns an invalid [RID] on failure. Use [method entity_replicate] for a node that is not in the tree yet.
+				Replicates a node that is already in the scene tree, and returns its entity. Returns an invalid [RID] on failure. Use [method spawn_registered] for a node that is not in the tree yet.
 			</description>
 		</method>
 		<method name="entity_bind_node">
@@ -1040,14 +1040,6 @@
 			<param index="0" name="node" type="Object" />
 			<description>
 				Returns the entity of [param node] or of its closest ancestor that has one.
-			</description>
-		</method>
-		<method name="entity_replicate">
-			<return type="RID" />
-			<param index="0" name="node" type="Object" />
-			<param index="1" name="owner" type="Object" default="null" />
-			<description>
-				Replicates [param node] and returns its entity, or an invalid [RID] on failure. Call it before [param node] enters the tree. Use [method entity_adopt] for a node already in the tree.
 			</description>
 		</method>
 		<method name="event_arm">

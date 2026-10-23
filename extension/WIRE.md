@@ -1,7 +1,7 @@
-# WIRE v12, the carrier format
+# WIRE v13, the carrier format
 
 The byte layout of every datagram, frame and payload Networked writes.
-`FORMAT_VERSION` is 12. `src/wire/registry.cpp` is the one declaration of the
+`FORMAT_VERSION` is 13. `src/wire/registry.cpp` is the one declaration of the
 channel table and `tools/wire_decode.py` reads a capture against this page.
 
 ---
@@ -630,13 +630,11 @@ SPAWN
 [control_hold bits 2]             NONE SOFT EXCLUSIVE
 [declares_scene bool1][scene_label string iff]
 [node_name string]
-[recipe int_range 0..4]           ADOPT SCENE SPAWNER FN_REGISTRY FN
+[recipe int_range 1..4]           FN SPAWNER ADOPT FN_REGISTRY
 [parent_is_spawn_target bool1]    set only on SPAWNER
 [parent anchor]                   iff parent_is_spawn_target = 0
 recipe body
   ADOPT        [moved bool1][origin anchor iff moved]
-  SCENE        [by_uid bool1]
-               [uid bits 64 iff by_uid][scene string iff not by_uid]
   SPAWNER      [spawner anchor]
                [scene_index varuint 3]   index + 1, so 0 is custom data
                [custom bytes_capped 4095 iff scene_index = 0]
@@ -685,7 +683,7 @@ applied from a frame that did not decode to exhaustion.
 A SPAWN also travels from a client to the server, and to the server alone, for
 an entity that declares `LIFECYCLE_CONTROLLER`. The layout is the same. The
 route comes from the lease of section 16, `controller` names the client, and
-the recipe is SCENE, FN_REGISTRY or FN. The client holds its copy as one the
+the recipe is FN_REGISTRY or FN. The client holds its copy as one the
 server sent it. The server admits the frame only for a route that client still
 holds in its lease, and spends it. It builds its own copy from the recipe and
 arguments, applies the spawn state and rules on that copy before it enters the
@@ -1196,7 +1194,7 @@ after    capture records back to back, to the end of the file
 
 ```text
 header
-┠╴format      the format version, an integer, 11 on this branch
+┠╴format      the format version, an integer, 13 on this branch
 ┠╴identity    the channel table's 63 bit fold, the number a JOIN carries
 ┠╴peer        the unique id this peer held when its first datagram moved
 ┠╴started     the process wall clock, in milliseconds, at that same moment
@@ -1236,7 +1234,7 @@ column list no `describe()` layout carries.
 
 `format` decides how the first byte of each datagram is read and whether a
 REPLY carries the failed bit, and nothing else in the file depends on it, so
-`tools/wire_decode.py` reads a v10, v11 or v12 capture without being told which
+`tools/wire_decode.py` reads a v10, v11, v12 or v13 capture without being told which
 it holds.
 
 The armed path is claimed once per process by the first session to move a

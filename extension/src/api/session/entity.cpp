@@ -483,6 +483,82 @@ void NetwMultiplayer::entity_enter_tree(
     }
 }
 
+void NetwMultiplayer::entity_demote_placed() {
+    spawn::Pipeline *pipeline = spawn_plane();
+    if (is_host() || pipeline == nullptr) {
+        return;
+    }
+    const auto booked_at = [pipeline](Node *p_node) {
+        const NetwEntity *held
+            = Object::cast_to<NetwEntity>(tree::entity_object_at(p_node));
+        return held != nullptr && held->get_route() > 0
+            && pipeline->is_booked(held->get_route());
+    };
+    LocalVector<Ref<NetwEntity>> placed;
+    for (const KeyValue<uint64_t, Ref<NetwEntity>> &held : entity_book) {
+        const Ref<NetwEntity> &entity = held.value;
+        Node *owner = entity.is_valid() ? entity->get_owner() : nullptr;
+        if (owner == nullptr || entity->get_route() <= 0
+            || entity->get_stage() != int64_t(entity::Stage::LIVE)) {
+            continue;
+        }
+        bool booked = false;
+        for (Node *at = owner; at != nullptr && !booked;
+             at = at->get_parent()) {
+            booked = booked_at(at);
+        }
+        if (!booked) {
+            placed.push_back(entity);
+        }
+    }
+    for (const Ref<NetwEntity> &entity : placed) {
+        Node *owner = entity->get_owner();
+        const int64_t route = entity->get_route();
+        liveness_core->unbind_route(entity->get_rid_handle());
+        if (entity->get_name()
+            == spawn::Book::default_entity_id(nullptr, owner, route)) {
+            entity->set_name(StringName());
+        }
+        entity->set_route(0);
+    }
+}
+
+void NetwMultiplayer::entity_publish_placed() {
+    if (!is_host()) {
+        return;
+    }
+    LocalVector<Ref<NetwEntity>> live;
+    for (const KeyValue<uint64_t, Ref<NetwEntity>> &held : entity_book) {
+        if (held.value.is_valid()
+            && held.value->get_stage() == int64_t(entity::Stage::LIVE)) {
+            live.push_back(held.value);
+        }
+    }
+    for (const Ref<NetwEntity> &entity : live) {
+        Node *owner = entity->get_owner();
+        if (owner == nullptr || !owner->is_inside_tree()) {
+            continue;
+        }
+        int64_t route = entity->get_route();
+        if (route == 0) {
+            route = liveness_allocate_route(entity.ptr());
+            entity->set_route(route);
+        }
+        if (route <= 0) {
+            continue;
+        }
+        if (entity->get_name() == StringName()) {
+            entity->set_name(
+                spawn::Book::default_entity_id(nullptr, owner, route)
+            );
+        }
+        if (spawn::Pipeline *pipeline = spawn_plane()) {
+            pipeline->note_placed_before_host(route);
+        }
+        spawn_note_nested_candidate(route);
+    }
+}
+
 Node *NetwMultiplayer::entity_component_node(
     const RID &p_entity,
     int64_t p_comp

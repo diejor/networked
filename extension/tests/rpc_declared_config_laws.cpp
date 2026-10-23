@@ -111,6 +111,7 @@ Seated seat_star(LoopbackRig &p_rig, const Ref<Script> &p_script) {
     );
 
     p_rig.branch(-1)->add_child(made.hub);
+    made.hub->set_owner(p_rig.branch(-1));
     Node *seats[2] = {nullptr, nullptr};
     for (int index = 0; index < 2; ++index) {
         seats[index] = a_sink(p_script);

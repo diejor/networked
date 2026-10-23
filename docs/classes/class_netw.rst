@@ -77,8 +77,6 @@ Methods
    +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwPromise<class_NetwPromise>`                             | :ref:`reparent<class_Netw_method_reparent>`\ (\ node\: :godot:`Node`, new_parent\: :godot:`Node`\ ) |static|                                                                                            |
    +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwEntity<class_NetwEntity>`                               | :ref:`replicate<class_Netw_method_replicate>`\ (\ node\: :godot:`Node`, owner\: :ref:`NetwPlayer<class_NetwPlayer>` = null\ ) |static|                                                                  |
-   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwPromise<class_NetwPromise>`                             | :ref:`request<class_Netw_method_request>`\ (\ callable\: :godot:`Callable`, ...\ ) |vararg| |static|                                                                                                    |
    +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwGroupPromise<class_NetwGroupPromise>`                   | :ref:`request_all<class_Netw_method_request_all>`\ (\ callable\: :godot:`Callable`, ...\ ) |vararg| |static|                                                                                            |
@@ -265,6 +263,8 @@ Declares what the other peers do with ``node`` when :ref:`despawn()<class_Netw_m
 
 Declares ``node`` as a root before it enters the tree.
 
+A node placed in a scene that every peer opens needs no :ref:`spawn()<class_Netw_method_spawn>`. Every peer finds it by its path from :ref:`NetwSession.root<class_NetwSession_property_root>`, and a peer that does not have it reports it by name and path.
+
 \ :ref:`NetwEntity.of()<class_NetwEntity_method_of>` finds an existing :ref:`NetwEntity<class_NetwEntity>`.
 
 .. rst-class:: classref-item-separator
@@ -380,8 +380,6 @@ Makes ``node`` a multiplayer scene. Players only see its children while they are
 
     func _init() -> void:
         Netw.configure_scene(self).labeled(&"Arena")
-
-\ A declared scene placed in the editor as a child of the session's root is freed when the session starts, and the server spawns it from its file.
 
 .. rst-class:: classref-item-separator
 
@@ -518,7 +516,7 @@ Picks which :ref:`NetwEntity<class_NetwEntity>` instances outlive a server trans
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **despawn**\ (\ node\: :godot:`Node`, opts\: :ref:`NetwDespawnOpts<class_NetwDespawnOpts>` = null\ ) |static| :ref:`🔗<class_Netw_method_despawn>`
 
-Removes the node :ref:`spawn()<class_Netw_method_spawn>` or :ref:`replicate()<class_Netw_method_replicate>` made, on every peer.
+Removes the node :ref:`spawn()<class_Netw_method_spawn>` or :ref:`spawn_player()<class_Netw_method_spawn_player>` made, on every peer.
 
 ::
 
@@ -629,27 +627,6 @@ Moves ``node`` under ``new_parent`` like :godot:`Node.reparent() <Node#class_Nod
 The promise fails with :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>` when ``node`` has no entity, and :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>` outside a session.
 
 A client can call it when its player is the :ref:`NetwEntity.controller<class_NetwEntity_property_controller>` and :ref:`NetwEntity.lifecycle<class_NetwEntity_property_lifecycle>` is :ref:`NetwEntity.LIFECYCLE_CONTROLLER<class_NetwEntity_constant_LIFECYCLE_CONTROLLER>`. The node moves on that client at once, and moves back if the server refuses.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_Netw_method_replicate:
-
-.. rst-class:: classref-method
-
-:ref:`NetwEntity<class_NetwEntity>` **replicate**\ (\ node\: :godot:`Node`, owner\: :ref:`NetwPlayer<class_NetwPlayer>` = null\ ) |static| :ref:`🔗<class_Netw_method_replicate>`
-
-Spawns ``node`` on every peer from its :godot:`Node.scene_file_path <Node#class_Node_property_scene_file_path>`, and returns its :ref:`NetwEntity<class_NetwEntity>`. Call it before adding ``node`` to the tree. Peers receive it when it enters the tree, so set its starting values in between.
-
-::
-
-    var avatar := PlayerScene.instantiate()
-    var entity := Netw.replicate(avatar, player)
-    avatar.position = spawn_point
-    scene.add_child(avatar)
-
-\ A client can call it without ``owner`` when ``node`` sets :ref:`NetwEntity.lifecycle<class_NetwEntity_property_lifecycle>` to :ref:`NetwEntity.LIFECYCLE_CONTROLLER<class_NetwEntity_constant_LIFECYCLE_CONTROLLER>`. That client's player becomes its :ref:`NetwEntity.controller<class_NetwEntity_property_controller>`.
 
 .. rst-class:: classref-item-separator
 
@@ -944,6 +921,10 @@ Calls ``fn`` with the arguments after it on every peer, and returns the node it 
     muzzle.add_child(Netw.spawn(_spawn_bullet, dir, 2))
 
 \ Register ``fn`` with :ref:`configure_spawn()<class_Netw_method_configure_spawn>` first, and add the node to the tree before the next tick.
+
+The entity has no :ref:`NetwEntity.player<class_NetwEntity_property_player>`, so it stays when any player leaves. :ref:`spawn_player()<class_Netw_method_spawn_player>` makes one that is despawned with its player.
+
+A client can call it when the node sets :ref:`NetwEntity.lifecycle<class_NetwEntity_property_lifecycle>` to :ref:`NetwEntity.LIFECYCLE_CONTROLLER<class_NetwEntity_constant_LIFECYCLE_CONTROLLER>`. That client's player becomes its :ref:`NetwEntity.controller<class_NetwEntity_property_controller>`.
 
 \ ``fn`` must return the node without waiting. Load a scene that takes a while on every peer first with :ref:`request_all()<class_Netw_method_request_all>`.
 

@@ -96,8 +96,13 @@ inline FlowPair stand_flow_pair(
         p_name
     );
     p_rig.branch(-1)->add_child(pair.authored);
+    pair.authored->set_owner(p_rig.branch(-1));
     for (int index = 0; index < p_rig.count(); ++index) {
-        godot::Node2D *mirror = flow_body(p_script_path, p_name);
+        godot::Node2D *mirror = flow_body(
+            p_script_path,
+            binds_mirror(p_binding, index) ? p_name
+                                           : p_name + godot::String("Unbound")
+        );
         p_rig.branch(index)->add_child(mirror);
         pair.mirrors.push_back(mirror);
     }

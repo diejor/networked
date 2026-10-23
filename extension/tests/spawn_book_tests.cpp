@@ -263,10 +263,6 @@ TEST_CASE(
     "[Networked][Spawn][Hosted] a recipe names the stem an auto-assigned "
     "entity id is built from"
 ) {
-    Record scene = at(1);
-    scene.set_recipe(Book::RECIPE_SCENE);
-    scene.set_scene_path("res://levels/Arena.tscn");
-
     Record fn = at(2);
     fn.set_recipe(Book::RECIPE_FN);
     fn.set_fn_method(StringName("make_player"));
@@ -278,7 +274,6 @@ TEST_CASE(
     Node *node = memnew(Node);
     node->set_name("N");
     node->set_scene_file_path("res://x/Y.tscn");
-    CHECK(Book::default_entity_id(&scene, node, 7) == StringName("Arena@7"));
     CHECK(Book::default_entity_id(&fn, node, 7) == StringName("make_player@7"));
     CHECK(Book::default_entity_id(&registered, node, 7) == StringName("bot@7"));
     memdelete(node);

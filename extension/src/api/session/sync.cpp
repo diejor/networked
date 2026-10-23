@@ -490,23 +490,6 @@ Error NetwMultiplayer::sync_send_signal(
     return OK;
 }
 
-RID NetwMultiplayer::entity_replicate(Object *p_node, Object *p_owner) {
-    NETW_STAGE(SPAWN, "Spawn replicate", colors::LIVENESS);
-    spawn::Pipeline *pipeline = spawn_plane();
-    NETW_ERR_COND_V(
-        pipeline == nullptr,
-        RID(),
-        sys::SPAWN,
-        "Netw.replicate did nothing, because replication is not running on "
-        "this peer."
-    );
-    const Ref<NetwEntity> wrapper = pipeline->replicate(
-        Object::cast_to<Node>(p_node),
-        Ref<NetwPlayer>(Object::cast_to<NetwPlayer>(p_owner))
-    );
-    return wrapper.is_valid() ? wrapper->get_rid_handle() : RID();
-}
-
 NodePath NetwMultiplayer::property_path(
     Object *p_source,
     const StringName &p_property,

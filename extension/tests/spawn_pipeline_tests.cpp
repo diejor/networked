@@ -20,28 +20,6 @@ Pipeline *fresh(const Ref<NetwMultiplayer> &p_core) {
 }
 
 TEST_CASE(
-    "[Networked][Spawn][Hosted] a scene recipe rides its uid when it has one "
-    "and its path when it does not"
-) {
-    netw::wire::WriteStream writer;
-    REQUIRE(Pipeline::put_scene_recipe(writer, String("res://nowhere.tscn")));
-    netw::wire::ReadStream reader(writer.to_bytes());
-
-    String read_back;
-    REQUIRE(Pipeline::get_scene_recipe(reader, read_back));
-    const bool path_round_trips = read_back == String("res://nowhere.tscn");
-    CHECK(path_round_trips);
-
-    netw::wire::WriteStream empty;
-    REQUIRE(Pipeline::put_scene_recipe(empty, String()));
-    netw::wire::ReadStream empty_reader(empty.to_bytes());
-    String empty_back;
-    REQUIRE(Pipeline::get_scene_recipe(empty_reader, empty_back));
-    const bool empty_round_trips = empty_back.is_empty();
-    CHECK(empty_round_trips);
-}
-
-TEST_CASE(
     "[Networked][Spawn][Hosted] a spawn frame from a sender that is not the "
     "server is refused and counted"
 ) {

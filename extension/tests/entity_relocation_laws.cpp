@@ -49,6 +49,7 @@ struct Travelled {
         body->set_name("Traveller");
         entity = NetwEntity::ensure(body);
         home->add_child(body);
+        body->set_owner(rig.branch(-1));
         handle = core()->entity_of(body);
         REQUIRE(handle.is_valid());
     }
@@ -145,6 +146,7 @@ TEST_CASE(
     const Ref<NetwEntity> entity = NetwEntity::ensure(body);
     REQUIRE(entity.is_valid());
     rig.branch(-1)->add_child(body);
+    body->set_owner(rig.branch(-1));
     NetwMultiplayer *core = flow_core(rig.server());
 
     NetwMultiplayer::entity_move(body, away);
@@ -173,6 +175,7 @@ TEST_CASE(
     rig.branch(-1)->add_child(home);
     rig.branch(-1)->add_child(away);
     home->add_child(body);
+    body->set_owner(rig.branch(-1));
     const Ref<NetwEntity> entity = NetwEntity::ensure(body);
     body->set_global_position(Vector3(5, 6, 7));
 

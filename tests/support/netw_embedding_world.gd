@@ -28,13 +28,21 @@ func provider() -> String:
 	return "base"
 
 
+func register_probe(api: NetwMultiplayer) -> void:
+	api.spawn_register_constructor(&"probe", make_probe, [TYPE_STRING])
+
+
+func make_probe(probe_name: String) -> Node:
+	var node := _PROBE_SCENE.instantiate()
+	node.name = probe_name
+	return node
+
+
 func spawn_probe(name: String) -> int:
 	var host_api := await host()
-	var node := _PROBE_SCENE.instantiate()
-	node.name = name
-	host_api.entity_replicate(node)
-	host_api.root.add_child(node)
-	return host_api.entity_get_route(NetwEntity.of(node).rid)
+	var entity := host_api.spawn_registered(&"probe", [name])
+	host_api.root.add_child(host_api.entity_get_node(entity))
+	return host_api.entity_get_route(entity)
 
 
 func dispose() -> void:

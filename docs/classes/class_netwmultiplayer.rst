@@ -358,8 +358,6 @@ Methods
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`RID`                                                        | :ref:`entity_of<class_NetwMultiplayer_method_entity_of>`\ (\ node\: :godot:`Object`\ )                                                                                                                                                                                                                                                                                                                                                                                                  |
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`RID`                                                        | :ref:`entity_replicate<class_NetwMultiplayer_method_entity_replicate>`\ (\ node\: :godot:`Object`, owner\: :godot:`Object` = null\ )                                                                                                                                                                                                                                                                                                                                                    |
-   +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | |void|                                                              | :ref:`event_arm<class_NetwMultiplayer_method_event_arm>`\ (\ enabled\: :godot:`bool`\ )                                                                                                                                                                                                                                                                                                                                                                                                 |
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Array`\[:godot:`Dictionary`\]                               | :ref:`event_ring<class_NetwMultiplayer_method_event_ring>`\ (\ route\: :godot:`int`\ )                                                                                                                                                                                                                                                                                                                                                                                                  |
@@ -5219,7 +5217,7 @@ Gives ``entity`` a new route, the id peers use to address it, and returns it. An
 
 :godot:`RID` **entity_adopt**\ (\ root\: :godot:`Object`\ ) :ref:`🔗<class_NetwMultiplayer_method_entity_adopt>`
 
-Replicates a node that is already in the scene tree, and returns its entity. Returns an invalid :godot:`RID` on failure. Use :ref:`entity_replicate()<class_NetwMultiplayer_method_entity_replicate>` for a node that is not in the tree yet.
+Replicates a node that is already in the scene tree, and returns its entity. Returns an invalid :godot:`RID` on failure. Use :ref:`spawn_registered()<class_NetwMultiplayer_method_spawn_registered>` for a node that is not in the tree yet.
 
 .. rst-class:: classref-item-separator
 
@@ -5456,18 +5454,6 @@ Gives control of ``entity`` to ``peer``. Returns :godot:`@GlobalScope.ERR_UNAUTH
 :godot:`RID` **entity_of**\ (\ node\: :godot:`Object`\ ) :ref:`🔗<class_NetwMultiplayer_method_entity_of>`
 
 Returns the entity of ``node`` or of its closest ancestor that has one.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwMultiplayer_method_entity_replicate:
-
-.. rst-class:: classref-method
-
-:godot:`RID` **entity_replicate**\ (\ node\: :godot:`Object`, owner\: :godot:`Object` = null\ ) :ref:`🔗<class_NetwMultiplayer_method_entity_replicate>`
-
-Replicates ``node`` and returns its entity, or an invalid :godot:`RID` on failure. Call it before ``node`` enters the tree. Use :ref:`entity_adopt()<class_NetwMultiplayer_method_entity_adopt>` for a node already in the tree.
 
 .. rst-class:: classref-item-separator
 

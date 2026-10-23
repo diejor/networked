@@ -82,6 +82,7 @@ Carrier *a_state_body(
     REQUIRE(entity.is_valid());
     const uint64_t set = a_state_stream(p_session, body);
     p_branch->add_child(body);
+    body->set_owner(p_branch);
     NETW_CHECK_EQ(
         int(p_session->sync_pipeline()->register_property_set(body, set)),
         int(OK)

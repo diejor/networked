@@ -6265,29 +6265,6 @@ public sealed class NetwMultiplayer : NetwRefCounted
         return NetwMultiplayer.Adopt(answered);
     }
 
-    private static readonly IntPtr _bindEntityReplicate =
-        NetwApi.MethodBind("NetwMultiplayer", "entity_replicate", 1082489955UL);
-
-    /// <summary>
-    /// Replicates <paramref name="node"/> and returns its entity, or an invalid
-    /// <see cref="Rid"/> on failure. Call it before <paramref name="node"/>
-    /// enters the tree. Use <see cref="NetwMultiplayer.EntityAdopt"/> for a
-    /// node already in the tree.
-    /// </summary>
-    public Rid EntityReplicate(GodotObject node, GodotObject owner = null)
-    {
-        IntPtr slot0 = node?.NativeInstance ?? IntPtr.Zero;
-        IntPtr slot1 = owner?.NativeInstance ?? IntPtr.Zero;
-        Rid answered = default;
-        NetwThunks.Ptrcall2_IntPtr_IntPtr_Rid(
-            _bindEntityReplicate,
-            Checked,
-            in slot0,
-            in slot1,
-            ref answered);
-        return answered;
-    }
-
     private static readonly IntPtr _bindSpawnRegisterConstructor =
         NetwApi.MethodBind(
             "NetwMultiplayer",
@@ -6367,7 +6344,7 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <summary>
     /// Replicates a node that is already in the scene tree, and returns its
     /// entity. Returns an invalid <see cref="Rid"/> on failure. Use
-    /// <see cref="NetwMultiplayer.EntityReplicate"/> for a node that is not in
+    /// <see cref="NetwMultiplayer.SpawnRegistered"/> for a node that is not in
     /// the tree yet.
     /// </summary>
     public Rid EntityAdopt(GodotObject root)

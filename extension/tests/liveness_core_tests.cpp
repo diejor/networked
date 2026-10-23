@@ -199,6 +199,36 @@ TEST_CASE(
 }
 
 TEST_CASE(
+    "[Networked][Liveness][Hosted] L15 an entity bound to a second route "
+    "leaves its first one, so one entity answers to one route"
+) {
+    Ref<NetwLivenessCore> core = make_core();
+    int first = 0;
+    const RID entity = spawn(core, &first);
+    const int second = core->reserve_route();
+
+    CHECK(core->bind_route(entity, second));
+
+    NETW_CHECK_EQ(core->route_of(entity), second);
+    CHECK(core->rid_from_route(second) == entity);
+    CHECK_FALSE(core->rid_from_route(first).is_valid());
+    NETW_CHECK_EQ(core->route_count(), 1);
+
+    const RID newcomer = core->entity_create();
+    CHECK(core->bind_route(newcomer, first));
+    CHECK(core->rid_from_route(first) == newcomer);
+
+    SUBCASE("an unbound entity holds no route and can take another") {
+        CHECK(core->unbind_route(entity));
+        NETW_CHECK_EQ(core->route_of(entity), 0);
+        CHECK_FALSE(core->rid_from_route(second).is_valid());
+        CHECK(core->bind_route(newcomer, second));
+        CHECK(core->bind_route(entity, core->reserve_route()));
+        NETW_CHECK_EQ(core->route_count(), 2);
+    }
+}
+
+TEST_CASE(
     "[Networked][Liveness][Hosted] L11 a route never renames, alive or "
     "tombstoned"
 ) {

@@ -15,7 +15,6 @@ namespace netw::spawn {
 class Book {
 public:
     enum Recipe {
-        RECIPE_SCENE = 0,
         RECIPE_FN = 1,
         RECIPE_SPAWNER = 2,
         RECIPE_ADOPT = 3,
@@ -86,7 +85,6 @@ public:
     int64_t held_bytes() const;
 
     godot::LocalVector<godot::ObjectID> session_nodes() const;
-    bool armed_scene_path(godot::ObjectID p_node, godot::String &r_path) const;
 
     void clear();
 };

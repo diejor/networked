@@ -211,6 +211,8 @@ TEST_CASE(
     REQUIRE(annex_container != nullptr);
     rig.branch(-1)->add_child(arena_container);
     rig.branch(-1)->add_child(annex_container);
+    arena_container->set_owner(rig.branch(-1));
+    annex_container->set_owner(rig.branch(-1));
     rig.pump(4);
     rig.enter_scene(StringName("Arena"));
     rig.enter_scene(StringName("Annex"));

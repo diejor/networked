@@ -705,6 +705,11 @@ CAPTURE_MAGICS_BY_FORMAT = {
         0x78: "DatagramUnreliable",
         0x98: "DatagramAcked",
     },
+    13: {
+        0x58: "DatagramReliable",
+        0x78: "DatagramUnreliable",
+        0x98: "DatagramAcked",
+    },
 }
 
 REPLY_FAILED_BIT_SINCE = 12

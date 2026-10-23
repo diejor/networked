@@ -105,6 +105,7 @@ void readded_in_one_frame_keeps_predicting(int p_side) {
     Node *parent = owner->get_parent();
     parent->remove_child(owner);
     parent->add_child(owner);
+    owner->set_owner(parent);
 
     stand.drive(10, Vector2(0.0, 1.0));
     NETW_CHECK_EQ(stand.slot(p_side), seated);

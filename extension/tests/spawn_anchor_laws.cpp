@@ -111,10 +111,10 @@ TEST_CASE(
 ) {
     Branch branch = a_branch();
     Node *node = memnew(Node);
-    node->set_name("scene-recipe");
+    node->set_name("fn-recipe");
     branch.destination->add_child(node);
     Record record = consumed(branch, node);
-    record.set_recipe(Book::RECIPE_SCENE);
+    record.set_recipe(Book::RECIPE_FN);
 
     branch.core->spawn_reanchor(&record, node, &branch.roster);
     NETW_CHECK_EQ(record.spawner(), branch.watching_origin);

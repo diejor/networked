@@ -29,6 +29,7 @@ func host() -> NetwMultiplayer:
 	var loopback := LocalLoopbackSession.get_shared_session()
 	if not loopback.has_live_server():
 		loopback.reset()
+	register_probe(_server_tree.api)
 	_server_tree.api.session_prepare_join(&"host", [])
 	_server_tree.api.multiplayer_peer = loopback.get_server_peer()
 
@@ -36,9 +37,7 @@ func host() -> NetwMultiplayer:
 	await pump_until(func() -> bool: return api.is_online)
 	_host_api = api
 	if _initial_scene != null:
-		var level := _initial_scene.instantiate()
-		api.entity_replicate(level)
-		api.root.add_child(level)
+		api.scene_create(_initial_scene.resource_path)
 	return _host_api
 
 
@@ -54,6 +53,7 @@ func add_client(username: String) -> NetwMultiplayer:
 	_anchor.add_child(tree)
 	_client_trees.append(tree)
 
+	register_probe(tree.api)
 	tree.api.session_prepare_join(StringName(username), [])
 	tree.api.multiplayer_peer = LocalLoopbackSession \
 			.get_shared_session() \

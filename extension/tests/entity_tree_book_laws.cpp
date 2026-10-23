@@ -79,6 +79,7 @@ TEST_CASE(
         entity_id = entity->get_instance_id();
     }
     rig.branch(SERVER)->add_child(node);
+    node->set_owner(rig.branch(SERVER));
     rig.step_ticks(2);
     rig.branch(SERVER)->remove_child(node);
     rig.step_ticks(2);

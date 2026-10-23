@@ -3,6 +3,7 @@
 #include "godot/packed_scene.hpp"
 #include "godot/resource.hpp"
 #include "godot/resource_uid.hpp"
+#include "godot/scene_tree.hpp"
 #include "godot/script.hpp"
 #include "godot/utility.hpp"
 #include "netw/api/despawn_config.hpp"
@@ -82,8 +83,6 @@ Book::Received received_of(const SpawnBuild &p_built) {
             break;
         case Book::RECIPE_ADOPT:
             out.source = gd::instance_id(p_built.origin);
-            break;
-        case Book::RECIPE_SCENE:
             break;
     }
     return out;
@@ -357,6 +356,10 @@ Ref<NetwEntity> Pipeline::arm_authoritative_spawn(
         entity->_go_live_if_armed();
         schedule_armed_flush(route);
     } else {
+        unadded[route] = Unadded{
+            gd::instance_id(p_node),
+            plane->clock_engine().get_ticks_run()
+        };
         connect_once(
             p_node,
             SIG_TREE_ENTERED,
@@ -366,6 +369,31 @@ Ref<NetwEntity> Pipeline::arm_authoritative_spawn(
         );
     }
     return entity;
+}
+
+void Pipeline::report_unadded(int64_t p_ticks_run) {
+    LocalVector<int64_t> settled;
+    for (const KeyValue<int64_t, Unadded> &row : unadded) {
+        if (row.value.armed_at_ticks_run >= p_ticks_run) {
+            continue;
+        }
+        settled.push_back(row.key);
+        Node *node
+            = Object::cast_to<Node>(gd::instance_from_id(row.value.node));
+        if (node == nullptr || node->is_inside_tree()
+            || !spawn_book.has_armed(row.key)) {
+            continue;
+        }
+        NETW_WARN(
+            sys::SPAWN,
+            "Netw.spawn returned '%s' but it never entered the tree. Add it "
+            "before the next tick.",
+            node->get_name()
+        );
+    }
+    for (const int64_t route : settled) {
+        unadded.erase(route);
+    }
 }
 
 bool Pipeline::armed_player_left(int64_t p_route) {
@@ -437,67 +465,6 @@ bool Pipeline::spawn_admitted(Node *p_node, const char *p_verb) {
         )
     );
     return false;
-}
-
-Ref<NetwEntity> Pipeline::replicate(
-    Node *p_node,
-    const Ref<NetwPlayer> &p_owner
-) {
-    NETW_STAGE(SPAWN, "Spawn replicate", colors::LIVENESS);
-    if (p_node == nullptr) {
-        NETW_ERR_V(
-            Ref<NetwEntity>(),
-            sys::SPAWN,
-            "Netw.replicate was given a null or freed node."
-        );
-    }
-    write_owner(p_node, p_owner);
-    if (!spawn_admitted(p_node, "Netw.replicate")) {
-        return Ref<NetwEntity>();
-    }
-    if (p_node->is_inside_tree()) {
-        NETW_ERR_V(
-            Ref<NetwEntity>(),
-            sys::SPAWN,
-            "Netw.replicate was called on a node already in the tree. Call it "
-            "before add_child."
-        );
-    }
-
-    const Ref<NetwEntity> existing = NetwEntity::of(p_node);
-    if (existing.is_valid() && existing->get_route() > 0) {
-        if (spawn_book.is_recv(existing->get_route())) {
-            NETW_ERR_V(
-                Ref<NetwEntity>(),
-                sys::SPAWN,
-                "Netw.replicate cannot take '%s', because another peer spawned "
-                "it. Only the peer that spawned a node can replicate it.",
-                p_node->get_name()
-            );
-        }
-        NETW_WARN(
-            sys::SPAWN,
-            "Netw.replicate was called twice on '%s', so it returned the "
-            "entity it already has, route %d.",
-            p_node->get_name(),
-            existing->get_route()
-        );
-        return existing;
-    }
-
-    if (p_node->get_scene_file_path().is_empty()) {
-        NETW_ERR_V(
-            Ref<NetwEntity>(),
-            sys::SPAWN,
-            "Netw.replicate needs a node instantiated from a scene file. Use "
-            "Netw.spawn with a Netw.configure_spawn function for other nodes."
-        );
-    }
-
-    Record record;
-    record.set_recipe(Book::RECIPE_SCENE);
-    record.set_scene_path(p_node->get_scene_file_path());
-    return arm_authoritative_spawn(&record, p_node);
 }
 
 Node *Pipeline::spawn(
@@ -756,6 +723,7 @@ Ref<NetwEntity> Pipeline::arm_consumed_spawn(
 }
 
 void Pipeline::on_armed_tree_entered(int64_t p_route) {
+    unadded.erase(p_route);
     schedule_armed_flush(p_route);
 }
 
@@ -938,6 +906,48 @@ void Pipeline::reconcile_nested_child(int64_t p_route) {
         }
         return;
     }
+    publish_placed(node, p_route);
+}
+
+void Pipeline::note_placed_before_host(int64_t p_route) {
+    placed_before_host.insert(p_route);
+}
+
+void Pipeline::publish_placed(Node *p_node, int64_t p_route) {
+    NetwMultiplayer *plane = core();
+    if (plane == nullptr || !plane->is_online()) {
+        return;
+    }
+    const bool placed = placed_before_host.erase(p_route);
+    const SceneTree *tree = gd::scene_tree();
+    const bool owned = placed || p_node->get_owner() != nullptr
+        || (tree != nullptr && tree->get_current_scene() == p_node);
+    const bool isolated = NetwMultiplayer::scene_root_is_isolated(p_node)
+        && NetwMultiplayer::scene_world_of(p_node) == nullptr;
+    if (owned && !isolated) {
+        publish_nested(p_node);
+        return;
+    }
+    const uint64_t id = uint64_t(p_node->get_instance_id());
+    if (refused_placed.has(id)) {
+        return;
+    }
+    refused_placed.insert(id);
+    if (owned) {
+        NETW_ERROR(
+            sys::SCENE,
+            "'%s' is isolated and was placed in the editor. Open it with "
+            "Netw.change_scene_to_file, or turn isolation off.",
+            p_node->get_name()
+        );
+        return;
+    }
+    NETW_ERROR(
+        sys::SPAWN,
+        "'%s' was added to the tree without Netw.spawn, so no other peer has "
+        "it. Spawn it with Netw.spawn.",
+        p_node->get_name()
+    );
 }
 
 void Pipeline::note_nested_candidate(int64_t p_route) {
@@ -1147,39 +1157,6 @@ Variant Pipeline::resolve_spawn_args(
     return args;
 }
 
-bool Pipeline::put_scene_recipe(
-    wire::WriteStream &p_stream,
-    const String &p_path
-) {
-    const int64_t uid = gd::resource_uid_for(p_path);
-    bool by_uid = uid != int64_t(ResourceUID::INVALID_ID);
-    if (!p_stream.bool1(by_uid)) {
-        return false;
-    }
-    if (by_uid) {
-        uint64_t staged = uint64_t(uid);
-        return p_stream.bits(staged, 64);
-    }
-    String path = p_path;
-    return wire::string_field(p_stream, path);
-}
-
-bool Pipeline::get_scene_recipe(wire::ReadStream &p_stream, String &r_path) {
-    bool by_uid = false;
-    if (!p_stream.bool1(by_uid)) {
-        return false;
-    }
-    if (by_uid) {
-        uint64_t staged = 0;
-        if (!p_stream.bits(staged, 64)) {
-            return false;
-        }
-        r_path = gd::resource_uid_path(int64_t(staged));
-        return true;
-    }
-    return wire::string_field(p_stream, r_path);
-}
-
 #ifdef NETW_TESTS
 void Pipeline::arm_spawn_state(const Array &p_rows) {
     armed_spawn_state.clear();
@@ -1282,7 +1259,7 @@ PackedByteArray Pipeline::encode_record_frame(
         && spawner->get_node_or_null(spawner->get_spawn_path()) == parent;
 
     int64_t recipe_code = int64_t(recipe);
-    if (!stream.int_range(recipe_code, 0, 4)
+    if (!stream.int_range(recipe_code, 1, 4)
         || !stream.bool1(parent_is_spawn_target)) {
         NETW_ERROR(
             sys::SPAWN,
@@ -1310,10 +1287,6 @@ PackedByteArray Pipeline::encode_record_frame(
             && plane->anchor_encode(addressable, origin);
         if (!stream.bool1(moved)
             || (moved && !plane->anchor_encode(stream, origin))) {
-            return PackedByteArray();
-        }
-    } else if (recipe == Book::RECIPE_SCENE) {
-        if (!put_scene_recipe(stream, p_record->get_scene_path())) {
             return PackedByteArray();
         }
     } else if (recipe == Book::RECIPE_SPAWNER) {
@@ -1484,11 +1457,6 @@ Node *Pipeline::build_adopt(Object *p_parent, const String &p_name) {
                              : nullptr;
 }
 
-Node *Pipeline::build_scene(const Variant &p_packed) {
-    const Ref<PackedScene> packed = p_packed;
-    return packed.is_valid() ? packed->instantiate() : nullptr;
-}
-
 Node *Pipeline::build_spawner(
     Object *p_spawner,
     int64_t p_index,
@@ -1565,7 +1533,7 @@ bool decode_spawn_frame(
     SpawnFrame frame;
     if (!NetwMultiplayer::verb_head_read(stream, frame.route, frame.epoch)
         || !Record::decode_header(stream, frame.header)
-        || !stream.int_range(frame.recipe, 0, 4)
+        || !stream.int_range(frame.recipe, 1, 4)
         || !stream.bool1(frame.parent_is_spawn_target)) {
         return false;
     }
@@ -1583,10 +1551,6 @@ bool decode_spawn_frame(
         if (!stream.bool1(frame.moved_from_origin)
             || (frame.moved_from_origin
                 && !p_plane->anchor_decode(stream, frame.origin_anchor))) {
-            return false;
-        }
-    } else if (frame.recipe == Book::RECIPE_SCENE) {
-        if (!Pipeline::get_scene_recipe(stream, frame.scene_path)) {
             return false;
         }
     } else if (frame.recipe == Book::RECIPE_SPAWNER) {
@@ -1844,9 +1808,7 @@ void Pipeline::issue_controller_spawn(SpawnBuild &r_built, int64_t p_sender) {
     plane->lifecycle_seed_controller(r_built.entity.ptr(), p_sender);
     Record record;
     record.set_recipe(frame.recipe);
-    if (frame.recipe == Book::RECIPE_SCENE) {
-        record.set_scene_path(frame.scene_path);
-    } else if (frame.recipe == Book::RECIPE_FN_REGISTRY) {
+    if (frame.recipe == Book::RECIPE_FN_REGISTRY) {
         record.set_fn_registry_id(StringName(frame.fn_id));
         record.set_fn_args(r_built.args);
     } else if (frame.recipe == Book::RECIPE_FN) {
@@ -2015,17 +1977,6 @@ SpawnBuild::Outcome Pipeline::build_spawn(
         }
         r_built.origin = adopt_parent;
         adopted = true;
-    } else if (recipe == Book::RECIPE_SCENE) {
-        const SpawnBuild::Outcome loaded
-            = wait_for_scene(frame.scene_path, r_built);
-        if (loaded != SpawnBuild::BUILT) {
-            return loaded;
-        }
-        const Ref<PackedScene> packed
-            = SceneLoads::shared().scene(r_built.scene);
-        node = run_construct_stage(
-            callable_mp(plane, &NetwMultiplayer::spawn_build_scene).bind(packed)
-        );
     } else if (recipe == Book::RECIPE_SPAWNER) {
         const Dictionary &spawner_anchor = frame.spawner_anchor;
         const int64_t spawner_route
@@ -2520,11 +2471,11 @@ void Pipeline::handle_hide_frame(
         spawn_parked_cancelled += 1;
         return;
     }
-    if (!spawn_book.is_recv(route)) {
+    Record received;
+    if (!spawn_book.take_recv(route, received)) {
         drops_hide_unknown += 1;
         return;
     }
-    spawn_book.drop_recv(route);
 
     const Ref<NetwEntity> entity = plane->wrapper_for_route(route);
     if (!plane->liveness_hide(route)) {
@@ -2535,7 +2486,9 @@ void Pipeline::handle_hide_frame(
         return;
     }
     entity->_remote_hide();
-    free_route_node(route, entity->get_owner());
+    if (received.get_recipe() != Book::RECIPE_ADOPT) {
+        free_route_node(route, entity->get_owner());
+    }
 }
 
 void Pipeline::handle_reparent_frame(
@@ -2812,6 +2765,33 @@ void Pipeline::park_spawn_for_adopt(
     }
 }
 
+String Pipeline::adopt_place_of(const PackedByteArray &p_payload) {
+    NetwMultiplayer *plane = core();
+    SpawnFrame frame;
+    if (plane == nullptr || !decode_spawn_frame(plane, p_payload, frame)) {
+        return String("A node the server named");
+    }
+    const Dictionary &anchor
+        = frame.moved_from_origin ? frame.origin_anchor : frame.parent_anchor;
+    const String name = frame.header.get(StringName("node_name"), String());
+    String under = anchor.get(StringName("path"), String());
+    if (int64_t(anchor.get(StringName("kind"), int64_t(0))) == 1) {
+        const Ref<NetwEntity> entity = plane->wrapper_for_route(
+            int64_t(anchor.get(StringName("route"), int64_t(0)))
+        );
+        Node *holder = entity.is_valid() ? entity->get_owner() : nullptr;
+        Node *root = plane->session_root();
+        if (holder != nullptr && root != nullptr
+            && root->is_ancestor_of(holder)) {
+            under = String(root->get_path_to(holder)).path_join(under);
+        }
+    }
+    const String path = under.is_empty() || under == String(".")
+        ? name
+        : under.path_join(name);
+    return vformat("'%s' at %s", name, path);
+}
+
 void Pipeline::retry_adopt_parked() {
     const PackedInt64Array waiting = park.waiting_on(Park::WAIT_ADOPT);
     if (waiting.is_empty()) {
@@ -2824,15 +2804,15 @@ void Pipeline::retry_adopt_parked() {
             continue;
         }
         if (park.is_expired(parked_route, now)) {
+            const String missing = adopt_place_of(park.peek(parked_route));
             cancel_parked(parked_route);
             spawn_park_expired += 1;
             drops_spawn_unresolved += 1;
             NETW_WARN(
                 sys::SPAWN,
-                "Route %d was dropped, because the node the server named for "
-                "it never appeared on this peer. Build the same scene tree on "
-                "every peer.",
-                parked_route
+                "%s exists on the server but not on this peer. Place it in the "
+                "same scene on every peer, or spawn it with Netw.spawn.",
+                missing
             );
             continue;
         }
@@ -3005,6 +2985,7 @@ void Pipeline::clear_action_gates() {
 }
 
 void Pipeline::free_session_nodes() {
+    report_unadded(INT64_MAX);
     const LocalVector<ObjectID> nodes = spawn_book.session_nodes();
     for (const ObjectID &id : nodes) {
         Node *node = Object::cast_to<Node>(gd::instance_from_id(id));
@@ -3014,16 +2995,6 @@ void Pipeline::free_session_nodes() {
         if (node->is_inside_tree()) {
             node->queue_free();
             continue;
-        }
-        String scene_path;
-        if (spawn_book.armed_scene_path(id, scene_path)) {
-            NETW_WARN(
-                sys::SPAWN,
-                "'%s' (%s) was replicated but never entered the tree before "
-                "the session ended. Call add_child after Netw.replicate.",
-                node->get_name(),
-                scene_path
-            );
         }
         Node *parent = node->get_parent();
         if (parent != nullptr) {
@@ -3041,6 +3012,9 @@ void Pipeline::clear_session() {
     clear_parks();
     release_scenes();
     spawn_book.clear();
+    refused_placed.clear();
+    placed_before_host.clear();
+    unadded.clear();
     clear_action_gates();
 }
 
@@ -3103,6 +3077,7 @@ void Pipeline::demote_spawned() {
 
 void Pipeline::clear_route(int64_t p_route) {
     release_scene(p_route);
+    unadded.erase(p_route);
     spawn_book.drop_armed(p_route);
     spawn_book.drop_recv(p_route);
     NetwMultiplayer *plane = core();
@@ -3219,11 +3194,6 @@ Node *NetwMultiplayer::spawn_build_adopt(
     spawn::Pipeline *pipeline = spawn_plane();
     return pipeline != nullptr ? pipeline->build_adopt(p_parent, p_name)
                                : nullptr;
-}
-
-Node *NetwMultiplayer::spawn_build_scene(const Variant &p_packed) {
-    spawn::Pipeline *pipeline = spawn_plane();
-    return pipeline != nullptr ? pipeline->build_scene(p_packed) : nullptr;
 }
 
 Node *NetwMultiplayer::spawn_build_spawner(

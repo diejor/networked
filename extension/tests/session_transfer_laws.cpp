@@ -1352,7 +1352,6 @@ struct Kinds {
     Ref<Script> maker;
     Ref<Script> chick;
     Ref<Script> spawner;
-    Ref<PackedScene> crate;
     Vector<int> routes;
     Vector<int> recipes;
 
@@ -1360,18 +1359,10 @@ struct Kinds {
         maker = netw_test::minted_script(MAKER_SOURCE);
         chick = netw_test::minted_script(CHICK_SOURCE);
         spawner = netw_test::minted_script(SPAWNER_SOURCE);
-        Node2D *shape = memnew(Node2D);
-        shape->set_name("Crate");
-        crate = netw_test::pack_stock_scene(
-            shape,
-            netw_test::mint_scene_path("TransferCrate")
-        );
-        memdelete(shape);
     }
 
     bool ready() const {
-        return maker.is_valid() && chick.is_valid() && spawner.is_valid()
-            && crate.is_valid();
+        return maker.is_valid() && chick.is_valid() && spawner.is_valid();
     }
 
     void seat(Table &p_table, int p_at) const {
@@ -1415,11 +1406,6 @@ struct Kinds {
         NETW_REQUIRE_EQ(int(nest != nullptr), 1);
         arena->add_child(nest);
 
-        Node *crate_node = crate->instantiate();
-        crate_node->set_name("Crate");
-        REQUIRE(pipeline->replicate(crate_node, Ref<NetwPlayer>()).is_valid());
-        arena->add_child(crate_node);
-
         Node *host
             = p_table.rig.branch(-1)->get_node_or_null(NodePath("Maker"));
         NETW_REQUIRE_EQ(int(host != nullptr), 1);
@@ -1444,7 +1430,6 @@ struct Kinds {
             nest->get_node_or_null(NodePath("Chick")),
             netw::spawn::Book::RECIPE_ADOPT
         );
-        note(crate_node, netw::spawn::Book::RECIPE_SCENE);
         note(made, netw::spawn::Book::RECIPE_FN);
         note(spawned, netw::spawn::Book::RECIPE_SPAWNER);
     }
@@ -1464,7 +1449,7 @@ TEST_CASE(
     }
     table.rig.pump(SETTLE_PUMPS);
     kinds.spawn(table);
-    NETW_REQUIRE_EQ(kinds.routes.size(), 5);
+    NETW_REQUIRE_EQ(kinds.routes.size(), 4);
     for (int at = 0; at < kinds.routes.size(); ++at) {
         NETW_FORMAT_INT(recipe_text, kinds.recipes[at]);
         CAPTURE(recipe_text);

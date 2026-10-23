@@ -370,6 +370,9 @@ void NetwMultiplayer::clock_event(
                 if (pipeline->reveals_action_gates()) {
                     spawn_on_action_reveal_tick(delta, tick);
                 }
+                if (pipeline->awaits_unadded()) {
+                    pipeline->report_unadded(clock.get_ticks_run());
+                }
             }
             notify(CLOCK_ON_TICK, p_a, p_b);
             return;
@@ -2023,6 +2026,8 @@ void NetwMultiplayer::session_announce_entered() {
     }
     notify(SESSION_ENTERED);
     scene_player_display_invalidate();
+    entity_publish_placed();
+    entity_demote_placed();
     session_after_entered();
     connect_core.on_session_online();
 }

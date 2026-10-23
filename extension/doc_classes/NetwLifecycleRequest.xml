@@ -45,7 +45,7 @@
 	</members>
 	<constants>
 		<constant name="KIND_SPAWN" value="0" enum="Kind">
-			The controller spawned the entity with [method Netw.spawn] or [method Netw.replicate].
+			The controller spawned the entity with [method Netw.spawn].
 		</constant>
 		<constant name="KIND_DESPAWN" value="1" enum="Kind">
 			The controller despawned the entity with [method Netw.despawn] or [method NetwEntity.despawn].
