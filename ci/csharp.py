@@ -148,6 +148,7 @@ NAMED_MEMBER_METHODS = {
     "request_all",
     "request_controller",
     "spawn",
+    "spawn_async",
     "spawn_player",
     "emit_entity_signal",
     "action",

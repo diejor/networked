@@ -11,6 +11,7 @@
 #include "godot/variant.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/participant.hpp"
+#include "netw/api/promise.hpp"
 #include "netw/api/sync_compat.hpp"
 #include "netw/call_args.hpp"
 #include "netw/spawn/book.hpp"
@@ -51,6 +52,7 @@ struct SpawnFrame {
     godot::String fn_id;
     godot::Dictionary host_anchor;
     godot::String method;
+    bool fn_waits = false;
     godot::PackedByteArray args;
     godot::LocalVector<StateEntry> state;
     godot::LocalVector<NativeEntry> native;
@@ -86,6 +88,45 @@ struct SpawnBuild {
     Park::Wait wait = Park::WAIT_NONE;
     int64_t wait_route = 0;
     godot::String scene;
+    bool from_build = false;
+};
+
+struct Build {
+    godot::String scene;
+    godot::Variant pending;
+    godot::ObjectID ready;
+    godot::ObjectID host;
+    godot::StringName method;
+    int64_t serial = 0;
+    int64_t started_at = 0;
+    bool warned = false;
+};
+
+struct SpawnCall {
+    godot::ObjectID host;
+    godot::StringName method;
+    godot::Array args;
+    godot::Ref<NetwPlayer> owner;
+    const char *verb = "";
+    int64_t started_at = 0;
+    bool waits = false;
+};
+
+struct SpawnRefusal {
+    godot::Error code = godot::OK;
+    godot::String detail;
+
+    void refuse(godot::Error p_code, const godot::String &p_detail);
+    void refused_quietly(godot::Error p_code, const godot::String &p_detail);
+    godot::Ref<NetwPromise> promise() const;
+    void settle(const godot::Ref<NetwPromise> &p_promise) const;
+};
+
+struct PendingSpawn {
+    SpawnCall call;
+    godot::Variant waiting;
+    godot::Ref<NetwPromise> promise;
+    bool warned = false;
 };
 
 class Pipeline {
@@ -115,7 +156,10 @@ private:
     godot::HashMap<godot::StringName, godot::Callable> constructors;
     godot::HashMap<godot::StringName, godot::Array> constructor_schemas;
     godot::HashMap<int64_t, int64_t> first_recipients;
-    godot::HashMap<int64_t, godot::String> scene_holds;
+    godot::HashMap<int64_t, Build> builds;
+    int64_t build_serial = 0;
+    int64_t building_route = 0;
+    godot::Variant waited_result;
     godot::HashSet<uint64_t> refused_placed;
     godot::HashSet<int64_t> placed_before_host;
     struct Unadded {
@@ -123,7 +167,9 @@ private:
         int64_t armed_at_ticks_run = 0;
     };
     godot::HashMap<int64_t, Unadded> unadded;
-    bool host_fn_waited = false;
+    bool fn_waited = false;
+    godot::HashMap<int64_t, PendingSpawn> pending_spawns;
+    int64_t pending_serial = 0;
 
     int64_t drops_spawn_bad_sender = 0;
     int64_t drops_spawn_duplicate = 0;
@@ -243,6 +289,18 @@ private:
         const godot::Ref<NetwPlayer> &p_owner
     );
     bool spawn_admitted(godot::Node *p_node, const char *p_verb);
+    godot::Node *spawn_host(
+        const godot::Callable &p_fn,
+        const godot::Array &p_args,
+        const char *p_verb,
+        SpawnRefusal &r_refusal
+    );
+    godot::Node *spawn_finish(
+        const godot::Variant &p_built,
+        const SpawnCall &p_call,
+        SpawnRefusal &r_refusal
+    );
+    void fail_pending_spawns(const godot::String &p_detail);
     godot::Node *run_construct_stage(const godot::Callable &p_constructor);
     godot::Node *build_adopt(
         godot::Object *p_parent,
@@ -315,6 +373,11 @@ private:
 
     int64_t park_timeout_ticks() const;
     int64_t park_now() const;
+    void warn_slow_build(
+        const godot::StringName &p_method,
+        int64_t p_started_at,
+        bool &r_warned
+    ) const;
     void park_spawn(
         const godot::PackedByteArray &p_payload,
         int64_t p_dep_route,
@@ -335,8 +398,16 @@ private:
         int64_t p_route,
         const godot::String &p_path
     );
-    void release_scene(int64_t p_route);
-    void release_scenes();
+    SpawnBuild::Outcome wait_for_function(
+        const godot::Variant &p_waiting,
+        godot::Node *p_host,
+        const godot::StringName &p_method,
+        SpawnBuild &r_built
+    );
+    godot::Node *take_ready(int64_t p_route);
+    void drop_build(int64_t p_route);
+    void release_build(int64_t p_route);
+    void release_builds();
 
     int64_t gate_display_tick() const;
     void apply_action_gate(
@@ -425,13 +496,35 @@ public:
         int64_t p_sender
     );
     void retry_adopt_parked();
-    void retry_load_parked();
+    void retry_build_parked();
+    bool build_returned(
+        const godot::Variant &p_value,
+        int64_t p_route,
+        int64_t p_serial
+    );
+    void build_failed(
+        const godot::String &p_detail,
+        int64_t p_route,
+        int64_t p_serial
+    );
 
     godot::Node *spawn(
         const godot::Callable &p_fn,
         const godot::Array &p_args,
         const godot::Ref<NetwPlayer> &p_owner
     );
+    godot::Ref<NetwPromise> spawn_async(
+        const godot::Callable &p_fn,
+        const godot::Array &p_args,
+        const godot::Ref<NetwPlayer> &p_owner
+    );
+    bool spawn_async_returned(const godot::Variant &p_value, int64_t p_serial);
+    void spawn_async_failed(
+        int64_t p_code,
+        const godot::String &p_detail,
+        int64_t p_serial
+    );
+    void sweep_pending_spawns();
     void register_spawn_constructor(
         const godot::StringName &p_id,
         const godot::Callable &p_fn,

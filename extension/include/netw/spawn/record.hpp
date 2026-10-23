@@ -54,6 +54,7 @@ private:
     godot::StringName fn_method;
     godot::StringName fn_registry_id;
     godot::Array fn_args;
+    bool fn_waits = false;
     godot::Variant custom_data;
 
 public:
@@ -183,6 +184,12 @@ public:
     }
     godot::Array get_fn_args() const {
         return fn_args;
+    }
+    void set_fn_waits(bool value) {
+        fn_waits = value;
+    }
+    bool get_fn_waits() const {
+        return fn_waits;
     }
     void set_custom_data(const godot::Variant &value) {
         custom_data = value;

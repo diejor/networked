@@ -1,7 +1,7 @@
-# WIRE v13, the carrier format
+# WIRE v14, the carrier format
 
 The byte layout of every datagram, frame and payload Networked writes.
-`FORMAT_VERSION` is 13. `src/wire/registry.cpp` is the one declaration of the
+`FORMAT_VERSION` is 14. `src/wire/registry.cpp` is the one declaration of the
 channel table and `tools/wire_decode.py` reads a capture against this page.
 
 ---
@@ -639,7 +639,8 @@ recipe body
                [scene_index varuint 3]   index + 1, so 0 is custom data
                [custom bytes_capped 4095 iff scene_index = 0]
   FN_REGISTRY  [id string][args bytes_capped 4095]
-  FN           [host anchor][method string][args bytes_capped 4095]
+  FN           [host anchor][method string][waits bool1]
+               [args bytes_capped 4095]
 [state count varuint 2]
   per entry    [by_path bool1][path string iff]
                [token bytes_capped 1023][values bytes_capped 4095]
@@ -676,6 +677,10 @@ move, installing `anchor_revision` when the carry places it.
 `[derived]` are opaque runs. The verb delimits them and never reads inside, so
 an unparseable run costs one field. The consumed and derived runs carry the
 descriptor rows of section 19.
+
+`waits` is set when the server spawned through `Netw.spawn_async`. A receiver
+whose spawn function awaits then holds the route until the function returns,
+with no deadline, and drops the spawn when the bit is clear.
 
 A SPAWN is refused whole and counts `drops_spawn_truncated`. Nothing is
 applied from a frame that did not decode to exhaustion.

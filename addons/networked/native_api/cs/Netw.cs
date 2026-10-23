@@ -492,7 +492,8 @@ public sealed class Netw : NetwRefCounted
     /// </code>
     /// <para>
     /// The <see cref="Callable"/> must be configured before
-    /// <see cref="Netw.Spawn"/> uses it.
+    /// <see cref="Netw.Spawn"/> or <see cref="Netw.SpawnAsync"/> uses it. It
+    /// may await only under <see cref="Netw.SpawnAsync"/>.
     /// </para>
     /// </summary>
     public static NetwMemberConfig ConfigureSpawn(Callable callable)
@@ -1207,22 +1208,11 @@ public sealed class Netw : NetwRefCounted
     /// player. A client can call it when the node sets
     /// <see cref="NetwEntity.Lifecycle"/> to
     /// <see cref="NetwEntity.LifecycleEnum.Controller"/>. That client's player
-    /// becomes its <see cref="NetwEntity.Controller"/>. <paramref name="fn"/>
-    /// must return the node without waiting. Load a scene that takes a while on
-    /// every peer first with <see cref="Netw.RequestAll"/>.
-    /// <code>
-    /// var loads := Netw.request_all(preload_level, path)
-    /// await loads.wait()
-    /// if not loads.is_failed:
-    ///     add_child(Netw.spawn(make_level, path))
-    /// </code>
-    /// </para>
-    /// <para>
-    /// A client can call it when the node sets
-    /// <see cref="NetwEntity.Lifecycle"/> to
-    /// <see cref="NetwEntity.LifecycleEnum.Controller"/>. That client's player
     /// becomes its <see cref="NetwEntity.Controller"/>. The client sees it at
-    /// once and loses it if the server refuses.
+    /// once and loses it if the server refuses. <paramref name="fn"/> must
+    /// return the node without waiting. Use <see cref="Netw.SpawnAsync"/> when
+    /// it awaits, and load first with <see cref="Netw.RequestAll"/> when every
+    /// peer should start together.
     /// </para>
     /// </summary>
     public static Node Spawn(Callable fn, params Variant[] rest)
@@ -1329,6 +1319,80 @@ public sealed class Netw : NetwRefCounted
         params Variant[] rest)
     {
         return SpawnPlayer(player, new Callable(node, name), rest);
+    }
+
+    private static readonly IntPtr _bindSpawnAsync =
+        NetwApi.MethodBind("Netw", "spawn_async", 2325787334UL);
+
+    /// <summary>
+    /// Calls <paramref name="fn"/> with the arguments after it on every peer,
+    /// as <see cref="Netw.Spawn"/> does, and lets <paramref name="fn"/> await.
+    /// The <see cref="NetwPromise"/> settles with the node once
+    /// <paramref name="fn"/> returns here. A client holds what the server sends
+    /// for the node until its own copy is built.
+    /// <code>
+    /// public async void Start(string path)
+    /// {
+    ///     Node level = await Netw.SpawnAsync(this, MethodName.MakeLevel, path).AsTask(v =&gt; v.As&lt;Node&gt;());
+    ///     AddChild(level);
+    /// }
+    ///
+    /// public Variant MakeLevel(string path) =&gt; NetwPromise.FromTask(LoadLevel(path));
+    ///
+    /// async Task&lt;Node&gt; LoadLevel(string path)
+    /// {
+    ///     ResourceLoader.LoadThreadedRequest(path);
+    ///     while (ResourceLoader.LoadThreadedGetStatus(path)
+    ///             == ResourceLoader.ThreadLoadStatus.InProgress)
+    ///         await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+    ///     return (ResourceLoader.LoadThreadedGet(path) as PackedScene).Instantiate();
+    /// }
+    /// </code>
+    /// <para>
+    /// Add the node to the tree before the next tick. <b>Server Only.</b>
+    /// </para>
+    /// </summary>
+    public static NetwPromise SpawnAsync(Callable fn, params Variant[] rest)
+    {
+        if (fn.Delegate != null)
+        {
+            throw new ArgumentException(
+                "Netw.SpawnAsync sends a method by name. Pass the " +
+                "node and a MethodName constant.", nameof(fn));
+        }
+        int total = 1 + (rest == null ? 0 : rest.Length);
+        IntPtr pack = NetwThunks.ArgsNew(total);
+        godot_variant slot0 = VariantUtils.CreateFromCallable(fn);
+        NetwThunks.ArgsSet(pack, 0, in slot0);
+        slot0.Dispose();
+        for (int index = 1; index < total; index++)
+        {
+            godot_variant carried = rest[index - 1].CopyNativeVariant();
+            NetwThunks.ArgsSet(pack, index, in carried);
+            carried.Dispose();
+        }
+        godot_variant answered = default;
+        NetwThunks.CallPack(
+            _bindSpawnAsync,
+            IntPtr.Zero,
+            pack,
+            total,
+            ref answered);
+        NetwThunks.ArgsFree(pack);
+        NetwPromise result =
+            NetwPromise.Adopt(
+                NetwApi.Retained(
+                    VariantUtils.ConvertToGodotObjectPtr(answered)));
+        answered.Dispose();
+        return result;
+    }
+
+    public static NetwPromise SpawnAsync(
+        Node node,
+        StringName name,
+        params Variant[] rest)
+    {
+        return SpawnAsync(new Callable(node, name), rest);
     }
 
     private static readonly IntPtr _bindDespawn =

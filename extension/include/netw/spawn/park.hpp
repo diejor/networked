@@ -15,7 +15,7 @@ public:
         WAIT_ROUTE,
         WAIT_SPAWNER,
         WAIT_ADOPT,
-        WAIT_LOAD,
+        WAIT_BUILD,
     };
 
 private:

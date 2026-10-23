@@ -29,6 +29,7 @@ public:
         int32_t recipe = RECIPE_ADOPT;
         int32_t scene_index = -1;
         bool authored = false;
+        bool fn_waits = false;
     };
 
 private:
@@ -44,6 +45,7 @@ public:
     void arm(const Record &record);
     bool take_armed(int64_t route, Record &out);
     bool has_armed(int64_t route) const;
+    bool fn_waits_of(int64_t route) const;
     bool drop_armed(int64_t route);
     bool books_node(godot::Node *node) const;
     int armed_count() const;

@@ -912,6 +912,27 @@ Node *Netw::spawn_player(
     return plane != nullptr ? plane->spawn(p_fn, p_args, p_player) : nullptr;
 }
 
+Ref<NetwPromise> Netw::spawn_async(const Callable &p_fn, const Array &p_args) {
+    Node *host = Object::cast_to<Node>(p_fn.get_object());
+    NetwMultiplayer *api
+        = host != nullptr ? NetwMultiplayer::of(host) : nullptr;
+    ReplicationCore *plane
+        = api != nullptr ? api->get_replication_plane() : nullptr;
+    if (plane == nullptr) {
+        const String refusal(
+            "Netw.spawn_async needs a spawn function on a node inside a "
+            "session. Pass a method of a node under a MultiplayerViewport."
+        );
+        NETW_ERROR(sys::SPAWN, "%s", refusal);
+        return NetwPromise::refused(ERR_UNCONFIGURED, refusal);
+    }
+    return plane->get_spawn_pipeline()->spawn_async(
+        p_fn,
+        p_args,
+        Ref<NetwPlayer>()
+    );
+}
+
 Error Netw::despawn(Node *p_node, const Ref<NetwDespawnOpts> &p_opts) {
     const Ref<NetwEntity> entity = NetwEntity::of(p_node);
     if (entity.is_null()) {
@@ -1285,6 +1306,11 @@ void Netw::_bind_methods() {
         "Netw",
         D_METHOD("spawn_player", "player", "fn"),
         &Netw::spawn_player
+    );
+    gd::bind_static_vararg(
+        "Netw",
+        D_METHOD("spawn_async", "fn"),
+        &Netw::spawn_async
     );
     ClassDB::bind_static_method(
         "Netw",

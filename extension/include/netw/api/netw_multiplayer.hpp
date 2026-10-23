@@ -5258,6 +5258,45 @@ public:
 
 public:
     static bool is_coroutine(const godot::Variant &p_value);
+    static bool is_waiting(const godot::Variant &p_value);
+    static void free_when_returned(const godot::Variant &p_waiting);
+    static void free_returned(
+        const godot::Variant &p_value,
+        const godot::Variant &p_held_until_return
+    );
+    static void promise_refuse(
+        const godot::Ref<NetwPromise> &p_promise,
+        godot::Error p_code,
+        const godot::String &p_detail
+    );
+    static void spawn_async_returned(
+        const godot::Variant &p_value,
+        const godot::Variant &p_held_until_return,
+        uint64_t p_plane,
+        int64_t p_serial
+    );
+    static void spawn_async_failed(
+        int64_t p_code,
+        const godot::String &p_detail,
+        const godot::Variant &p_held_until_return,
+        uint64_t p_plane,
+        int64_t p_serial
+    );
+    static void spawn_build_returned(
+        const godot::Variant &p_value,
+        const godot::Variant &p_held_until_return,
+        uint64_t p_plane,
+        int64_t p_route,
+        int64_t p_serial
+    );
+    static void spawn_build_failed(
+        int64_t p_code,
+        const godot::String &p_detail,
+        const godot::Variant &p_held_until_return,
+        uint64_t p_plane,
+        int64_t p_route,
+        int64_t p_serial
+    );
 
     bool script_overrides_seam(
         const godot::Ref<godot::Script> &p_script,

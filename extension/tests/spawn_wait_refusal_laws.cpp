@@ -7,6 +7,7 @@
 #include "support/sim_stand.h"
 
 #include "godot/node.hpp"
+#include "godot/object.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 
@@ -18,21 +19,49 @@ using netw::NetwEntity;
 using netw::NetwMultiplayer;
 
 constexpr const char *SPAWNER_ID = "spawn_wait_spawner";
+constexpr const char *WAITING_ID = "waiting";
 
 constexpr const char *SPAWNER_SOURCE = R"(extends Node
 
-signal never
+signal go
 
 var waits := false
+var promised := false
+var pending: NetwPromise
+var late_id := 0
 
 func _init() -> void:
 	Netw.configure_entity(self)
 	Netw.configure_spawn(make)
 
-func make() -> Node:
+func make():
+	if promised:
+		return promise()
 	if waits:
-		await never
-	return Node.new()
+		await go
+	return fresh()
+
+func construct(_name: String):
+	if promised:
+		return promise()
+	if waits:
+		await go
+	return fresh()
+
+func promise() -> NetwPromise:
+	pending = NetwPromise.new()
+	return pending
+
+func fresh() -> Node:
+	var made := Node.new()
+	late_id = made.get_instance_id()
+	return made
+
+func finish() -> void:
+	if pending != null:
+		pending.resolve(fresh())
+	else:
+		go.emit()
 
 func spawn_one() -> Node:
 	var made: Node = Netw.spawn(make)
@@ -53,33 +82,90 @@ Node *build_spawner(const Variant &p_name) {
     return made;
 }
 
+enum Wait {
+    COROUTINE,
+    PROMISE,
+    REGISTRY,
+};
+
 struct Row {
-    const char *peer;
+    const char *name;
     int waiter;
-    bool server_spawns;
+    Wait wait;
     bool error;
     const char *message;
 };
 
+constexpr const char *FN_FIX
+    = "Use Netw.spawn_async for a spawn function that awaits.";
+constexpr const char *REGISTRY_FIX = "Return the node without waiting.";
+
 const Row ROWS[] = {
-    {"server", SERVER, false, true, "Spawn function 'make' waited."},
-    {"client", A, true, false, "Spawn function 'make' waited, so route"},
+    {"server coroutine",
+     SERVER,
+     COROUTINE,
+     true,
+     "Spawn function 'make' waited."},
+    {"client coroutine",
+     A,
+     COROUTINE,
+     false,
+     "Spawn function 'make' waited, so route"},
+    {"server promise", SERVER, PROMISE, true, "Spawn function 'make' waited."},
+    {"client promise",
+     A,
+     PROMISE,
+     false,
+     "Spawn function 'make' waited, so route"},
+    {"server registry",
+     SERVER,
+     REGISTRY,
+     true,
+     "Spawn constructor 'waiting' waited."},
+    {"client registry",
+     A,
+     REGISTRY,
+     false,
+     "Spawn constructor 'waiting' waited, so route"},
 };
 
-constexpr const char *FIX
-    = "Load what it needs with Netw.request_all before calling Netw.spawn.";
+void register_waiting(NetwMultiplayer *p_api, Node *p_host) {
+    Array types;
+    types.push_back(int(Variant::STRING));
+    Array quantizers;
+    quantizers.push_back(Variant());
+    p_api->spawn_register_constructor(
+        StringName(WAITING_ID),
+        Callable(p_host, StringName("construct")),
+        types,
+        quantizers
+    );
+}
+
+Node *spawn_waiting(NetwMultiplayer *p_server, Node *p_arena) {
+    Array args;
+    args.push_back(String("Waited"));
+    const RID made
+        = p_server->spawn_registered(StringName(WAITING_ID), args, nullptr);
+    Node *node = made.is_valid() ? p_server->entity_get_node(made) : nullptr;
+    if (node != nullptr) {
+        p_arena->add_child(node);
+    }
+    return node;
+}
 
 TEST_CASE(
-    "[Networked][Spawn] a spawn function that waits is refused on the server "
-    "and dropped on a client, and the message says it waited"
+    "[Networked][Spawn] a spawn function or constructor that waits is "
+    "refused on the server and dropped on a client, the message says it "
+    "waited, and the node it returns later is freed"
 ) {
     const Ref<Script> spawner = netw_test::minted_script(SPAWNER_SOURCE);
     REQUIRE(spawner.is_valid());
     spawner_script = spawner.ptr();
 
     for (const Row &row : ROWS) {
-        NETW_FORMAT_TEXT(peer_text, row.peer);
-        CAPTURE(peer_text);
+        NETW_FORMAT_TEXT(row_text, row.name);
+        CAPTURE(row_text);
 
         netw_test::SimStand stand(1);
         REQUIRE(stand.ready());
@@ -103,27 +189,38 @@ TEST_CASE(
         const int host_route = int(server->entity_get_route(made));
         Node *client_host = stand.node_at(A, host_route);
         REQUIRE(client_host != nullptr);
+        register_waiting(server, host);
+        register_waiting(stand.session(A), client_host);
         Node *waiter = row.waiter == SERVER ? host : client_host;
         waiter->set(StringName("waits"), true);
+        waiter->set(StringName("promised"), row.wait == PROMISE);
 
         const netw_test::FaultWatch faults;
-        Node *spawned
-            = Object::cast_to<Node>(host->call(StringName("spawn_one")));
+        Node *spawned = row.wait == REGISTRY
+            ? spawn_waiting(server, arena)
+            : Object::cast_to<Node>(host->call(StringName("spawn_one")));
         stand.step_ticks(8);
 
-        CHECK((spawned != nullptr) == row.server_spawns);
+        CHECK((spawned != nullptr) == (row.waiter != SERVER));
         if (spawned != nullptr) {
             const Ref<NetwEntity> entity = NetwEntity::of(spawned);
             REQUIRE(entity.is_valid());
             CHECK(stand.node_at(A, int(entity->get_route())) == nullptr);
         }
-        for (const String message : {String(row.message), String(FIX)}) {
+        const String fix = row.wait == REGISTRY ? REGISTRY_FIX : FN_FIX;
+        for (const String message : {String(row.message), fix}) {
             NETW_CHECK_EQ(
                 row.error ? faults.errors_containing(message)
                           : faults.warnings_containing(message),
                 1
             );
         }
+
+        waiter->call(StringName("finish"));
+        const ObjectID late
+            = ObjectID(uint64_t(int64_t(waiter->get(StringName("late_id")))));
+        CHECK(late.is_valid());
+        CHECK(netw::gd::instance_from_id(late) == nullptr);
     }
     spawner_script = nullptr;
 }

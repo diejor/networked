@@ -596,7 +596,7 @@ public:
             default: {
                 close_seats();
                 seen.orphan_warnings = faults->warnings_containing(
-                    "but it never entered the tree"
+                    "never entered the tree"
                 );
                 delete faults;
                 faults = nullptr;

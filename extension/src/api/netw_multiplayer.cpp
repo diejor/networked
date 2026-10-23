@@ -3190,7 +3190,8 @@ Error NetwMultiplayer::NETW_API_VIRTUAL(poll)() {
     session_poll_turned_away();
     SceneLoads::shared().poll(engine->get_process_frames());
     if (spawn::Pipeline *spawning = spawn_plane()) {
-        spawning->retry_load_parked();
+        spawning->retry_build_parked();
+        spawning->sweep_pending_spawns();
     }
     scene_poll_loading_change();
     const bool clocked = clock_engine().get_configured();
@@ -5472,6 +5473,120 @@ bool NetwMultiplayer::is_coroutine(const Variant &p_value) {
     Object *object = p_value;
     return object != nullptr
         && object->get_class() == String("GDScriptFunctionState");
+}
+
+bool NetwMultiplayer::is_waiting(const Variant &p_value) {
+    return is_coroutine(p_value)
+        || Object::cast_to<NetwPromise>(gd::live_object(p_value)) != nullptr;
+}
+
+void NetwMultiplayer::free_when_returned(const Variant &p_waiting) {
+    Object *waiting = gd::live_object(p_waiting);
+    if (NetwPromise *promise = Object::cast_to<NetwPromise>(waiting)) {
+        promise->then(callable_mp_static(&NetwMultiplayer::free_returned)
+                          .bind(p_waiting));
+        return;
+    }
+    if (is_coroutine(p_waiting)) {
+        waiting->connect(
+            StringName("completed"),
+            callable_mp_static(&NetwMultiplayer::free_returned)
+                .bind(p_waiting),
+            Object::CONNECT_ONE_SHOT
+        );
+    }
+}
+
+void NetwMultiplayer::free_returned(const Variant &p_value, const Variant &) {
+    Node *node = Object::cast_to<Node>(gd::live_object(p_value));
+    if (node == nullptr || node->is_queued_for_deletion()) {
+        return;
+    }
+    if (node->is_inside_tree()) {
+        node->queue_free();
+        return;
+    }
+    if (Node *parent = node->get_parent()) {
+        parent->remove_child(node);
+    }
+    memdelete(node);
+}
+
+void NetwMultiplayer::promise_refuse(
+    const Ref<NetwPromise> &p_promise,
+    Error p_code,
+    const String &p_detail
+) {
+    p_promise->reject(p_code, p_detail);
+    p_promise->mark_failure_observed();
+}
+
+void NetwMultiplayer::spawn_async_returned(
+    const Variant &p_value,
+    const Variant &,
+    uint64_t p_plane,
+    int64_t p_serial
+) {
+    NetwMultiplayer *plane = Object::cast_to<NetwMultiplayer>(
+        gd::instance_from_id(ObjectID(p_plane))
+    );
+    spawn::Pipeline *pipeline
+        = plane != nullptr ? plane->spawn_plane() : nullptr;
+    if (pipeline == nullptr
+        || !pipeline->spawn_async_returned(p_value, p_serial)) {
+        free_returned(p_value, Variant());
+    }
+}
+
+void NetwMultiplayer::spawn_async_failed(
+    int64_t p_code,
+    const String &p_detail,
+    const Variant &,
+    uint64_t p_plane,
+    int64_t p_serial
+) {
+    NetwMultiplayer *plane = Object::cast_to<NetwMultiplayer>(
+        gd::instance_from_id(ObjectID(p_plane))
+    );
+    if (spawn::Pipeline *pipeline
+        = plane != nullptr ? plane->spawn_plane() : nullptr) {
+        pipeline->spawn_async_failed(p_code, p_detail, p_serial);
+    }
+}
+
+void NetwMultiplayer::spawn_build_returned(
+    const Variant &p_value,
+    const Variant &,
+    uint64_t p_plane,
+    int64_t p_route,
+    int64_t p_serial
+) {
+    NetwMultiplayer *plane = Object::cast_to<NetwMultiplayer>(
+        gd::instance_from_id(ObjectID(p_plane))
+    );
+    spawn::Pipeline *pipeline
+        = plane != nullptr ? plane->spawn_plane() : nullptr;
+    if (pipeline == nullptr
+        || !pipeline->build_returned(p_value, p_route, p_serial)) {
+        free_returned(p_value, Variant());
+    }
+}
+
+void NetwMultiplayer::spawn_build_failed(
+    int64_t,
+    const String &p_detail,
+    const Variant &,
+    uint64_t p_plane,
+    int64_t p_route,
+    int64_t p_serial
+) {
+    NetwMultiplayer *plane = Object::cast_to<NetwMultiplayer>(
+        gd::instance_from_id(ObjectID(p_plane))
+    );
+    if (spawn::Pipeline *pipeline
+        = plane != nullptr ? plane->spawn_plane() : nullptr) {
+        pipeline->build_failed(p_detail, p_route, p_serial);
+    }
 }
 
 bool NetwMultiplayer::overrides_seam(const StringName &p_seam) {

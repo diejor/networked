@@ -37,6 +37,8 @@ const char *SIG_TREE_ENTERED = "tree_entered";
 const char *SIG_TREE_EXITING = "tree_exiting";
 const char *KEY_SWEEP = "spawn-visibility-sweep";
 const char *KEY_FLUSH = "spawn-carrier-flush";
+const char *SESSION_ENDED_MID_SPAWN
+    = "The session ended before the spawn function returned.";
 const double CLOCKLESS_TICKRATE = 30.0;
 constexpr int BLOB_CAP = 4095;
 
@@ -71,6 +73,7 @@ Book::Received received_of(const SpawnBuild &p_built) {
             out.source = gd::instance_id(p_built.host);
             out.fn = StringName(p_built.frame.method);
             out.payload = p_built.args;
+            out.fn_waits = p_built.frame.fn_waits;
             break;
         case Book::RECIPE_FN_REGISTRY:
             out.fn = StringName(p_built.frame.fn_id);
@@ -386,8 +389,8 @@ void Pipeline::report_unadded(int64_t p_ticks_run) {
         }
         NETW_WARN(
             sys::SPAWN,
-            "Netw.spawn returned '%s' but it never entered the tree. Add it "
-            "before the next tick.",
+            "'%s' was spawned but never entered the tree. Add it before the "
+            "next tick.",
             node->get_name()
         );
     }
@@ -467,96 +470,126 @@ bool Pipeline::spawn_admitted(Node *p_node, const char *p_verb) {
     return false;
 }
 
-Node *Pipeline::spawn(
+void SpawnRefusal::refuse(Error p_code, const String &p_detail) {
+    NETW_ERROR(sys::SPAWN, "%s", p_detail);
+    refused_quietly(p_code, p_detail);
+}
+
+void SpawnRefusal::refused_quietly(Error p_code, const String &p_detail) {
+    code = p_code;
+    detail = p_detail;
+}
+
+Ref<NetwPromise> SpawnRefusal::promise() const {
+    return NetwPromise::refused(code, detail);
+}
+
+void SpawnRefusal::settle(const Ref<NetwPromise> &p_promise) const {
+    NetwMultiplayer::promise_refuse(p_promise, code, detail);
+}
+
+Node *Pipeline::spawn_host(
     const Callable &p_fn,
     const Array &p_args,
-    const Ref<NetwPlayer> &p_owner
+    const char *p_verb,
+    SpawnRefusal &r_refusal
 ) {
-    NETW_STAGE(SPAWN, "Spawn construct", colors::LIVENESS);
     Node *host = Object::cast_to<Node>(p_fn.get_object());
     if (host == nullptr) {
-        NETW_ERR_V(
-            nullptr,
-            sys::SPAWN,
-            "Netw.spawn needs a method of a Node. Pass a method of a node that "
-            "exists on every peer."
+        r_refusal.refuse(
+            ERR_UNCONFIGURED,
+            vformat(
+                "%s needs a method of a Node. Pass a method of a node that "
+                "exists on every peer.",
+                String(p_verb)
+            )
         );
+        return nullptr;
     }
     const Ref<Script> script = host->get_script();
     const StringName method = p_fn.get_method();
     if (netw::script::model::get_spawn_config(script, method).is_null()) {
-        NETW_ERR_V(
-            nullptr,
-            sys::SPAWN,
-            "Spawn function '%s' is not registered. Register it with "
-            "Netw.configure_spawn before calling Netw.spawn.",
-            method
+        r_refusal.refuse(
+            ERR_UNCONFIGURED,
+            vformat(
+                "Spawn function '%s' is not registered. Register it with "
+                "Netw.configure_spawn before calling %s.",
+                method,
+                String(p_verb)
+            )
         );
+        return nullptr;
     }
     if (!netw::script::model::validate_argument_count(
             script,
             method,
             p_args.size()
         )) {
-        NETW_ERR_V(
-            nullptr,
-            sys::SPAWN,
-            "Netw.spawn was given the wrong number of arguments for spawn "
-            "function '%s'.",
-            method
+        r_refusal.refuse(
+            ERR_INVALID_PARAMETER,
+            vformat(
+                "%s was given the wrong number of arguments for spawn "
+                "function '%s'.",
+                String(p_verb),
+                method
+            )
         );
+        return nullptr;
     }
+    return host;
+}
 
-    Variant built;
-    {
-        NETW_ZONE_NC("Spawn call constructor", colors::LIVENESS);
-        built = p_fn.callv(p_args);
-    }
-    if (NetwMultiplayer::is_coroutine(built)) {
-        NETW_ERR_V(
-            nullptr,
-            sys::SPAWN,
-            "Spawn function '%s' waited. Load what it needs with "
-            "Netw.request_all before calling Netw.spawn.",
-            method
-        );
-    }
-    Node *node = Object::cast_to<Node>(gd::live_object(built));
+Node *Pipeline::spawn_finish(
+    const Variant &p_built,
+    const SpawnCall &p_call,
+    SpawnRefusal &r_refusal
+) {
+    Node *node = Object::cast_to<Node>(gd::live_object(p_built));
     if (node == nullptr || node->is_inside_tree()) {
-        NETW_ERR_V(
-            nullptr,
-            sys::SPAWN,
-            "Spawn function '%s' did not return a Node outside the tree. "
-            "Return the new node without adding it, and do not await in it.",
-            method
+        r_refusal.refuse(
+            ERR_INVALID_PARAMETER,
+            vformat(
+                "Spawn function '%s' did not return a Node outside the tree. "
+                "Return the new node without adding it.",
+                p_call.method
+            )
         );
+        return nullptr;
     }
     const Ref<NetwEntity> existing = NetwEntity::of(node);
     if (existing.is_valid() && existing->get_route() != 0) {
-        NETW_ERR_V(
-            nullptr,
-            sys::SPAWN,
-            "Spawn function '%s' returned a node that is already replicated. "
-            "Return a new node.",
-            method
+        r_refusal.refuse(
+            ERR_INVALID_PARAMETER,
+            vformat(
+                "Spawn function '%s' returned a node that is already "
+                "replicated. Return a new node.",
+                p_call.method
+            )
         );
+        return nullptr;
     }
     bool admitted = false;
     {
         NETW_ZONE_NC("Spawn admit", colors::LIVENESS);
-        write_owner(node, p_owner);
-        admitted = spawn_admitted(node, "Netw.spawn");
+        write_owner(node, p_call.owner);
+        admitted = spawn_admitted(node, p_call.verb);
     }
     if (!admitted) {
         memdelete(node);
+        r_refusal.refused_quietly(
+            ERR_UNAUTHORIZED,
+            vformat("The session refused spawn function '%s'.", p_call.method)
+        );
         return nullptr;
     }
 
+    Node *host = Object::cast_to<Node>(gd::instance_from_id(p_call.host));
     Record record;
     record.set_recipe(Book::RECIPE_FN);
     record.bind_fn_host(host);
-    record.set_fn_method(method);
-    record.set_fn_args(p_args);
+    record.set_fn_method(p_call.method);
+    record.set_fn_args(p_call.args);
+    record.set_fn_waits(p_call.waits);
     bool armed = false;
     {
         NETW_ZONE_NC("Spawn arm authoritative", colors::LIVENESS);
@@ -564,6 +597,10 @@ Node *Pipeline::spawn(
     }
     if (!armed) {
         memdelete(node);
+        r_refusal.refused_quietly(
+            ERR_UNAVAILABLE,
+            vformat("Spawn function '%s' could not be armed.", p_call.method)
+        );
         return nullptr;
     }
     {
@@ -571,6 +608,208 @@ Node *Pipeline::spawn(
         NetwMultiplayer::scene_wrap_world(node);
     }
     return node;
+}
+
+Node *Pipeline::spawn(
+    const Callable &p_fn,
+    const Array &p_args,
+    const Ref<NetwPlayer> &p_owner
+) {
+    NETW_STAGE(SPAWN, "Spawn construct", colors::LIVENESS);
+    SpawnRefusal refusal;
+    Node *host = spawn_host(p_fn, p_args, "Netw.spawn", refusal);
+    if (host == nullptr) {
+        return nullptr;
+    }
+    const StringName method = p_fn.get_method();
+
+    Variant built;
+    {
+        NETW_ZONE_NC("Spawn call constructor", colors::LIVENESS);
+        built = p_fn.callv(p_args);
+    }
+    if (NetwMultiplayer::is_waiting(built)) {
+        NetwMultiplayer::free_when_returned(built);
+        NETW_ERR_V(
+            nullptr,
+            sys::SPAWN,
+            "Spawn function '%s' waited. Use Netw.spawn_async for a spawn "
+            "function that awaits.",
+            method
+        );
+    }
+    const SpawnCall call{
+        gd::instance_id(host),
+        method,
+        p_args,
+        p_owner,
+        "Netw.spawn",
+        0
+    };
+    return spawn_finish(built, call, refusal);
+}
+
+Ref<NetwPromise> Pipeline::spawn_async(
+    const Callable &p_fn,
+    const Array &p_args,
+    const Ref<NetwPlayer> &p_owner
+) {
+    NETW_STAGE(SPAWN, "Spawn construct async", colors::LIVENESS);
+    SpawnRefusal refusal;
+    if (!is_server_authority()) {
+        refusal.refuse(
+            ERR_UNAUTHORIZED,
+            String(
+                "Netw.spawn_async runs on the server. A client spawns its own "
+                "node with Netw.spawn."
+            )
+        );
+        return refusal.promise();
+    }
+    Node *host = spawn_host(p_fn, p_args, "Netw.spawn_async", refusal);
+    if (host == nullptr) {
+        return refusal.promise();
+    }
+    NetwMultiplayer *plane = core();
+    const SpawnCall call{
+        gd::instance_id(host),
+        p_fn.get_method(),
+        p_args,
+        p_owner,
+        "Netw.spawn_async",
+        park_now(),
+        true
+    };
+
+    Variant built;
+    {
+        NETW_ZONE_NC("Spawn call constructor", colors::LIVENESS);
+        built = p_fn.callv(p_args);
+    }
+    if (!NetwMultiplayer::is_waiting(built)) {
+        Node *node = spawn_finish(built, call, refusal);
+        return node != nullptr ? NetwPromise::resolved(
+                                     NetwMultiplayer::scene_outer_of(node)
+                                 )
+                               : refusal.promise();
+    }
+
+    pending_serial += 1;
+    const int64_t serial = pending_serial;
+    PendingSpawn &row = pending_spawns[serial];
+    row.call = call;
+    row.waiting = built;
+    row.promise.instantiate();
+    const uint64_t plane_id = uint64_t(gd::instance_id(plane));
+    Object *waiting = gd::live_object(built);
+    if (NetwPromise *promised = Object::cast_to<NetwPromise>(waiting)) {
+        promised->then(
+            callable_mp_static(&NetwMultiplayer::spawn_async_returned)
+                .bind(built, plane_id, serial)
+        );
+        promised->catch_error(
+            callable_mp_static(&NetwMultiplayer::spawn_async_failed)
+                .bind(built, plane_id, serial)
+        );
+    } else {
+        waiting->connect(
+            StringName("completed"),
+            callable_mp_static(&NetwMultiplayer::spawn_async_returned)
+                .bind(built, plane_id, serial),
+            Object::CONNECT_ONE_SHOT
+        );
+    }
+    return row.promise;
+}
+
+bool Pipeline::spawn_async_returned(const Variant &p_value, int64_t p_serial) {
+    const HashMap<int64_t, PendingSpawn>::Iterator found
+        = pending_spawns.find(p_serial);
+    if (!found) {
+        return false;
+    }
+    const PendingSpawn row = found->value;
+    pending_spawns.remove(found);
+    if (gd::instance_from_id(row.call.host) == nullptr) {
+        row.promise->reject(
+            ERR_UNAVAILABLE,
+            vformat(
+                "The node holding spawn function '%s' was freed before it "
+                "returned.",
+                row.call.method
+            )
+        );
+        return false;
+    }
+    SpawnRefusal refusal;
+    Node *node = spawn_finish(p_value, row.call, refusal);
+    if (node == nullptr) {
+        refusal.settle(row.promise);
+        return true;
+    }
+    row.promise->resolve(NetwMultiplayer::scene_outer_of(node));
+    return true;
+}
+
+void Pipeline::spawn_async_failed(
+    int64_t p_code,
+    const String &p_detail,
+    int64_t p_serial
+) {
+    const HashMap<int64_t, PendingSpawn>::Iterator found
+        = pending_spawns.find(p_serial);
+    if (!found) {
+        return;
+    }
+    const Ref<NetwPromise> promise = found->value.promise;
+    pending_spawns.remove(found);
+    promise->reject(Error(p_code), p_detail);
+}
+
+void Pipeline::fail_pending_spawns(const String &p_detail) {
+    if (pending_spawns.is_empty()) {
+        return;
+    }
+    LocalVector<Ref<NetwPromise>> failed;
+    for (const KeyValue<int64_t, PendingSpawn> &row : pending_spawns) {
+        failed.push_back(row.value.promise);
+    }
+    pending_spawns.clear();
+    for (const Ref<NetwPromise> &promise : failed) {
+        promise->reject(ERR_UNAVAILABLE, p_detail);
+    }
+}
+
+void Pipeline::sweep_pending_spawns() {
+    if (pending_spawns.is_empty()) {
+        return;
+    }
+    LocalVector<int64_t> orphaned;
+    for (KeyValue<int64_t, PendingSpawn> &row : pending_spawns) {
+        PendingSpawn &pending = row.value;
+        if (gd::instance_from_id(pending.call.host) == nullptr) {
+            orphaned.push_back(row.key);
+            continue;
+        }
+        warn_slow_build(
+            pending.call.method,
+            pending.call.started_at,
+            pending.warned
+        );
+    }
+    for (const int64_t serial : orphaned) {
+        const Ref<NetwPromise> promise = pending_spawns[serial].promise;
+        const StringName method = pending_spawns[serial].call.method;
+        pending_spawns.erase(serial);
+        promise->reject(
+            ERR_UNAVAILABLE,
+            vformat(
+                "The node holding spawn function '%s' was freed before it "
+                "returned.",
+                method
+            )
+        );
+    }
 }
 
 void Pipeline::register_spawn_constructor(
@@ -646,6 +885,15 @@ Node *Pipeline::spawn_registered(
         );
     }
     const Variant built = fn.callv(p_args);
+    if (NetwMultiplayer::is_waiting(built)) {
+        NetwMultiplayer::free_when_returned(built);
+        NETW_ERR_V(
+            nullptr,
+            sys::SPAWN,
+            "Spawn constructor '%s' waited. Return the node without waiting.",
+            p_id
+        );
+    }
     Node *node = Object::cast_to<Node>(gd::live_object(built));
     if (node == nullptr || node->is_inside_tree()) {
         NETW_ERR_V(
@@ -1367,8 +1615,9 @@ PackedByteArray Pipeline::encode_record_frame(
             return PackedByteArray();
         }
         String name = String(p_record->get_fn_method());
+        bool waits = p_record->get_fn_waits();
         PackedByteArray args = encode_fn_args(schema, p_record->get_fn_args());
-        if (!wire::string_field(stream, name)
+        if (!wire::string_field(stream, name) || !stream.bool1(waits)
             || !stream.bytes_capped(args, BLOB_CAP)) {
             return PackedByteArray();
         }
@@ -1470,6 +1719,11 @@ Node *Pipeline::build_spawner(
 
 Node *Pipeline::build_fn(const Callable &p_fn, const Array &p_args) {
     const Variant built = p_fn.callv(p_args);
+    fn_waited = NetwMultiplayer::is_waiting(built);
+    if (fn_waited) {
+        NetwMultiplayer::free_when_returned(built);
+        return nullptr;
+    }
     return Object::cast_to<Node>(gd::live_object(built));
 }
 
@@ -1481,8 +1735,16 @@ Node *Pipeline::build_host_fn(
     if (p_host == nullptr) {
         return nullptr;
     }
+    const Build *held = builds.getptr(building_route);
+    if (held != nullptr && held->scene.is_empty()) {
+        return take_ready(building_route);
+    }
     const Variant built = Callable(p_host, p_method).callv(p_args);
-    host_fn_waited = NetwMultiplayer::is_coroutine(built);
+    fn_waited = NetwMultiplayer::is_waiting(built);
+    if (fn_waited) {
+        waited_result = built;
+        return nullptr;
+    }
     return Object::cast_to<Node>(gd::live_object(built));
 }
 
@@ -1572,6 +1834,7 @@ bool decode_spawn_frame(
     } else if (frame.recipe == Book::RECIPE_FN) {
         if (!p_plane->anchor_decode(stream, frame.host_anchor)
             || !wire::string_field(stream, frame.method)
+            || !stream.bool1(frame.fn_waits)
             || !stream.bytes_capped(frame.args, BLOB_CAP)) {
             return false;
         }
@@ -1837,7 +2100,7 @@ void Pipeline::apply_parked(
         return;
     }
     if (!admits_frame(p_sender, channel_spawn, p_payload)) {
-        release_scene(p_route);
+        release_build(p_route);
         spawn_park_refused += 1;
         NETW_WARN(
             sys::SPAWN,
@@ -1858,8 +2121,8 @@ void Pipeline::try_apply_spawn(
     SpawnBuild built;
     switch (build_spawn(p_payload, built)) {
         case SpawnBuild::DROPPED:
-            if (!built.scene.is_empty()) {
-                release_scene(built.frame.route);
+            if (!built.scene.is_empty() || built.from_build) {
+                release_build(built.frame.route);
             }
             return;
         case SpawnBuild::WAITS:
@@ -1890,11 +2153,11 @@ void Pipeline::park_built(
         case Park::WAIT_SPAWNER:
             park_spawn_for_scene(p_payload, route, p_sender);
             break;
-        case Park::WAIT_LOAD:
+        case Park::WAIT_BUILD:
             if (park.park(
                     route,
                     p_payload,
-                    Park::WAIT_LOAD,
+                    Park::WAIT_BUILD,
                     INT64_MAX,
                     p_sender
                 )) {
@@ -1925,6 +2188,8 @@ SpawnBuild::Outcome Pipeline::build_spawn(
     const Dictionary &header = frame.header;
     const int64_t recipe = frame.recipe;
     const Dictionary &parent_anchor = frame.parent_anchor;
+    const Build *held = builds.getptr(route);
+    r_built.from_build = held != nullptr && held->scene.is_empty();
 
     if (!plane->liveness_epoch_admits(route, frame.epoch)) {
         drops_spawn_stale_life += 1;
@@ -2081,18 +2346,29 @@ SpawnBuild::Outcome Pipeline::build_spawn(
                 return loaded;
             }
         }
+        fn_waited = false;
         node = run_construct_stage(
             callable_mp(plane, &NetwMultiplayer::spawn_build_fn)
                 .bind(fn, Array(resolved))
         );
         if (node == nullptr) {
-            NETW_WARN(
-                sys::SPAWN,
-                "Spawn constructor '%s' did not return a Node, so route %d was "
-                "dropped.",
-                id,
-                route
-            );
+            if (fn_waited) {
+                NETW_WARN(
+                    sys::SPAWN,
+                    "Spawn constructor '%s' waited, so route %d was dropped. "
+                    "Return the node without waiting.",
+                    id,
+                    route
+                );
+            } else {
+                NETW_WARN(
+                    sys::SPAWN,
+                    "Spawn constructor '%s' did not return a Node, so route %d "
+                    "was dropped.",
+                    id,
+                    route
+                );
+            }
             drops_spawn_unresolved += 1;
             return SpawnBuild::DROPPED;
         }
@@ -2139,18 +2415,32 @@ SpawnBuild::Outcome Pipeline::build_spawn(
             return unresolved_args(r_built);
         }
         r_built.args = resolved;
-        host_fn_waited = false;
+        fn_waited = false;
+        waited_result = Variant();
+        building_route = route;
         node = run_construct_stage(
             callable_mp(plane, &NetwMultiplayer::spawn_build_host_fn)
                 .bind(host, method, Array(resolved))
         );
+        building_route = 0;
+        const Variant waiting = waited_result;
+        waited_result = Variant();
+        if (node == nullptr && fn_waited && frame.fn_waits && !r_built.strict) {
+            const SpawnBuild::Outcome waited
+                = wait_for_function(waiting, host, method, r_built);
+            if (waited != SpawnBuild::BUILT) {
+                return waited;
+            }
+            node = take_ready(route);
+        } else if (fn_waited) {
+            NetwMultiplayer::free_when_returned(waiting);
+        }
         if (node == nullptr) {
-            if (host_fn_waited) {
+            if (fn_waited) {
                 NETW_WARN(
                     sys::SPAWN,
-                    "Spawn function '%s' waited, so route %d was dropped. "
-                    "Load what it needs with Netw.request_all before "
-                    "calling Netw.spawn.",
+                    "Spawn function '%s' waited, so route %d was dropped. Use "
+                    "Netw.spawn_async for a spawn function that awaits.",
                     method,
                     route
                 );
@@ -2644,6 +2934,24 @@ int64_t Pipeline::park_now() const {
     return clock.get_configured() ? clock.get_ticks_run()
                                   : plane->receive_tick();
 }
+
+void Pipeline::warn_slow_build(
+    const StringName &p_method,
+    int64_t p_started_at,
+    bool &r_warned
+) const {
+    if (r_warned || park_now() - p_started_at < park_timeout_ticks()) {
+        return;
+    }
+    r_warned = true;
+    NETW_WARN(
+        sys::SPAWN,
+        "Spawn function '%s' has not returned after %s seconds. Check that "
+        "what it awaits can finish.",
+        p_method,
+        String::num(park_timeout_seconds)
+    );
+}
 void Pipeline::park_spawn(
     const PackedByteArray &p_payload,
     int64_t p_dep_route,
@@ -2686,7 +2994,7 @@ bool Pipeline::cancel_parked(int64_t p_route) {
     if (!park.cancel(p_route)) {
         return false;
     }
-    release_scene(p_route);
+    release_build(p_route);
     return true;
 }
 
@@ -2827,21 +3135,40 @@ void Pipeline::retry_adopt_parked() {
     }
 }
 
-void Pipeline::retry_load_parked() {
+void Pipeline::retry_build_parked() {
     if (park.size() == 0) {
         return;
     }
     expire_spawner_parked();
-    const PackedInt64Array waiting = park.waiting_on(Park::WAIT_LOAD);
+    const PackedInt64Array waiting = park.waiting_on(Park::WAIT_BUILD);
     const SceneLoads &loads = SceneLoads::shared();
     for (int at = 0; at < waiting.size(); ++at) {
         const int64_t parked_route = waiting[at];
         if (!park.has(parked_route)) {
             continue;
         }
-        const HashMap<int64_t, String>::ConstIterator held
-            = scene_holds.find(parked_route);
-        const String path = held ? held->value : String();
+        Build *held = builds.getptr(parked_route);
+        if (held != nullptr && held->scene.is_empty()) {
+            if (held->ready.is_valid()) {
+                const int64_t sender = park.sender_of(parked_route);
+                apply_parked(parked_route, park.take(parked_route), sender);
+            } else if (gd::instance_from_id(held->host) == nullptr) {
+                const StringName method = held->method;
+                cancel_parked(parked_route);
+                drops_spawn_unresolved += 1;
+                NETW_WARN(
+                    sys::SPAWN,
+                    "The node holding spawn function '%s' was freed before it "
+                    "returned, so route %d was dropped.",
+                    method,
+                    parked_route
+                );
+            } else {
+                warn_slow_build(held->method, held->started_at, held->warned);
+            }
+            continue;
+        }
+        const String path = held != nullptr ? held->scene : String();
         const SceneLoads::Status status = loads.status(path);
         if (status == SceneLoads::STATUS_LOADING) {
             continue;
@@ -2868,25 +3195,142 @@ SpawnBuild::Outcome Pipeline::wait_for_scene(
     r_built.scene = path;
     SceneLoads &loads = SceneLoads::shared();
     const SceneLoads::Status status = loads.begin(path);
-    if (!scene_holds.has(route)) {
+    if (!builds.has(route)) {
         loads.hold(path);
-        scene_holds.insert(route, path);
+        Build held;
+        held.scene = path;
+        builds.insert(route, held);
     }
     if (status == SceneLoads::STATUS_READY) {
         return SpawnBuild::BUILT;
     }
     if (status == SceneLoads::STATUS_LOADING) {
-        r_built.wait = Park::WAIT_LOAD;
+        r_built.wait = Park::WAIT_BUILD;
         return SpawnBuild::WAITS;
     }
     return drop_missing_scene(route, path);
+}
+
+SpawnBuild::Outcome Pipeline::wait_for_function(
+    const Variant &p_waiting,
+    Node *p_host,
+    const StringName &p_method,
+    SpawnBuild &r_built
+) {
+    const int64_t route = r_built.frame.route;
+    release_build(route);
+    build_serial += 1;
+    const int64_t serial = build_serial;
+    Build held;
+    held.pending = p_waiting;
+    held.host = gd::instance_id(p_host);
+    held.method = p_method;
+    held.serial = serial;
+    held.started_at = park_now();
+    builds.insert(route, held);
+
+    const uint64_t plane_id = uint64_t(gd::instance_id(core()));
+    Object *waiting = gd::live_object(p_waiting);
+    if (NetwPromise *promised = Object::cast_to<NetwPromise>(waiting)) {
+        promised->then(
+            callable_mp_static(&NetwMultiplayer::spawn_build_returned)
+                .bind(p_waiting, plane_id, route, serial)
+        );
+        promised->catch_error(
+            callable_mp_static(&NetwMultiplayer::spawn_build_failed)
+                .bind(p_waiting, plane_id, route, serial)
+        );
+    } else {
+        waiting->connect(
+            StringName("completed"),
+            callable_mp_static(&NetwMultiplayer::spawn_build_returned)
+                .bind(p_waiting, plane_id, route, serial),
+            Object::CONNECT_ONE_SHOT
+        );
+    }
+
+    const Build *settled = builds.getptr(route);
+    if (settled == nullptr || settled->serial != serial) {
+        return SpawnBuild::DROPPED;
+    }
+    if (settled->ready.is_valid()) {
+        return SpawnBuild::BUILT;
+    }
+    r_built.wait = Park::WAIT_BUILD;
+    return SpawnBuild::WAITS;
+}
+
+Node *Pipeline::take_ready(int64_t p_route) {
+    const HashMap<int64_t, Build>::Iterator held = builds.find(p_route);
+    if (!held || !held->value.scene.is_empty()) {
+        return nullptr;
+    }
+    Node *ready
+        = Object::cast_to<Node>(gd::instance_from_id(held->value.ready));
+    builds.remove(held);
+    return ready;
+}
+
+bool Pipeline::build_returned(
+    const Variant &p_value,
+    int64_t p_route,
+    int64_t p_serial
+) {
+    Build *held = builds.getptr(p_route);
+    if (held == nullptr || !held->scene.is_empty()
+        || held->serial != p_serial) {
+        return false;
+    }
+    held->pending = Variant();
+    Node *node = Object::cast_to<Node>(gd::live_object(p_value));
+    if (node != nullptr && !node->is_inside_tree()) {
+        held->ready = gd::instance_id(node);
+        return true;
+    }
+    const StringName method = held->method;
+    drop_build(p_route);
+    NETW_WARN(
+        sys::SPAWN,
+        "Spawn function '%s' did not return a Node, so route %d was dropped.",
+        method,
+        p_route
+    );
+    return true;
+}
+
+void Pipeline::build_failed(
+    const String &p_detail,
+    int64_t p_route,
+    int64_t p_serial
+) {
+    const Build *held = builds.getptr(p_route);
+    if (held == nullptr || !held->scene.is_empty()
+        || held->serial != p_serial) {
+        return;
+    }
+    const StringName method = held->method;
+    drop_build(p_route);
+    NETW_WARN(
+        sys::SPAWN,
+        "Spawn function '%s' failed with '%s', so route %d was dropped.",
+        method,
+        p_detail,
+        p_route
+    );
+}
+
+void Pipeline::drop_build(int64_t p_route) {
+    drops_spawn_unresolved += 1;
+    if (!cancel_parked(p_route)) {
+        release_build(p_route);
+    }
 }
 
 SpawnBuild::Outcome Pipeline::drop_missing_scene(
     int64_t p_route,
     const String &p_path
 ) {
-    release_scene(p_route);
+    release_build(p_route);
     NETW_WARN(
         sys::SPAWN,
         "A spawn for route %d was dropped, because scene '%s' does not exist "
@@ -2898,20 +3342,30 @@ SpawnBuild::Outcome Pipeline::drop_missing_scene(
     return SpawnBuild::DROPPED;
 }
 
-void Pipeline::release_scene(int64_t p_route) {
-    const HashMap<int64_t, String>::Iterator held = scene_holds.find(p_route);
+void Pipeline::release_build(int64_t p_route) {
+    const HashMap<int64_t, Build>::Iterator held = builds.find(p_route);
     if (!held) {
         return;
     }
-    SceneLoads::shared().release(held->value);
-    scene_holds.remove(held);
+    if (!held->value.scene.is_empty()) {
+        SceneLoads::shared().release(held->value.scene);
+    }
+    Node *ready
+        = Object::cast_to<Node>(gd::instance_from_id(held->value.ready));
+    builds.remove(held);
+    if (ready != nullptr) {
+        NetwMultiplayer::free_returned(Variant(ready), Variant());
+    }
 }
 
-void Pipeline::release_scenes() {
-    for (const KeyValue<int64_t, String> &held : scene_holds) {
-        SceneLoads::shared().release(held.value);
+void Pipeline::release_builds() {
+    LocalVector<int64_t> routes;
+    for (const KeyValue<int64_t, Build> &held : builds) {
+        routes.push_back(held.key);
     }
-    scene_holds.clear();
+    for (const int64_t route : routes) {
+        release_build(route);
+    }
 }
 
 void Pipeline::drop_scene_park_retry() {
@@ -2985,6 +3439,7 @@ void Pipeline::clear_action_gates() {
 }
 
 void Pipeline::free_session_nodes() {
+    fail_pending_spawns(SESSION_ENDED_MID_SPAWN);
     report_unadded(INT64_MAX);
     const LocalVector<ObjectID> nodes = spawn_book.session_nodes();
     for (const ObjectID &id : nodes) {
@@ -3005,12 +3460,13 @@ void Pipeline::free_session_nodes() {
 }
 
 Pipeline::~Pipeline() {
-    release_scenes();
+    release_builds();
 }
 
 void Pipeline::clear_session() {
+    fail_pending_spawns(SESSION_ENDED_MID_SPAWN);
     clear_parks();
-    release_scenes();
+    release_builds();
     spawn_book.clear();
     refused_placed.clear();
     placed_before_host.clear();
@@ -3021,13 +3477,13 @@ void Pipeline::clear_session() {
 void Pipeline::clear_parks() {
     drop_scene_park_retry();
     LocalVector<int64_t> parked;
-    for (const KeyValue<int64_t, String> &held : scene_holds) {
+    for (const KeyValue<int64_t, Build> &held : builds) {
         if (park.has(held.key)) {
             parked.push_back(held.key);
         }
     }
     for (const int64_t route : parked) {
-        release_scene(route);
+        release_build(route);
     }
     park.clear();
 }
@@ -3066,6 +3522,9 @@ PackedInt64Array Pipeline::promote_received() {
 }
 
 void Pipeline::demote_spawned() {
+    fail_pending_spawns(
+        String("The server changed before the spawn function returned.")
+    );
     const PackedInt64Array routes = spawn_book.spawned_routes();
     for (int at = 0; at < routes.size(); ++at) {
         const Record *record = spawn_book.spawned_of(routes[at]);
@@ -3076,7 +3535,7 @@ void Pipeline::demote_spawned() {
 }
 
 void Pipeline::clear_route(int64_t p_route) {
-    release_scene(p_route);
+    release_build(p_route);
     unadded.erase(p_route);
     spawn_book.drop_armed(p_route);
     spawn_book.drop_recv(p_route);

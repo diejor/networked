@@ -155,6 +155,10 @@ public:
         const godot::Callable &p_fn,
         const godot::Array &p_args
     );
+    static godot::Ref<NetwPromise> spawn_async(
+        const godot::Callable &p_fn,
+        const godot::Array &p_args
+    );
     static godot::Error despawn(
         godot::Node *p_node,
         const godot::Ref<NetwDespawnOpts> &p_opts

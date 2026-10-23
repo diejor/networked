@@ -6,6 +6,7 @@
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/log.hpp"
+#include "netw/spawn/pipeline.hpp"
 
 using namespace godot;
 
@@ -49,7 +50,32 @@ void NetwActionContext::open(
     key = p_key;
 }
 
+namespace {
+
+bool built_async(Node *p_node) {
+    const Ref<NetwEntity> entity = NetwEntity::of(p_node);
+    if (entity.is_null()) {
+        return false;
+    }
+    const Ref<NetwMultiplayer> plane = entity->get_multiplayer();
+    spawn::Pipeline *spawning
+        = plane.is_valid() ? plane->spawn_plane() : nullptr;
+    return spawning != nullptr
+        && spawning->get_spawn_book()->fn_waits_of(entity->get_route());
+}
+
+} // namespace
+
 void NetwActionContext::bind_result(Node *p_node) {
+    if (p_node != nullptr && built_async(p_node)) {
+        NETW_ERROR(
+            sys::SPAWN,
+            "NetwActionContext.bind_result got '%s', which Netw.spawn_async "
+            "built. Spawn it with Netw.spawn inside the action.",
+            p_node->get_name()
+        );
+        return;
+    }
     bound = true;
     NetwMultiplayer::wrapper_stamp_identity(p_node, key, 0);
     const Ref<NetwEntity> entity = NetwEntity::ensure(p_node);

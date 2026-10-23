@@ -101,6 +101,8 @@ Methods
    +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Node`                                                     | :ref:`spawn<class_Netw_method_spawn>`\ (\ fn\: :godot:`Callable`, ...\ ) |vararg| |static|                                                                                                              |
    +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>`                             | :ref:`spawn_async<class_Netw_method_spawn_async>`\ (\ fn\: :godot:`Callable`, ...\ ) |vararg| |static|                                                                                                  |
+   +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Node`                                                     | :ref:`spawn_player<class_Netw_method_spawn_player>`\ (\ player\: :ref:`NetwPlayer<class_NetwPlayer>`, fn\: :godot:`Callable`, ...\ ) |vararg| |static|                                                  |
    +-------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | |void|                                                            | :ref:`sync_property<class_Netw_method_sync_property>`\ (\ node\: :godot:`Node`, property\: :godot:`StringName`\ ) |static|                                                                              |
@@ -482,7 +484,7 @@ By default, only the node's multiplayer authority may emit ``sig``.
                     func fire(direction: Vector2) -> void:
                         muzzle.add_child(Netw.spawn(make_bullet, direction))
 
-\ The :godot:`Callable` must be configured before :ref:`spawn()<class_Netw_method_spawn>` uses it.
+\ The :godot:`Callable` must be configured before :ref:`spawn()<class_Netw_method_spawn>` or :ref:`spawn_async()<class_Netw_method_spawn_async>` uses it. It may await only under :ref:`spawn_async()<class_Netw_method_spawn_async>`.
 
 .. rst-class:: classref-item-separator
 
@@ -924,18 +926,62 @@ Calls ``fn`` with the arguments after it on every peer, and returns the node it 
 
 The entity has no :ref:`NetwEntity.player<class_NetwEntity_property_player>`, so it stays when any player leaves. :ref:`spawn_player()<class_Netw_method_spawn_player>` makes one that is despawned with its player.
 
-A client can call it when the node sets :ref:`NetwEntity.lifecycle<class_NetwEntity_property_lifecycle>` to :ref:`NetwEntity.LIFECYCLE_CONTROLLER<class_NetwEntity_constant_LIFECYCLE_CONTROLLER>`. That client's player becomes its :ref:`NetwEntity.controller<class_NetwEntity_property_controller>`.
+A client can call it when the node sets :ref:`NetwEntity.lifecycle<class_NetwEntity_property_lifecycle>` to :ref:`NetwEntity.LIFECYCLE_CONTROLLER<class_NetwEntity_constant_LIFECYCLE_CONTROLLER>`. That client's player becomes its :ref:`NetwEntity.controller<class_NetwEntity_property_controller>`. The client sees it at once and loses it if the server refuses.
 
-\ ``fn`` must return the node without waiting. Load a scene that takes a while on every peer first with :ref:`request_all()<class_Netw_method_request_all>`.
+\ ``fn`` must return the node without waiting. Use :ref:`spawn_async()<class_Netw_method_spawn_async>` when it awaits, and load first with :ref:`request_all()<class_Netw_method_request_all>` when every peer should start together.
 
-::
+.. rst-class:: classref-item-separator
 
-    var loads := Netw.request_all(preload_level, path)
-    await loads.wait()
-    if not loads.is_failed:
-        add_child(Netw.spawn(make_level, path))
+----
 
-\ A client can call it when the node sets :ref:`NetwEntity.lifecycle<class_NetwEntity_property_lifecycle>` to :ref:`NetwEntity.LIFECYCLE_CONTROLLER<class_NetwEntity_constant_LIFECYCLE_CONTROLLER>`. That client's player becomes its :ref:`NetwEntity.controller<class_NetwEntity_property_controller>`. The client sees it at once and loses it if the server refuses.
+.. _class_Netw_method_spawn_async:
+
+.. rst-class:: classref-method
+
+:ref:`NetwPromise<class_NetwPromise>` **spawn_async**\ (\ fn\: :godot:`Callable`, ...\ ) |vararg| |static| :ref:`🔗<class_Netw_method_spawn_async>`
+
+Calls ``fn`` with the arguments after it on every peer, as :ref:`spawn()<class_Netw_method_spawn>` does, and lets ``fn`` await. The :ref:`NetwPromise<class_NetwPromise>` settles with the node once ``fn`` returns here. A client holds what the server sends for the node until its own copy is built.
+
+
+.. tabs::
+
+ .. code-tab:: gdscript
+
+    func start(path: String) -> void:
+        var level: Node = await Netw.spawn_async(make_level, path).wait()
+        add_child(level)
+
+    func make_level(path: String) -> Node:
+        ResourceLoader.load_threaded_request(path)
+        while ResourceLoader.load_threaded_get_status(path) \
+                == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+            await get_tree().process_frame
+        return ResourceLoader.load_threaded_get(path).instantiate()
+
+ .. code-tab:: csharp
+
+    public async void Start(string path)
+    {
+        Node level = await Netw.SpawnAsync(this, MethodName.MakeLevel, path).AsTask(v => v.As<Node>());
+        AddChild(level);
+    }
+
+    public Variant MakeLevel(string path) => NetwPromise.FromTask(LoadLevel(path));
+
+    async Task<Node> LoadLevel(string path)
+    {
+        ResourceLoader.LoadThreadedRequest(path);
+        while (ResourceLoader.LoadThreadedGetStatus(path)
+                == ResourceLoader.ThreadLoadStatus.InProgress)
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        return (ResourceLoader.LoadThreadedGet(path) as PackedScene).Instantiate();
+    }
+
+\ 
+
+Add the node to the tree before the next tick.
+
+\ **Server Only.**
 
 .. rst-class:: classref-item-separator
 

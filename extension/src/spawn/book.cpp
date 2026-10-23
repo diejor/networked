@@ -46,6 +46,15 @@ bool Book::has_armed(int64_t route) const {
     return armed.has(route);
 }
 
+bool Book::fn_waits_of(int64_t route) const {
+    const HashMap<int64_t, Record>::ConstIterator held = armed.find(route);
+    if (held) {
+        return held->value.get_fn_waits();
+    }
+    const Record *issued = spawned_of(route);
+    return issued != nullptr && issued->get_fn_waits();
+}
+
 bool Book::drop_armed(int64_t route) {
     const HashMap<int64_t, Record>::Iterator found = armed.find(route);
     if (!found) {
@@ -244,6 +253,7 @@ Book::Received Book::received_of(const Record &record) {
             out.source = gd::instance_id(record.fn_host());
             out.fn = record.get_fn_method();
             out.payload = record.get_fn_args();
+            out.fn_waits = record.get_fn_waits();
             break;
         case RECIPE_FN_REGISTRY:
             out.fn = record.get_fn_registry_id();
@@ -289,6 +299,7 @@ bool Book::take_recv(int64_t route, Record &out) {
         case RECIPE_FN:
             out.bind_fn_host(source);
             out.set_fn_method(recipe.fn);
+            out.set_fn_waits(recipe.fn_waits);
             out.set_fn_args(recipe.payload);
             break;
         case RECIPE_FN_REGISTRY:

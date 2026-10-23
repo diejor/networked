@@ -259,7 +259,7 @@
 				func fire(direction: Vector2) -&gt; void:
 				    muzzle.add_child(Netw.spawn(make_bullet, direction))
 				[/codeblock]
-				The [Callable] must be configured before [method spawn] uses it.
+				The [Callable] must be configured before [method spawn] or [method spawn_async] uses it. It may await only under [method spawn_async].
 			</description>
 		</method>
 		<method name="configure_transfer" qualifiers="static">
@@ -576,15 +576,49 @@
 				[/codeblock]
 				Register [param fn] with [method configure_spawn] first, and add the node to the tree before the next tick.
 				The entity has no [member NetwEntity.player], so it stays when any player leaves. [method spawn_player] makes one that is despawned with its player.
-				A client can call it when the node sets [member NetwEntity.lifecycle] to [constant NetwEntity.LIFECYCLE_CONTROLLER]. That client's player becomes its [member NetwEntity.controller].
-				[param fn] must return the node without waiting. Load a scene that takes a while on every peer first with [method request_all].
-				[codeblock]
-				var loads := Netw.request_all(preload_level, path)
-				await loads.wait()
-				if not loads.is_failed:
-				    add_child(Netw.spawn(make_level, path))
-				[/codeblock]
 				A client can call it when the node sets [member NetwEntity.lifecycle] to [constant NetwEntity.LIFECYCLE_CONTROLLER]. That client's player becomes its [member NetwEntity.controller]. The client sees it at once and loses it if the server refuses.
+				[param fn] must return the node without waiting. Use [method spawn_async] when it awaits, and load first with [method request_all] when every peer should start together.
+			</description>
+		</method>
+		<method name="spawn_async" qualifiers="vararg static">
+			<return type="NetwPromise" />
+			<param index="0" name="fn" type="Callable" />
+			<description>
+				Calls [param fn] with the arguments after it on every peer, as [method spawn] does, and lets [param fn] await. The [NetwPromise] settles with the node once [param fn] returns here. A client holds what the server sends for the node until its own copy is built.
+				[codeblocks]
+				[gdscript]
+				func start(path: String) -> void:
+				    var level: Node = await Netw.spawn_async(make_level, path).wait()
+				    add_child(level)
+
+				func make_level(path: String) -> Node:
+				    ResourceLoader.load_threaded_request(path)
+				    while ResourceLoader.load_threaded_get_status(path) \
+				            == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+				        await get_tree().process_frame
+				    return ResourceLoader.load_threaded_get(path).instantiate()
+				[/gdscript]
+				[csharp]
+				public async void Start(string path)
+				{
+				    Node level = await Netw.SpawnAsync(this, MethodName.MakeLevel, path).AsTask(v => v.As&lt;Node&gt;());
+				    AddChild(level);
+				}
+
+				public Variant MakeLevel(string path) =&gt; NetwPromise.FromTask(LoadLevel(path));
+
+				async Task&lt;Node&gt; LoadLevel(string path)
+				{
+				    ResourceLoader.LoadThreadedRequest(path);
+				    while (ResourceLoader.LoadThreadedGetStatus(path)
+				            == ResourceLoader.ThreadLoadStatus.InProgress)
+				        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+				    return (ResourceLoader.LoadThreadedGet(path) as PackedScene).Instantiate();
+				}
+				[/csharp]
+				[/codeblocks]
+				Add the node to the tree before the next tick.
+				[b]Server Only.[/b]
 			</description>
 		</method>
 		<method name="spawn_player" qualifiers="vararg static">

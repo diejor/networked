@@ -274,8 +274,8 @@ TEST_CASE(
 ) {
     netw_test::FaultWatch expected_faults;
     expected_faults.expect_warning(
-        "[warn][spawn] Netw.spawn returned 'Late' but it never entered the "
-        "tree. Add it before the next tick.",
+        "[warn][spawn] 'Late' was spawned but never entered the tree. Add "
+        "it before the next tick.",
         1
     );
     netw_test::LoopbackRig rig(0);
