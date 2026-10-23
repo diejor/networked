@@ -39,6 +39,13 @@
 			<description>
 			</description>
 		</method>
+		<method name="return_window">
+			<return type="NetwSessionConfig" />
+			<param index="0" name="seconds" type="float" />
+			<description>
+				Sets [member return_window_seconds], how long the server keeps a departed player's entities.
+			</description>
+		</method>
 		<method name="role">
 			<return type="NetwSessionConfig" />
 			<param index="0" name="desired_role" type="int" enum="NetwSession.Role" />
@@ -81,6 +88,9 @@
 		</member>
 		<member name="link_conditions" type="NetwLinkConditions" setter="set_link_conditions" getter="get_link_conditions">
 			[NetwLinkConditions] copied when the session starts.
+		</member>
+		<member name="return_window_seconds" type="float" setter="set_return_window_seconds" getter="get_return_window_seconds">
+			How many seconds the server keeps the entities of a player with an [member NetwPlayer.account] after it drops or calls [method NetwSession.step_away], or [code]0[/code] to despawn them when it leaves.
 		</member>
 		<member name="server_info" type="NetwServerInfo" setter="set_server_info" getter="get_server_info">
 			What this server shows in server browsers. The player count and [member NetwServerInfo.app_id] are filled in automatically. Copied when applied.

@@ -31,6 +31,7 @@
 #include "netw/api/sync_pipeline.hpp"
 #include "netw/colors.hpp"
 #include "netw/comp_table.hpp"
+#include "netw/entity/stage.hpp"
 #include "netw/lifecycle/rule.hpp"
 #include "netw/log.hpp"
 #include "netw/object_port.hpp"
@@ -822,6 +823,10 @@ void NetwMultiplayer::entity_note_stage(
 ) {
     if (p_record == nullptr || p_to == p_from) {
         return;
+    }
+    if (entity::stage_is_leaving(p_to)) {
+        kept_entities.erase(p_record->get_handle().get_id());
+        kept_by_server.erase(p_record->get_handle().get_id());
     }
     const int64_t route = p_record->get_route();
     if (!plane.wants(EventPlane::STAGE_TRANSITION, route)) {
@@ -1759,6 +1764,7 @@ void NetwMultiplayer::entity_commit_death(const EntityDeparture &p_row) {
                 && gd::object_of(p_row.owner_id) != nullptr) {
                 p_row.wrapper->keep_readmission(*recipe);
             }
+            transfer_note_death(p_row.route);
             spawns->settle_death(p_row.route);
         }
         liveness_drop_hooks(p_row.route);

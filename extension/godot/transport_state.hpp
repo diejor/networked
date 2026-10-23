@@ -4,19 +4,71 @@
 #include "godot/ref_counted.hpp"
 
 #if defined(NETW_MODULE)
+#include "modules/enet/enet_connection.h"
 #include "modules/enet/enet_multiplayer_peer.h"
 #include "modules/enet/enet_packet_peer.h"
 
 namespace godot {
+using ::ENetConnection;
 using ::ENetMultiplayerPeer;
 using ::ENetPacketPeer;
 } // namespace godot
 #elif defined(NETW_GDEXTENSION)
+#include <godot_cpp/classes/e_net_connection.hpp>
 #include <godot_cpp/classes/e_net_multiplayer_peer.hpp>
 #include <godot_cpp/classes/e_net_packet_peer.hpp>
 #endif
 
 namespace netw::gd {
+
+inline void disconnect_server_later(
+    const godot::Ref<godot::MultiplayerPeer> &p_link
+) {
+    godot::ENetMultiplayerPeer *enet
+        = godot::Object::cast_to<godot::ENetMultiplayerPeer>(p_link.ptr());
+    if (enet == nullptr
+        || enet->get_connection_status()
+            != godot::MultiplayerPeer::CONNECTION_CONNECTED
+        || !enet->is_server_relay_supported() || enet->get_unique_id() == 1) {
+        return;
+    }
+    const godot::Ref<godot::ENetPacketPeer> server = enet->get_peer(1);
+    if (server.is_null()
+        || server->get_state() != godot::ENetPacketPeer::STATE_CONNECTED) {
+        return;
+    }
+    server->peer_disconnect_later();
+    const godot::Ref<godot::ENetConnection> host = enet->get_host();
+    if (host.is_valid()) {
+        host->flush();
+    }
+}
+
+inline void disconnect_clients_later(
+    const godot::Ref<godot::MultiplayerPeer> &p_link,
+    const godot::PackedInt32Array &p_clients
+) {
+    godot::ENetMultiplayerPeer *enet
+        = godot::Object::cast_to<godot::ENetMultiplayerPeer>(p_link.ptr());
+    if (enet == nullptr
+        || enet->get_connection_status()
+            != godot::MultiplayerPeer::CONNECTION_CONNECTED
+        || enet->get_unique_id() != 1) {
+        return;
+    }
+    for (int at = 0; at < p_clients.size(); ++at) {
+        const godot::Ref<godot::ENetPacketPeer> client
+            = enet->get_peer(p_clients[at]);
+        if (client.is_valid()
+            && client->get_state() == godot::ENetPacketPeer::STATE_CONNECTED) {
+            client->peer_disconnect_later();
+        }
+    }
+    const godot::Ref<godot::ENetConnection> host = enet->get_host();
+    if (host.is_valid()) {
+        host->flush();
+    }
+}
 
 inline bool peer_is_relayed(
     const godot::Ref<godot::SceneMultiplayer> &p_api,

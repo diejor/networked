@@ -142,6 +142,8 @@ Methods
    +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | |void|                                                | :ref:`set_server_info<class_NetwSession_method_set_server_info>`\ (\ info\: :ref:`NetwServerInfo<class_NetwServerInfo>`\ )                                                            |
    +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwPromise<class_NetwPromise>`                 | :ref:`step_away<class_NetwSession_method_step_away>`\ (\ )                                                                                                                            |
+   +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwTable<class_NetwTable>`                     | :ref:`table<class_NetwSession_method_table>`\ (\ name\: :godot:`StringName`\ ) |const|                                                                                                |
    +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`transfer_server<class_NetwSession_method_transfer_server>`\ (\ peer_id\: :godot:`int`\ )                                                                                        |
@@ -248,9 +250,9 @@ A :ref:`NetwPlayer<class_NetwPlayer>` has joined, including this peer's own.
 
 .. rst-class:: classref-signal
 
-**player_left**\ (\ player\: :ref:`NetwPlayer<class_NetwPlayer>`\ ) :ref:`🔗<class_NetwSession_signal_player_left>`
+**player_left**\ (\ player\: :ref:`NetwPlayer<class_NetwPlayer>`, reason\: :ref:`LeaveReason<enum_NetwPlayer_LeaveReason>`\ ) :ref:`🔗<class_NetwSession_signal_player_left>`
 
-A :ref:`NetwPlayer<class_NetwPlayer>` has left, either because their peer disconnected or because of :ref:`kick()<class_NetwSession_method_kick>`. :ref:`NetwPlayer.is_active<class_NetwPlayer_property_is_active>` is already ``false``.
+A :ref:`NetwPlayer<class_NetwPlayer>` has left for ``reason``. :ref:`NetwPlayer.is_active<class_NetwPlayer_property_is_active>` is already ``false``.
 
 .. rst-class:: classref-item-separator
 
@@ -774,15 +776,7 @@ The database declared as ``name`` with :ref:`Netw.configure_database()<class_Net
 
 :ref:`NetwPlayer<class_NetwPlayer>` **find_player**\ (\ account\: :godot:`String`\ ) |const| :ref:`🔗<class_NetwSession_method_find_player>`
 
-The :ref:`NetwPlayer<class_NetwPlayer>` with :ref:`NetwPlayer.account<class_NetwPlayer_property_account>` equal to ``account``, or ``null``. It answers a player currently in the session, so an admission handler can kick a player already signed in with that account. A client knows only its own account, so on a client it answers the local player or ``null``.
-
-::
-
-    func admit(request: NetwJoinRequest) -> Error:
-        var signed_in := session.find_player(request.account)
-        if signed_in != null:
-            session.kick(signed_in, "Signed in somewhere else.")
-        return OK
+The :ref:`NetwPlayer<class_NetwPlayer>` with :ref:`NetwPlayer.account<class_NetwPlayer_property_account>` equal to ``account``, or ``null``. It answers a player currently in the session. A client knows only its own account, so on a client it answers the local player or ``null``.
 
 .. rst-class:: classref-item-separator
 
@@ -861,7 +855,7 @@ Removes ``player`` from the session and disconnects their peer with ``reason``. 
 
 :ref:`NetwPromise<class_NetwPromise>` **leave**\ (\ ) :ref:`🔗<class_NetwSession_method_leave>`
 
-Leaves the session. The server saves its entity rows first, and stays online if the database refuses a row. The promise resolves with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>` once the peer is down or the save failed.
+Leaves the session. The server saves its entity rows first, and stays online if the database refuses a row. The promise resolves with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>` once the peer is down or the save failed. Closing the game window leaves the same way. A server that saves entities loses unsaved changes when its window closes, so it sets :godot:`SceneTree.auto_accept_quit <SceneTree#class_SceneTree_property_auto_accept_quit>` to ``false`` and quits after :ref:`leave()<class_NetwSession_method_leave>` resolves.
 
 .. rst-class:: classref-item-separator
 
@@ -976,6 +970,18 @@ Replaces what this session advertises about itself, such as the name shown in a 
 
 ----
 
+.. _class_NetwSession_method_step_away:
+
+.. rst-class:: classref-method
+
+:ref:`NetwPromise<class_NetwPromise>` **step_away**\ (\ ) :ref:`🔗<class_NetwSession_method_step_away>`
+
+Leaves like :ref:`leave()<class_NetwSession_method_leave>`, and :ref:`player_left<class_NetwSession_signal_player_left>` reports :ref:`NetwPlayer.LEAVE_STEPPED_AWAY<class_NetwPlayer_constant_LEAVE_STEPPED_AWAY>` to every other peer. The server keeps the player's entities for :ref:`NetwSessionConfig.return_window_seconds<class_NetwSessionConfig_property_return_window_seconds>`.
+
+.. rst-class:: classref-item-separator
+
+----
+
 .. _class_NetwSession_method_table:
 
 .. rst-class:: classref-method
@@ -994,7 +1000,7 @@ The table of the schema declared as ``name`` with :ref:`Netw.configure_schema()<
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **transfer_server**\ (\ peer_id\: :godot:`int`\ ) :ref:`🔗<class_NetwSession_method_transfer_server>`
 
-Asks the transport to make ``peer_id`` the server and this peer a client under a new id. :ref:`server_transferred<class_NetwSession_signal_server_transferred>` follows on every peer. Whether a transport can is stated in the class description.
+Asks the transport to make ``peer_id`` the server and this peer a client under a new id. :ref:`server_transferred<class_NetwSession_signal_server_transferred>` follows on every peer. Whether a transport can is stated in the class description. When the server moves, players who have left lose their return window, and their kept entities despawn.
 
 .. code:: text
 

@@ -497,6 +497,31 @@ AGAINST_SPEC = [
         "why": "WIRE.md 16, peer 9 zigzagged, then the reason",
     },
     {
+        "record": "SessionLeave",
+        "bytes": bytes([0x01]),
+        "values": {"returning": True},
+        "why": "WIRE.md 16, a client stepping away, padded to the byte",
+    },
+    {
+        "record": "PlayerLeft",
+        "bytes": bytes([0x09, 0x01]),
+        "values": {"player_id": 9, "reason": 1},
+        "why": "WIRE.md 16, player 9 left stepping away",
+    },
+    {
+        "record": "ResyncRoute",
+        "bytes": bytes([0x07, 0x00, 0x00, 0x00, 0x01, 0x01]),
+        "values": {
+            "route_delta": 7,
+            "anchor": 0,
+            "anchor_author": 0,
+            "control_revision": 0,
+            "epoch": 1,
+            "gone": True,
+        },
+        "why": "WIRE.md 16, the former server reports route 7 gone",
+    },
+    {
         "record": "SceneReleased",
         "bytes": bytes([0x07]),
         "values": {"route": 7},
@@ -590,7 +615,7 @@ AGAINST_SPEC = [
     },
     {
         "record": "ControlApply",
-        "bytes": bytes([0x02, 0x03, 0x00, 0x05, 0x00]),
+        "bytes": bytes([0x02, 0x03, 0x00, 0x25, 0x00, 0x00, 0x09, 0x04]),
         "values": {
             "controller": 2,
             "revision": 3,
@@ -598,9 +623,14 @@ AGAINST_SPEC = [
             "tenure_changed": True,
             "hold": 2,
             "outcome": 0,
+            "has_owner": True,
+            "kept": False,
             "final_state": b"",
+            "peer": 9,
+            "player_id": 4,
         },
-        "why": "WIRE.md 14, revision 3 opens peer 2's tenure with an exclusive hold",
+        "why": "WIRE.md 14, revision 3 opens peer 2's tenure with an exclusive "
+        "hold and hands the entity to peer 9 as player 4",
     },
     {
         "record": "DenyKey",
@@ -706,6 +736,21 @@ CAPTURE_MAGICS_BY_FORMAT = {
         0x98: "DatagramAcked",
     },
     13: {
+        0x58: "DatagramReliable",
+        0x78: "DatagramUnreliable",
+        0x98: "DatagramAcked",
+    },
+    14: {
+        0x58: "DatagramReliable",
+        0x78: "DatagramUnreliable",
+        0x98: "DatagramAcked",
+    },
+    15: {
+        0x58: "DatagramReliable",
+        0x78: "DatagramUnreliable",
+        0x98: "DatagramAcked",
+    },
+    16: {
         0x58: "DatagramReliable",
         0x78: "DatagramUnreliable",
         0x98: "DatagramAcked",

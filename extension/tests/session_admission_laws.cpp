@@ -2,6 +2,7 @@
 #include "support/netw_test.h"
 #include "support/frame_drive.h"
 #include "support/directory_stubs.h"
+#include "support/netw_call_log.h"
 
 #include "godot/class_db.hpp"
 #include "godot/multiplayer.hpp"
@@ -13,6 +14,7 @@
 #include "netw/api/join_request.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/participant.hpp"
+#include "netw/api/session.hpp"
 #include "netw/session_core.hpp"
 
 #if defined(NETW_TIER_HOSTED)
@@ -21,6 +23,7 @@ namespace TestNetwSessionAdmissionLaws {
 
 using namespace godot;
 using netw::NetwMultiplayer;
+using netw_test::CallLog;
 
 constexpr const char *GATE = R"(extends Node
 
@@ -786,38 +789,73 @@ Node *account_gate_on(Node *p_branch) {
     return gate;
 }
 
+struct SecondLogin {
+    const char *arm;
+    int64_t first_peer;
+    bool replaced;
+    int left_reason;
+};
+
+const SecondLogin SECOND_LOGINS[] = {
+    {"playing", 9, true, netw::NetwPlayer::LEAVE_DROPPED},
+    {"kicked", 9, true, netw::NetwPlayer::LEAVE_KICKED},
+    {"dropped", 9, true, netw::NetwPlayer::LEAVE_DROPPED},
+    {"server", 1, false, -1},
+};
+
 TEST_CASE(
     "[Networked][Session][SceneTree] a second join of an account already "
-    "playing is refused with ERR_ALREADY_IN_USE, unless the admission "
-    "handler kicks the first player or the first player left"
+    "playing replaces the first player, who leaves with its reason before "
+    "the second is seated, and the server's own player is never replaced"
 ) {
-    for (const char *arm : {"playing", "kicked", "left"}) {
-        NETW_FORMAT_TEXT(arm_text, arm);
+    for (const SecondLogin &row : SECOND_LOGINS) {
+        NETW_FORMAT_TEXT(arm_text, row.arm);
         CAPTURE(arm_text);
-        const String path(arm);
-        const bool replaced = path != "playing";
+        const String path(row.arm);
         Node *branch = mounted_branch("AccountInUse");
         const Ref<NetwMultiplayer> host = branch_session(branch);
         Node *gate = account_gate_on(branch);
         gate->set(StringName("kick_signed_in"), path == "kicked");
+        const CallLog heard;
+        const Ref<netw::NetwSession> door = host->get_session();
+        door->connect(StringName("player_left"), heard.callable("left"));
+        door->connect(StringName("player_joined"), heard.callable("joined"));
 
-        join_as(host, "ana", 9);
-        const Ref<netw::NetwPlayer> first = host->peer_get_player(9);
+        join_as(host, "ana", row.first_peer);
+        const Ref<netw::NetwPlayer> first
+            = host->peer_get_player(row.first_peer);
         REQUIRE(first.is_valid());
-        if (path == "left") {
-            host->session_settle_peer_loss(9);
+        if (path == "dropped") {
+            host->session_settle_peer_loss(row.first_peer);
         }
         join_as(host, "ana", 11);
 
         const Ref<netw::NetwPlayer> second = host->peer_get_player(11);
-        CHECK(second.is_valid() == replaced);
-        CHECK(host->peer_get_player(9).is_valid() == !replaced);
-        CHECK(first->get_is_active() == !replaced);
-        CHECK(String(host->session_refusal(11)).contains("already playing")
-              == !replaced);
+        CHECK(second.is_valid() == row.replaced);
+        CHECK(first->get_is_active() == !row.replaced);
         CHECK(bool(host->player_find_account("test:ana")
-                   == (replaced ? second : first)));
-        NETW_CHECK_EQ(int(gate->get(StringName("seats"))), replaced ? 2 : 1);
+                   == (row.replaced ? second : first)));
+        NETW_CHECK_EQ(
+            int(gate->get(StringName("seats"))),
+            row.replaced ? 2 : 1
+        );
+        if (!row.replaced) {
+            CHECK(String(host->session_refusal(11)).contains("already playing"));
+            NETW_CHECK_EQ(heard.count(StringName("left")), 0);
+            release_branch(host, branch);
+            continue;
+        }
+        NETW_REQUIRE_EQ(heard.count(StringName("left")), 1);
+        CHECK(bool(Ref<netw::NetwPlayer>(heard.args(StringName("left"))[0])
+                   == first));
+        NETW_CHECK_EQ(
+            int(heard.args(StringName("left"))[1]),
+            row.left_reason
+        );
+        const Vector<StringName> order = heard.order();
+        NETW_REQUIRE_EQ(int(order.size()), 3);
+        CHECK(bool(order[1] == StringName("left")));
+        CHECK(bool(order[2] == StringName("joined")));
         release_branch(host, branch);
     }
 }

@@ -78,8 +78,11 @@ void NetwSession::announce_local_joined(const Ref<NetwPlayer> &p_who) {
     emit_signal(StringName(SIG_LOCAL_JOINED), p_who);
 }
 
-void NetwSession::announce_player_left(const Ref<NetwPlayer> &p_who) {
-    emit_signal(StringName(SIG_PLAYER_LEFT), p_who);
+void NetwSession::announce_player_left(
+    const Ref<NetwPlayer> &p_who,
+    enums::NetwPlayer::LeaveReason p_reason
+) {
+    emit_signal(StringName(SIG_PLAYER_LEFT), p_who, p_reason);
 }
 
 void NetwSession::announce_join_failed(int64_t p_code, const String &p_reason) {
@@ -212,6 +215,12 @@ void NetwSession::set_peer_bandwidth(int64_t p_peer, int64_t p_kbps) {
 Ref<NetwPromise> NetwSession::leave() {
     NetwMultiplayer *api = session();
     return api != nullptr ? api->session_leave()
+                          : NetwPromise::resolved(ERR_UNCONFIGURED);
+}
+
+Ref<NetwPromise> NetwSession::step_away() {
+    NetwMultiplayer *api = session();
+    return api != nullptr ? api->session_step_away()
                           : NetwPromise::resolved(ERR_UNCONFIGURED);
 }
 
@@ -495,6 +504,7 @@ void NetwSession::_bind_methods() {
     );
 
     ClassDB::bind_method(D_METHOD("leave"), &NetwSession::leave);
+    ClassDB::bind_method(D_METHOD("step_away"), &NetwSession::step_away);
     ClassDB::bind_method(
         D_METHOD("pause", "reason"),
         &NetwSession::pause,
@@ -640,6 +650,14 @@ void NetwSession::_bind_methods() {
             "player",
             PROPERTY_HINT_RESOURCE_TYPE,
             "NetwPlayer"
+        ),
+        PropertyInfo(
+            Variant::INT,
+            "reason",
+            PROPERTY_HINT_NONE,
+            "",
+            PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_CLASS_IS_ENUM,
+            "NetwPlayer.LeaveReason"
         )
     ));
     ADD_SIGNAL(MethodInfo(

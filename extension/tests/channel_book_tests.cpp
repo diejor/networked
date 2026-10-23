@@ -229,6 +229,16 @@ TEST_CASE(
         "no handler.",
         1
     );
+    expected_faults.expect_warning(
+        "[warn][session] Built-in channel 49 (SESSION_LEAVE) has no "
+        "handler.",
+        1
+    );
+    expected_faults.expect_warning(
+        "[warn][session] Built-in channel 50 (SESSION_PLAYER_LEFT) "
+        "has no handler.",
+        1
+    );
 
     NetwChannelBook book;
     Ref<RefCounted> holder;

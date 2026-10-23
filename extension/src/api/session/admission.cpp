@@ -367,6 +367,7 @@ void NetwMultiplayer::session_admission_settled(
 }
 
 void NetwMultiplayer::session_poll_admissions(int64_t p_now_msec) {
+    player_expire_kept(p_now_msec);
     LocalVector<int64_t> expired;
     for (const KeyValue<int64_t, PendingAdmission> &entry : pending_admissions) {
         const int64_t deadline = entry.value.verdict.deadline;

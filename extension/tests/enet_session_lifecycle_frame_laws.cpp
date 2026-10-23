@@ -9,6 +9,7 @@
 #include "godot/scene_tree.hpp"
 #include "godot/time.hpp"
 #include "netw/api/netw_multiplayer.hpp"
+#include "netw/api/participant.hpp"
 #include "netw/api/promise.hpp"
 #include "netw/api/session.hpp"
 
@@ -43,6 +44,7 @@ struct LifecycleEvidence {
     std::vector<Exit> kicked_exits;
     std::vector<Exit> leaving_exits;
     int host_players_left = 0;
+    int host_kick_reason = -1;
     int host_exits = -1;
     bool staying_seated = false;
     bool host_left = false;
@@ -329,6 +331,11 @@ public:
                 leaving.unref();
                 evidence.host_players_left
                     = host_trace->log.count(StringName("player_left"));
+                if (evidence.host_players_left > 0) {
+                    evidence.host_kick_reason = int(
+                        host_trace->log.args(StringName("player_left"), 0)[1]
+                    );
+                }
                 evidence.host_exits = int(host_trace->exits().size());
                 staying = open_client(StringName("staying"), evidence.port);
                 if (staying.is_valid()) {
@@ -477,7 +484,7 @@ TEST_CASE(
 TEST_CASE(
     "[Networked][Connect][Frame] EL7 a kicked peer's own session exits once "
     "with KICKED, exiting before exited, and the host reports the departure "
-    "as player_left rather than as an exit of its own"
+    "as player_left with LEAVE_KICKED rather than as an exit of its own"
 ) {
     const LifecycleEvidence &evidence = lifecycle_evidence();
     REQUIRE(evidence.driven);
@@ -498,6 +505,10 @@ TEST_CASE(
         int(netw::NetwSession::STATE_OFFLINE)
     );
     NETW_CHECK_GE(evidence.host_players_left, 1);
+    NETW_CHECK_EQ(
+        evidence.host_kick_reason,
+        int(netw::NetwPlayer::LEAVE_KICKED)
+    );
     NETW_CHECK_EQ(evidence.host_exits, 0);
 }
 

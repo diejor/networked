@@ -291,18 +291,19 @@ public sealed class NetwSession : NetwRefCounted
     }
 
     /// <summary>
-    /// A <see cref="NetwPlayer"/> has left, either because their peer
-    /// disconnected or because of <see cref="NetwSession.Kick"/>.
+    /// A <see cref="NetwPlayer"/> has left for <c>reason</c>.
     /// <see cref="NetwPlayer.IsActive"/> is already <c>false</c>.
     /// </summary>
-    public event Action<NetwPlayer> PlayerLeft
+    public event Action<NetwPlayer, NetwPlayer.LeaveReason> PlayerLeft
     {
         add => ConnectBridge(
             "player_left",
             value,
             Callable.From(
-                (Variant a0) =>
-                    value(Wrapped(a0, NetwPlayer.From))
+                (Variant a0, long a1) =>
+                    value(
+                        Wrapped(a0, NetwPlayer.From),
+                        (NetwPlayer.LeaveReason)a1)
             )
         );
         remove => DisconnectBridge("player_left", value);
@@ -668,16 +669,8 @@ public sealed class NetwSession : NetwRefCounted
     /// <summary>
     /// The <see cref="NetwPlayer"/> with <see cref="NetwPlayer.Account"/> equal
     /// to <paramref name="account"/>, or <c>null</c>. It answers a player
-    /// currently in the session, so an admission handler can kick a player
-    /// already signed in with that account. A client knows only its own
-    /// account, so on a client it answers the local player or <c>null</c>.
-    /// <code>
-    /// func admit(request: NetwJoinRequest) -&gt; Error:
-    ///     var signed_in := session.find_player(request.account)
-    ///     if signed_in != null:
-    ///         session.kick(signed_in, "Signed in somewhere else.")
-    ///     return OK
-    /// </code>
+    /// currently in the session. A client knows only its own account, so on a
+    /// client it answers the local player or <c>null</c>.
     /// </summary>
     public NetwPlayer FindPlayer(string account)
     {
@@ -769,7 +762,9 @@ public sealed class NetwSession : NetwRefCounted
     /// Asks the transport to make <paramref name="peerId"/> the server and this
     /// peer a client under a new id.
     /// <see cref="NetwSession.ServerTransferred"/> follows on every peer.
-    /// Whether a transport can is stated in the class description.
+    /// Whether a transport can is stated in the class description. When the
+    /// server moves, players who have left lose their return window, and their
+    /// kept entities despawn.
     /// <code>
     /// Error
     /// ┠╴ERR_UNAUTHORIZED        called on a client
@@ -800,11 +795,32 @@ public sealed class NetwSession : NetwRefCounted
     /// Leaves the session. The server saves its entity rows first, and stays
     /// online if the database refuses a row. The promise resolves with an
     /// <c>@GlobalScope.Error</c> once the peer is down or the save failed.
+    /// Closing the game window leaves the same way. A server that saves
+    /// entities loses unsaved changes when its window closes, so it sets
+    /// <c>SceneTree.auto_accept_quit</c> to <c>false</c> and quits after
+    /// <see cref="NetwSession.Leave"/> resolves.
     /// </summary>
     public NetwPromise Leave()
     {
         IntPtr answered = default;
         NetwThunks.Ptrcall0_IntPtr(_bindLeave, Checked, ref answered);
+        return NetwPromise.Adopt(answered);
+    }
+
+    private static readonly IntPtr _bindStepAway =
+        NetwApi.MethodBind("NetwSession", "step_away", 1931563502UL);
+
+    /// <summary>
+    /// Leaves like <see cref="NetwSession.Leave"/>, and
+    /// <see cref="NetwSession.PlayerLeft"/> reports
+    /// <see cref="NetwPlayer.LeaveReason.SteppedAway"/> to every other peer.
+    /// The server keeps the player's entities for
+    /// <see cref="NetwSessionConfig.ReturnWindowSeconds"/>.
+    /// </summary>
+    public NetwPromise StepAway()
+    {
+        IntPtr answered = default;
+        NetwThunks.Ptrcall0_IntPtr(_bindStepAway, Checked, ref answered);
         return NetwPromise.Adopt(answered);
     }
 

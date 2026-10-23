@@ -100,6 +100,53 @@ Emitted when :ref:`scene<class_NetwPlayer_property_scene>` changes. Either may b
 
 .. rst-class:: classref-descriptions-group
 
+Enumerations
+------------
+
+.. _enum_NetwPlayer_LeaveReason:
+
+.. rst-class:: classref-enumeration
+
+enum **LeaveReason**: :ref:`🔗<enum_NetwPlayer_LeaveReason>`
+
+.. _class_NetwPlayer_constant_LEAVE_QUIT:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`LeaveReason<enum_NetwPlayer_LeaveReason>` **LEAVE_QUIT** = ``0``
+
+The player left with :ref:`NetwSession.leave()<class_NetwSession_method_leave>` or closed the game window.
+
+.. _class_NetwPlayer_constant_LEAVE_STEPPED_AWAY:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`LeaveReason<enum_NetwPlayer_LeaveReason>` **LEAVE_STEPPED_AWAY** = ``1``
+
+The player left with :ref:`NetwSession.step_away()<class_NetwSession_method_step_away>` and may come back.
+
+.. _class_NetwPlayer_constant_LEAVE_KICKED:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`LeaveReason<enum_NetwPlayer_LeaveReason>` **LEAVE_KICKED** = ``2``
+
+The server removed the player with :ref:`NetwSession.kick()<class_NetwSession_method_kick>`.
+
+.. _class_NetwPlayer_constant_LEAVE_DROPPED:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`LeaveReason<enum_NetwPlayer_LeaveReason>` **LEAVE_DROPPED** = ``3``
+
+The connection was lost, or the same :ref:`account<class_NetwPlayer_property_account>` joined again.
+
+.. rst-class:: classref-section-separator
+
+----
+
+.. rst-class:: classref-descriptions-group
+
 Property Descriptions
 ---------------------
 
@@ -114,6 +161,8 @@ Property Descriptions
 - :godot:`String` **get_account**\ (\ )
 
 The account :ref:`Netw.configure_admission()<class_Netw_method_configure_admission>` assigned to :ref:`NetwJoinRequest.account<class_NetwJoinRequest_property_account>`, such as ``"steam:76561198000000000"``. Empty for a guest, and empty for another player on a client.
+
+A second join with the same account replaces this player, who leaves with :ref:`LEAVE_DROPPED<class_NetwPlayer_constant_LEAVE_DROPPED>`.
 
 .. rst-class:: classref-item-separator
 
@@ -145,7 +194,7 @@ The display name admission verified with :ref:`account<class_NetwPlayer_property
 
 - :godot:`Array`\[:ref:`NetwEntity<class_NetwEntity>`\] **get_entities**\ (\ )
 
-The entities spawned for this player with :ref:`Netw.spawn_player()<class_Netw_method_spawn_player>`, in no particular order. Empty for a spectator.
+The entities spawned for this player with :ref:`Netw.spawn_player()<class_Netw_method_spawn_player>`, in no particular order. Empty for a spectator. On the server a player who dropped or stepped away still lists the entities kept for it, and a returning player lists them when it joins.
 
 .. rst-class:: classref-item-separator
 

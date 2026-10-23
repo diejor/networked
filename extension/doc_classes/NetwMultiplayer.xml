@@ -2631,7 +2631,7 @@
 			<return type="void" />
 			<param index="0" name="reason" type="String" default="&quot;&quot;" />
 			<description>
-				Notifies [constant SESSION_SERVER_DISCONNECTING] with [param reason] on every peer. It does not disconnect anyone.
+				Notifies [constant SESSION_SERVER_DISCONNECTING] with [param reason] on every peer. Every client ends its session when the notice arrives.
 			</description>
 		</method>
 		<method name="session_prepare_join">

@@ -144,6 +144,10 @@ void NetwPlayer::_bind_methods() {
             "NetwScene"
         )
     ));
+    BIND_ENUM_CONSTANT(LEAVE_QUIT);
+    BIND_ENUM_CONSTANT(LEAVE_STEPPED_AWAY);
+    BIND_ENUM_CONSTANT(LEAVE_KICKED);
+    BIND_ENUM_CONSTANT(LEAVE_DROPPED);
 }
 
 } // namespace netw

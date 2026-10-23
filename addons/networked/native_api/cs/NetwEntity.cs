@@ -168,7 +168,9 @@ public sealed class NetwEntity : NetwRefCounted
         /// </summary>
         RevertToServer = 0,
         /// <summary>
-        /// The entity despawns when its controller disconnects.
+        /// The entity despawns when its controller quits or is kicked. After a
+        /// drop or <see cref="NetwSession.StepAway"/> it despawns when
+        /// <see cref="NetwSessionConfig.ReturnWindowSeconds"/> runs out.
         /// </summary>
         Despawn = 1,
     }

@@ -27,12 +27,13 @@
 	<members>
 		<member name="account" type="String" setter="" getter="get_account">
 			The account [method Netw.configure_admission] assigned to [member NetwJoinRequest.account], such as [code]"steam:76561198000000000"[/code]. Empty for a guest, and empty for another player on a client.
+			A second join with the same account replaces this player, who leaves with [constant LEAVE_DROPPED].
 		</member>
 		<member name="account_name" type="String" setter="" getter="get_account_name">
 			The display name admission verified with [member account]. Every peer reads it. Empty for a guest.
 		</member>
 		<member name="entities" type="NetwEntity[]" setter="" getter="get_entities">
-			The entities spawned for this player with [method Netw.spawn_player], in no particular order. Empty for a spectator.
+			The entities spawned for this player with [method Netw.spawn_player], in no particular order. Empty for a spectator. On the server a player who dropped or stepped away still lists the entities kept for it, and a returning player lists them when it joins.
 		</member>
 		<member name="is_active" type="bool" setter="" getter="get_is_active">
 			[code]false[/code] once the player has left. Check it before using a player you stored.
@@ -67,4 +68,18 @@
 			</description>
 		</signal>
 	</signals>
+	<constants>
+		<constant name="LEAVE_QUIT" value="0" enum="LeaveReason">
+			The player left with [method NetwSession.leave] or closed the game window.
+		</constant>
+		<constant name="LEAVE_STEPPED_AWAY" value="1" enum="LeaveReason">
+			The player left with [method NetwSession.step_away] and may come back.
+		</constant>
+		<constant name="LEAVE_KICKED" value="2" enum="LeaveReason">
+			The server removed the player with [method NetwSession.kick].
+		</constant>
+		<constant name="LEAVE_DROPPED" value="3" enum="LeaveReason">
+			The connection was lost, or the same [member account] joined again.
+		</constant>
+	</constants>
 </class>

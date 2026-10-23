@@ -53,6 +53,8 @@ Properties
    +-----------------------------------------------------+------------------------------------------------------------------------------------------+
    | :ref:`NetwLinkConditions<class_NetwLinkConditions>` | :ref:`link_conditions<class_NetwSessionConfig_property_link_conditions>`                 |
    +-----------------------------------------------------+------------------------------------------------------------------------------------------+
+   | :godot:`float`                                      | :ref:`return_window_seconds<class_NetwSessionConfig_property_return_window_seconds>`     |
+   +-----------------------------------------------------+------------------------------------------------------------------------------------------+
    | :ref:`NetwServerInfo<class_NetwServerInfo>`         | :ref:`server_info<class_NetwSessionConfig_property_server_info>`                         |
    +-----------------------------------------------------+------------------------------------------------------------------------------------------+
    | :godot:`int`                                        | :ref:`transfer_deadline_ticks<class_NetwSessionConfig_property_transfer_deadline_ticks>` |
@@ -74,6 +76,8 @@ Methods
    | :ref:`NetwSessionConfig<class_NetwSessionConfig>` | :ref:`bandwidth<class_NetwSessionConfig_method_bandwidth>`\ (\ kbps\: :godot:`int`\ )                                              |
    +---------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwSessionConfig<class_NetwSessionConfig>` | :ref:`link<class_NetwSessionConfig_method_link>`\ (\ link_conditions\: :ref:`NetwLinkConditions<class_NetwLinkConditions>`\ )      |
+   +---------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwSessionConfig<class_NetwSessionConfig>` | :ref:`return_window<class_NetwSessionConfig_method_return_window>`\ (\ seconds\: :godot:`float`\ )                                 |
    +---------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwSessionConfig<class_NetwSessionConfig>` | :ref:`role<class_NetwSessionConfig_method_role>`\ (\ desired_role\: :ref:`Role<enum_NetwSession_Role>`\ )                          |
    +---------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------+
@@ -158,6 +162,23 @@ The role this peer takes when it hosts, which becomes :ref:`NetwMultiplayer.role
 - :ref:`NetwLinkConditions<class_NetwLinkConditions>` **get_link_conditions**\ (\ )
 
 :ref:`NetwLinkConditions<class_NetwLinkConditions>` copied when the session starts.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwSessionConfig_property_return_window_seconds:
+
+.. rst-class:: classref-property
+
+:godot:`float` **return_window_seconds** :ref:`🔗<class_NetwSessionConfig_property_return_window_seconds>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_return_window_seconds**\ (\ value\: :godot:`float`\ )
+- :godot:`float` **get_return_window_seconds**\ (\ )
+
+How many seconds the server keeps the entities of a player with an :ref:`NetwPlayer.account<class_NetwPlayer_property_account>` after it drops or calls :ref:`NetwSession.step_away()<class_NetwSession_method_step_away>`, or ``0`` to despawn them when it leaves.
 
 .. rst-class:: classref-item-separator
 
@@ -261,6 +282,18 @@ Sets :ref:`bandwidth_kbps<class_NetwSessionConfig_property_bandwidth_kbps>`, the
 .. container:: contribute
 
 	There is currently no description for this method. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwSessionConfig_method_return_window:
+
+.. rst-class:: classref-method
+
+:ref:`NetwSessionConfig<class_NetwSessionConfig>` **return_window**\ (\ seconds\: :godot:`float`\ ) :ref:`🔗<class_NetwSessionConfig_method_return_window>`
+
+Sets :ref:`return_window_seconds<class_NetwSessionConfig_property_return_window_seconds>`, how long the server keeps a departed player's entities.
 
 .. rst-class:: classref-item-separator
 

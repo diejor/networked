@@ -13,7 +13,7 @@ func _process(_delta: float) -> void:
 	if rocks_left == 0:
 		var winner_name: String = ""
 		var winner_score := 0
-		for p: int in player_labels:
+		for p: NetwPlayer in player_labels:
 			if player_labels[p].score > winner_score:
 				winner_score = player_labels[p].score
 				winner_name = player_labels[p].name
@@ -22,7 +22,7 @@ func _process(_delta: float) -> void:
 		$"../Winner".show()
 
 
-func increase_score(for_who: int) -> void:
+func increase_score(for_who: NetwPlayer) -> void:
 	assert(for_who in player_labels)
 
 	var pl: Dictionary = player_labels[for_who]
@@ -30,14 +30,14 @@ func increase_score(for_who: int) -> void:
 	pl.label.set_text(pl.name + "\n" + str(pl.score))
 
 
-func get_score(for_who: int) -> int:
+func get_score(for_who: NetwPlayer) -> int:
 	if not player_labels.has(for_who):
 		return 0
 	return int(player_labels[for_who].score)
 
 
-func add_player(id: int, new_player_name: String) -> void:
-	if id in player_labels:
+func add_player(player: NetwPlayer, new_player_name: String) -> void:
+	if player in player_labels:
 		return
 
 	var label := Label.new()
@@ -54,7 +54,7 @@ func add_player(id: int, new_player_name: String) -> void:
 	label.add_theme_font_size_override(&"font_size", 18)
 	add_child(label)
 
-	player_labels[id] = {
+	player_labels[player] = {
 		name = new_player_name,
 		label = label,
 		score = 0,

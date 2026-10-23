@@ -132,6 +132,33 @@ struct KickRequest {
     );
 };
 
+struct SessionLeave {
+    bool returning = false;
+
+    static constexpr auto wire = netw::wire::describe(
+        netw::wire::field<&SessionLeave::returning>(
+            "returning",
+            netw::wire::bool1()
+        )
+    );
+};
+
+struct PlayerLeft {
+    uint64_t player_id = 0;
+    int64_t reason = 0;
+
+    static constexpr auto wire = netw::wire::describe(
+        netw::wire::field<&PlayerLeft::player_id>(
+            "player_id",
+            netw::wire::varuint(5)
+        ),
+        netw::wire::field<&PlayerLeft::reason>(
+            "reason",
+            netw::wire::int_range(0, 3)
+        )
+    );
+};
+
 struct SceneReleased {
     int64_t route = 0;
 
@@ -231,7 +258,11 @@ struct ControlApply {
     bool tenure_changed = false;
     uint8_t hold = 0;
     uint8_t outcome = 0;
+    bool has_owner = false;
+    bool kept = false;
     godot::PackedByteArray final_state;
+    uint64_t peer = 0;
+    uint64_t player_id = 0;
 
     static constexpr auto wire = netw::wire::describe(
         netw::wire::field<&ControlApply::controller>(
@@ -252,9 +283,19 @@ struct ControlApply {
             "outcome",
             netw::wire::bits(2)
         ),
+        netw::wire::field<&ControlApply::has_owner>(
+            "has_owner",
+            netw::wire::bool1()
+        ),
+        netw::wire::field<&ControlApply::kept>("kept", netw::wire::bool1()),
         netw::wire::field<&ControlApply::final_state>(
             "final_state",
             netw::wire::bytes_capped(CONTROL_FINAL_STATE_CAP)
+        ),
+        netw::wire::field<&ControlApply::peer>("peer", netw::wire::varuint(5)),
+        netw::wire::field<&ControlApply::player_id>(
+            "player_id",
+            netw::wire::varuint(5)
         )
     );
 };
@@ -319,6 +360,7 @@ struct ResyncRoute {
     uint64_t anchor_author = 0;
     uint64_t control_revision = 0;
     uint64_t epoch = 0;
+    bool gone = false;
 
     static constexpr auto wire = netw::wire::describe(
         netw::wire::field<&ResyncRoute::route_delta>(
@@ -337,7 +379,8 @@ struct ResyncRoute {
             "control_revision",
             netw::wire::varuint(5)
         ),
-        netw::wire::field<&ResyncRoute::epoch>("epoch", netw::wire::varuint(3))
+        netw::wire::field<&ResyncRoute::epoch>("epoch", netw::wire::varuint(3)),
+        netw::wire::field<&ResyncRoute::gone>("gone", netw::wire::bool1())
     );
 };
 

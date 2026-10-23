@@ -59,6 +59,8 @@ const Declared TRANSCRIBED[] = {
     {"CLAIM_IMAGE", 46},
     {"SESSION_RESYNC", 47},
     {"LAGCOMP_CONFIRM", 48},
+    {"SESSION_LEAVE", 49},
+    {"SESSION_PLAYER_LEFT", 50},
 };
 
 constexpr int TRANSCRIBED_COUNT

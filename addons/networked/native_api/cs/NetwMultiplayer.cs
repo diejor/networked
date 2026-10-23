@@ -10715,8 +10715,8 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <summary>
     /// Notifies
     /// <see cref="NetwMultiplayer.Notification.SessionServerDisconnecting"/>
-    /// with <paramref name="reason"/> on every peer. It does not disconnect
-    /// anyone.
+    /// with <paramref name="reason"/> on every peer. Every client ends its
+    /// session when the notice arrives.
     /// </summary>
     public void SessionNotifyShutdown(string reason = "")
     {

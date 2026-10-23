@@ -333,7 +333,7 @@
 			The server takes control when the controller disconnects.
 		</constant>
 		<constant name="DISCONNECT_DESPAWN" value="1" enum="DisconnectRule">
-			The entity despawns when its controller disconnects.
+			The entity despawns when its controller quits or is kicked. After a drop or [method NetwSession.step_away] it despawns when [member NetwSessionConfig.return_window_seconds] runs out.
 		</constant>
 		<constant name="PARENT_DESPAWN_CASCADE" value="0" enum="ParentDespawnRule">
 			The entity despawns with the entity above it.

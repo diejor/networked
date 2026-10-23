@@ -4,6 +4,7 @@
 #include "netw/session/frames.hpp"
 #include "netw/session_core.hpp"
 #include "netw/wire/registry.hpp"
+#include "netw/wire/stream.hpp"
 
 namespace TestSessionFrameWire {
 
@@ -113,6 +114,36 @@ TEST_CASE(
         int64_t(table.identity_hash()),
         netw::SessionCore::compute_wire_identity()
     );
+}
+
+TEST_CASE(
+    "[Networked][Session][Hosted] SW5 a world report row the former server "
+    "marks gone, transcribed from WIRE.md 16, packs to the bytes "
+    "tools/wire_decode.py holds it to and reads back gone"
+) {
+    netw::session::ResyncRoute row;
+    row.route_delta = 7;
+    row.epoch = 1;
+    row.gone = true;
+    netw::wire::WriteStream stream;
+    REQUIRE(netw::session::ResyncRoute::wire.run(stream, row));
+    REQUIRE(stream.align_verify());
+    const PackedByteArray bytes = stream.to_bytes();
+
+    REQUIRE(bytes.size() == 6);
+    NETW_CHECK_EQ(bytes[0], 0x07);
+    NETW_CHECK_EQ(bytes[4], 0x01);
+    NETW_CHECK_EQ(bytes[5], 0x01);
+
+    netw::session::Resync report;
+    report.head.last = true;
+    report.routes.push_back(row);
+    netw::session::Resync read;
+    REQUIRE(
+        netw::session::resync_read(netw::session::resync_write(report), read)
+    );
+    REQUIRE(read.routes.size() == 1);
+    CHECK(read.routes[0].gone);
 }
 
 } // namespace TestSessionFrameWire

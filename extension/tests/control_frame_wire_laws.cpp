@@ -19,14 +19,20 @@ TEST_CASE(
     applied.revision = 3;
     applied.tenure_changed = true;
     applied.hold = 2;
+    applied.has_owner = true;
+    applied.peer = 9;
+    applied.player_id = 4;
     const PackedByteArray bytes = netw::session::frame_write(applied);
 
-    NETW_REQUIRE_EQ(int64_t(bytes.size()), int64_t(5));
+    NETW_REQUIRE_EQ(int64_t(bytes.size()), int64_t(8));
     NETW_CHECK_EQ(bytes[0], 0x02);
     NETW_CHECK_EQ(bytes[1], 0x03);
     NETW_CHECK_EQ(bytes[2], 0x00);
-    NETW_CHECK_EQ(bytes[3], 0x05);
+    NETW_CHECK_EQ(bytes[3], 0x25);
     NETW_CHECK_EQ(bytes[4], 0x00);
+    NETW_CHECK_EQ(bytes[5], 0x00);
+    NETW_CHECK_EQ(bytes[6], 0x09);
+    NETW_CHECK_EQ(bytes[7], 0x04);
 }
 
 TEST_CASE(

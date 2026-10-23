@@ -1,7 +1,7 @@
-# WIRE v14, the carrier format
+# WIRE v16, the carrier format
 
 The byte layout of every datagram, frame and payload Networked writes.
-`FORMAT_VERSION` is 14. `src/wire/registry.cpp` is the one declaration of the
+`FORMAT_VERSION` is 16. `src/wire/registry.cpp` is the one declaration of the
 channel table and `tools/wire_decode.py` reads a capture against this page.
 
 ---
@@ -156,6 +156,8 @@ id   name                    kind    rel fresh del agg direction  payload
 46   CLAIM_IMAGE             routed  U   fresh fit yes either     planned
 47   SESSION_RESYNC          session R   -     fit -   cli -> srv planned
 48   LAGCOMP_CONFIRM         session R   -     fit -   srv -> cli planned
+49   SESSION_LEAVE           session R   -     fit -   cli -> srv planned
+50   SESSION_PLAYER_LEFT     session R   -     fit -   srv -> cli planned
 100+ user channels           routed  -   -     -   -   either     raw
 ```
 
@@ -767,7 +769,11 @@ CONTROL_APPLY
 [tenure_changed bool1]            the tenure starts at this revision
 [hold bits 2]
 [outcome bits 2]                  0 granted, 1 unauthorized, 2 unavailable
+[has_owner bool1]                 the entity's owner changes with this decision
+[kept bool1]                      the server keeps it for a departed player
 [final_state bytes_capped 1024]   the new tenure's first sample, or empty
+[peer varuint 5]                  the new owner's peer, 0 the server
+[player_id varuint 5]             the new owner's player id, 0 no player
 [align_verify]
 ```
 
@@ -781,6 +787,17 @@ and the `outcome`. A refusal reaches only the issuer and restates the current
 decision at its current revision. A receiver installs a decision only when its
 revision is newer than the one it holds, and settles the op either way. An
 apply for a route the receiver has not spawned waits for the spawn.
+
+A receiver reads `peer` and `player_id` only when `has_owner` is set, and
+installs them with the decision, so the owner and the controller always change
+together. The server sets it when a player leaves and the session keeps that
+player's entities, which then belong to the server.
+
+`kept` is set on every decision for an entity the server keeps for a departed
+player and despawns when the window runs out, and cleared when the player
+returns. A peer admitted while the server keeps such an entity is sent its
+current decision once. Every peer records the bit from any copy, installed or
+not, so a peer the server moves to despawns those entities when it takes over.
 
 A `final_state` is one absolute row of every `.broadcast()` record the entity
 carries, in the entity's record order. It is left empty when it would pass
@@ -917,14 +934,21 @@ SESSION_RESYNC   what a client holds when the server moves to another peer
 [routes varuint 3][last bool1]
 [ROUTE_LEASE body] x leases
 [route_delta varuint 5][anchor varuint 5][anchor_author varuint 5]
-[control_revision varuint 5][epoch varuint 3] x routes
+[control_revision varuint 5][epoch varuint 3][gone bool1] x routes
 [align_verify]
 ```
 
-Each client sends it once the server has moved, in `TRANSFER_CONTINUE`.
-Routes ascend, each a delta from the one before and the first from zero, so
-every frame decodes alone. A report too large for one message splits into
-frames, and `last` marks the final one. Only the first carries leases.
+Each client sends it once the server has moved. In `TRANSFER_REJOIN` it
+carries no held routes. Routes ascend, each a delta from the one before and
+the first from zero, so every frame decodes alone. A report too large for one
+message splits into frames, and `last` marks the final one. Only the first
+carries leases.
+
+`gone` is set only by the former server, on each route it despawned from its
+last poll before the `transfer_server` call until it stopped being the server.
+Its despawn may have
+been sent on the old term and dropped, so the new server despawns a `gone`
+route it still holds. A `gone` row from any other peer is ignored.
 
 The new server mints above every `route_floor`, honours the leases, and
 issues player ids above every `player_high`. It sends DESPAWN for a route it
@@ -941,10 +965,19 @@ SESSION_KICKED         [reason string]
 SESSION_SHUTDOWN       [reason string]
 SESSION_LEAVE_REQUEST  [reason string]
 SESSION_KICK_REQUEST   [peer svarint 5][reason string]
+SESSION_LEAVE          [returning bool1]
+SESSION_PLAYER_LEFT    [player_id varuint 5][reason int_range 0..3]
 ```
 
 A reason is a string a game wrote and a player reads, bounded by the 1023 byte
 string cap.
+
+A client that leaves sends SESSION_LEAVE and waits for the server to close its
+connection, giving up after 2 seconds. `returning` is set by
+`NetwSession.step_away`. The server sends SESSION_PLAYER_LEFT to every other
+client before it closes the leaving one, and `reason` is a
+`NetwPlayer.LeaveReason`. A client that never receives it reads
+`LEAVE_DROPPED`.
 
 ```text
 SESSION_SCENE_RELEASED  [route varuint 5]
@@ -1239,7 +1272,7 @@ column list no `describe()` layout carries.
 
 `format` decides how the first byte of each datagram is read and whether a
 REPLY carries the failed bit, and nothing else in the file depends on it, so
-`tools/wire_decode.py` reads a v10, v11, v12 or v13 capture without being told which
+`tools/wire_decode.py` reads a v10 to v16 capture without being told which
 it holds.
 
 The armed path is claimed once per process by the first session to move a

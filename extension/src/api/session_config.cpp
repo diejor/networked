@@ -166,6 +166,47 @@ void NetwSessionConfig::_bind_methods() {
         D_METHOD("transfer_deadline", "ticks"),
         &NetwSessionConfig::transfer_deadline
     );
+
+    ClassDB::bind_method(
+        D_METHOD("set_return_window_seconds", "return_window_seconds"),
+        &NetwSessionConfig::set_return_window_seconds
+    );
+    ClassDB::bind_method(
+        D_METHOD("get_return_window_seconds"),
+        &NetwSessionConfig::get_return_window_seconds
+    );
+    ADD_PROPERTY(
+        PropertyInfo(
+            Variant::FLOAT,
+            "return_window_seconds",
+            PROPERTY_HINT_RANGE,
+            "0,600,0.1,or_greater,suffix:s"
+        ),
+        "set_return_window_seconds",
+        "get_return_window_seconds"
+    );
+    ClassDB::bind_method(
+        D_METHOD("return_window", "seconds"),
+        &NetwSessionConfig::return_window
+    );
+}
+
+void NetwSessionConfig::set_return_window_seconds(double p_seconds) {
+    NETW_ERR_COND(
+        !(p_seconds >= 0.0),
+        sys::SESSION,
+        "NetwSessionConfig.return_window_seconds got %f, which is negative. "
+        "Pass seconds, or 0 to despawn a player's entities when it leaves.",
+        p_seconds
+    );
+    if (guard.takes("return_window_seconds")) {
+        values.return_window_seconds = p_seconds;
+    }
+}
+
+Ref<NetwSessionConfig> NetwSessionConfig::return_window(double p_seconds) {
+    set_return_window_seconds(p_seconds);
+    return Ref<NetwSessionConfig>(this);
 }
 
 void NetwSessionConfig::set_transfer_deadline_ticks(int64_t p_ticks) {
@@ -293,6 +334,12 @@ String NetwSessionConfig::non_default_fields() const {
             named += ", ";
         }
         named += "transfer_deadline_ticks";
+    }
+    if (values.return_window_seconds != 0.0) {
+        if (!named.is_empty()) {
+            named += ", ";
+        }
+        named += "return_window_seconds";
     }
     return named;
 }

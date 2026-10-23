@@ -136,7 +136,8 @@ private:
         int64_t p_hold,
         int64_t p_issuer,
         uint64_t p_op,
-        const godot::PackedByteArray &p_final_state = godot::PackedByteArray()
+        const godot::PackedByteArray &p_final_state = godot::PackedByteArray(),
+        bool p_sends_owner = false
     );
     entity::Control::Outcome decide_request(
         int64_t p_requester,
@@ -407,6 +408,9 @@ public:
         const session::ControlRequest &p_request
     );
     void _handle_control_apply(const session::ControlApply &p_applied);
+    void reassign(int64_t p_peer, int64_t p_player_id, int64_t p_controller);
+    void revert_to_server(int64_t p_departed);
+    void restate_control(int64_t p_peer);
     void _handle_claim_image(
         int64_t p_sender,
         const session::ClaimImage &p_image

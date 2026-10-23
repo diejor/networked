@@ -30,6 +30,7 @@ private:
         enums::NetwSession::TransferMode transfer_mode
             = enums::NetwSession::TRANSFER_REJOIN;
         int64_t transfer_deadline_ticks = DEFAULT_TRANSFER_DEADLINE_TICKS;
+        double return_window_seconds = 0.0;
     };
 
     Values values;
@@ -88,6 +89,11 @@ public:
         return values.transfer_deadline_ticks;
     }
 
+    void set_return_window_seconds(double p_seconds);
+    double get_return_window_seconds() const {
+        return values.return_window_seconds;
+    }
+
     godot::Ref<NetwSessionConfig> app(const godot::StringName &p_app_id);
     godot::Ref<NetwSessionConfig> role(enums::NetwSession::Role p_role);
     godot::Ref<NetwSessionConfig> link(
@@ -101,6 +107,7 @@ public:
         enums::NetwSession::TransferMode p_mode
     );
     godot::Ref<NetwSessionConfig> transfer_deadline(int64_t p_ticks);
+    godot::Ref<NetwSessionConfig> return_window(double p_seconds);
 
     void seal(const godot::String &p_scope) {
         guard.seal(p_scope);

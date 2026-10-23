@@ -69,14 +69,7 @@
 			<return type="NetwPlayer" />
 			<param index="0" name="account" type="String" />
 			<description>
-				The [NetwPlayer] with [member NetwPlayer.account] equal to [param account], or [code]null[/code]. It answers a player currently in the session, so an admission handler can kick a player already signed in with that account. A client knows only its own account, so on a client it answers the local player or [code]null[/code].
-				[codeblock]
-				func admit(request: NetwJoinRequest) -&gt; Error:
-				    var signed_in := session.find_player(request.account)
-				    if signed_in != null:
-				        session.kick(signed_in, "Signed in somewhere else.")
-				    return OK
-				[/codeblock]
+				The [NetwPlayer] with [member NetwPlayer.account] equal to [param account], or [code]null[/code]. It answers a player currently in the session. A client knows only its own account, so on a client it answers the local player or [code]null[/code].
 			</description>
 		</method>
 		<method name="find_scene">
@@ -125,7 +118,7 @@
 		<method name="leave">
 			<return type="NetwPromise" />
 			<description>
-				Leaves the session. The server saves its entity rows first, and stays online if the database refuses a row. The promise resolves with an [enum @GlobalScope.Error] once the peer is down or the save failed.
+				Leaves the session. The server saves its entity rows first, and stays online if the database refuses a row. The promise resolves with an [enum @GlobalScope.Error] once the peer is down or the save failed. Closing the game window leaves the same way. A server that saves entities loses unsaved changes when its window closes, so it sets [member SceneTree.auto_accept_quit] to [code]false[/code] and quits after [method leave] resolves.
 			</description>
 		</method>
 		<method name="pause">
@@ -197,6 +190,12 @@
 				[b]Server Only.[/b]
 			</description>
 		</method>
+		<method name="step_away">
+			<return type="NetwPromise" />
+			<description>
+				Leaves like [method leave], and [signal player_left] reports [constant NetwPlayer.LEAVE_STEPPED_AWAY] to every other peer. The server keeps the player's entities for [member NetwSessionConfig.return_window_seconds].
+			</description>
+		</method>
 		<method name="table" qualifiers="const">
 			<return type="NetwTable" />
 			<param index="0" name="name" type="StringName" />
@@ -208,7 +207,7 @@
 			<return type="int" enum="Error" />
 			<param index="0" name="peer_id" type="int" />
 			<description>
-				Asks the transport to make [param peer_id] the server and this peer a client under a new id. [signal server_transferred] follows on every peer. Whether a transport can is stated in the class description.
+				Asks the transport to make [param peer_id] the server and this peer a client under a new id. [signal server_transferred] follows on every peer. Whether a transport can is stated in the class description. When the server moves, players who have left lose their return window, and their kept entities despawn.
 				[codeblock lang=text]
 				Error
 				┠╴ERR_UNAUTHORIZED        called on a client
@@ -332,8 +331,9 @@
 		</signal>
 		<signal name="player_left">
 			<param index="0" name="player" type="NetwPlayer" />
+			<param index="1" name="reason" type="int" enum="NetwPlayer.LeaveReason" />
 			<description>
-				A [NetwPlayer] has left, either because their peer disconnected or because of [method kick]. [member NetwPlayer.is_active] is already [code]false[/code].
+				A [NetwPlayer] has left for [param reason]. [member NetwPlayer.is_active] is already [code]false[/code].
 			</description>
 		</signal>
 		<signal name="scene_ready">

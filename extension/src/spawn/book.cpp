@@ -76,6 +76,14 @@ int Book::armed_count() const {
     return int(armed.size());
 }
 
+PackedInt64Array Book::armed_routes() const {
+    PackedInt64Array out;
+    for (const KeyValue<int64_t, Record> &row : armed) {
+        out.push_back(row.key);
+    }
+    return out;
+}
+
 Record *Book::issue(const Record &record) {
     const Record *held = spawned.getptr(record.get_route());
     if (held != nullptr) {

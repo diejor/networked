@@ -426,6 +426,15 @@ struct NetwScene {
     };
 };
 
+struct NetwPlayer {
+    enum LeaveReason {
+        LEAVE_QUIT,
+        LEAVE_STEPPED_AWAY,
+        LEAVE_KICKED,
+        LEAVE_DROPPED,
+    };
+};
+
 struct LobbyDirectory {
     enum Capability {
         CAPABILITY_BROWSE = 1,
@@ -444,6 +453,7 @@ VARIANT_ENUM_CAST(netw::enums::NetwSession::State);
 VARIANT_ENUM_CAST(netw::enums::NetwSession::Role);
 VARIANT_ENUM_CAST(netw::enums::NetwSession::ExitReason);
 VARIANT_ENUM_CAST(netw::enums::NetwSession::TransferMode);
+VARIANT_ENUM_CAST(netw::enums::NetwPlayer::LeaveReason);
 VARIANT_ENUM_CAST(netw::enums::NetwClock::SyncMode);
 VARIANT_ENUM_CAST(netw::enums::NetwClock::MismatchAction);
 VARIANT_ENUM_CAST(netw::enums::NetwClock::ClockMonitor);

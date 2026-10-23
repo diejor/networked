@@ -74,14 +74,14 @@ func test_explosion_scores_rocks_and_stuns_players() -> void:
 	await game.sync_ticks(2)
 	var bomb = world.root.get_node(^"Bombs").get_child(0)
 	var score = world.root.get_node(^"Score")
-	var before: int = score.get_score(host.peer_id)
+	var before: int = score.get_score(host.session.local_player)
 
-	bomb.from_player = host.peer_id
+	bomb.from_player = host.session.local_player.peer_id
 	bomb.in_area = [world.root.get_node(^"Rocks").get_child(0), client_on_host]
 	bomb.explode()
 	await game.sync_ticks(6)
 
-	assert_int(score.get_score(host.peer_id)).is_greater(before)
+	assert_int(score.get_score(host.session.local_player)).is_greater(before)
 	assert_bool(client_on_host.get(&"stunned")).is_true()
 	assert_bool(client_view.get(&"stunned")).is_true()
 

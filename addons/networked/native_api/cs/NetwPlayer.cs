@@ -57,6 +57,29 @@ public sealed class NetwPlayer : NetwRefCounted
         return Adopt(NetwApi.Retained(NetwApi.ObjectOf(value)));
     }
 
+    public enum LeaveReason : long
+    {
+        /// <summary>
+        /// The player left with <see cref="NetwSession.Leave"/> or closed the
+        /// game window.
+        /// </summary>
+        Quit = 0,
+        /// <summary>
+        /// The player left with <see cref="NetwSession.StepAway"/> and may come
+        /// back.
+        /// </summary>
+        SteppedAway = 1,
+        /// <summary>
+        /// The server removed the player with <see cref="NetwSession.Kick"/>.
+        /// </summary>
+        Kicked = 2,
+        /// <summary>
+        /// The connection was lost, or the same
+        /// <see cref="NetwPlayer.Account"/> joined again.
+        /// </summary>
+        Dropped = 3,
+    }
+
     /// <summary>
     /// Emitted when <see cref="NetwPlayer.Scene"/> changes. Either may be
     /// <c>null</c>. Only <see cref="NetwSession.LocalPlayer"/> emits it.
@@ -148,7 +171,9 @@ public sealed class NetwPlayer : NetwRefCounted
     /// The account <see cref="Netw.ConfigureAdmission"/> assigned to
     /// <see cref="NetwJoinRequest.Account"/>, such as
     /// <c>"steam:76561198000000000"</c>. Empty for a guest, and empty for
-    /// another player on a client.
+    /// another player on a client. A second join with the same account replaces
+    /// this player, who leaves with
+    /// <see cref="NetwPlayer.LeaveReason.Dropped"/>.
     /// </summary>
     public string Account
     {
@@ -188,7 +213,9 @@ public sealed class NetwPlayer : NetwRefCounted
     /// <summary>
     /// The entities spawned for this player with
     /// <see cref="Netw.SpawnPlayer"/>, in no particular order. Empty for a
-    /// spectator.
+    /// spectator. On the server a player who dropped or stepped away still
+    /// lists the entities kept for it, and a returning player lists them when
+    /// it joins.
     /// </summary>
     public NetwEntity[] Entities
     {

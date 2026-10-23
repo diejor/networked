@@ -15,7 +15,7 @@ var levels: Dictionary = { }
 
 
 func _init() -> void:
-	Netw.configure_session(self).app(&"netw-example-multiple-levels")
+	Netw.configure_session(self).app(&"netw-example-multiple-levels").return_window(60.0)
 	Netw.configure_clock(self)
 	Netw.configure_database(self, &"saves").backend(
 		preload("res://examples/multiple_levels/game/save_database.tres"),
@@ -43,6 +43,7 @@ func _notification(what: int) -> void:
 	if what != NOTIFICATION_WM_CLOSE_REQUEST:
 		return
 	await session.save_entities().wait()
+	await session.leave().wait()
 	get_tree().quit()
 
 
@@ -83,6 +84,8 @@ func open_level(path: String) -> NetwScene:
 
 
 func spawn_player(player: NetwPlayer) -> void:
+	if not player.entities.is_empty():
+		return
 	var body := Netw.spawn_player(player, spawn_avatar)
 	var roster: Array[NetwPlayer] = session.players
 	(body as Node2D).position = START_POSE + START_STRIDE * roster.size()

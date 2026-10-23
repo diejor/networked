@@ -448,10 +448,9 @@ bool Pipeline::spawn_admitted(Node *p_node, const char *p_verb) {
         return false;
     }
     if (represented.is_valid() && !plane->player_holds(represented)) {
-        NETW_ERROR(
+        NETW_INFO(
             sys::SPAWN,
-            "Nothing was spawned, because player '%s' is not in the session. "
-            "Spawn for a player the session has admitted.",
+            "Nothing was spawned, because player '%s' left the session.",
             String(represented->get_username())
         );
         return false;
@@ -3525,6 +3524,10 @@ void Pipeline::demote_spawned() {
     fail_pending_spawns(
         String("The server changed before the spawn function returned.")
     );
+    const PackedInt64Array armed = spawn_book.armed_routes();
+    for (int at = 0; at < armed.size(); ++at) {
+        discard_armed_spawn(armed[at]);
+    }
     const PackedInt64Array routes = spawn_book.spawned_routes();
     for (int at = 0; at < routes.size(); ++at) {
         const Record *record = spawn_book.spawned_of(routes[at]);

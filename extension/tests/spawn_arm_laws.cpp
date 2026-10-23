@@ -320,11 +320,6 @@ TEST_CASE(
     "through"
 ) {
     netw_test::FaultWatch expected_faults;
-    expected_faults.expect_error(
-        "[error][spawn] Nothing was spawned, because player '*' is not in "
-        "the session. Spawn for a player the session has admitted.",
-        1
-    );
     expected_faults.expect_warning(
         "[warn][transport] A packet for route * was refused with error *.",
         1

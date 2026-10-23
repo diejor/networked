@@ -420,7 +420,7 @@ The server takes control when the controller disconnects.
 
 :ref:`DisconnectRule<enum_NetwEntity_DisconnectRule>` **DISCONNECT_DESPAWN** = ``1``
 
-The entity despawns when its controller disconnects.
+The entity despawns when its controller quits or is kicked. After a drop or :ref:`NetwSession.step_away()<class_NetwSession_method_step_away>` it despawns when :ref:`NetwSessionConfig.return_window_seconds<class_NetwSessionConfig_property_return_window_seconds>` runs out.
 
 .. rst-class:: classref-item-separator
 

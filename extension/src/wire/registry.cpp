@@ -611,6 +611,28 @@ WireRegistry WireRegistry::create_default() {
         PayloadContract::PLANNED
     );
 
+    reg_c(
+        49,
+        "SESSION_LEAVE",
+        ChannelKind::SESSION,
+        Reliability::RELIABLE,
+        Freshness::NONE,
+        Delivery::FITTED,
+        Direction::CLIENT_TO_SERVER,
+        PayloadContract::PLANNED
+    );
+
+    reg_c(
+        50,
+        "SESSION_PLAYER_LEFT",
+        ChannelKind::SESSION,
+        Reliability::RELIABLE,
+        Freshness::NONE,
+        Delivery::FITTED,
+        Direction::SERVER_TO_CLIENT,
+        PayloadContract::PLANNED
+    );
+
     auto batches = [&](const char *name) {
         const ChannelDecl *decl
             = reg.find_channel_by_name(godot::StringName(name));

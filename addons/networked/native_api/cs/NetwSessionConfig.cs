@@ -329,6 +329,47 @@ public sealed class NetwSessionConfig : NetwRefCounted
         }
     }
 
+    private static readonly IntPtr _bindGetReturnWindowSeconds =
+        NetwApi.MethodBind(
+            "NetwSessionConfig",
+            "get_return_window_seconds",
+            1740695150UL);
+
+    private static readonly IntPtr _bindSetReturnWindowSeconds =
+        NetwApi.MethodBind(
+            "NetwSessionConfig",
+            "set_return_window_seconds",
+            373806689UL);
+
+    /// <summary>
+    /// How many seconds the server keeps the entities of a player with an
+    /// <see cref="NetwPlayer.Account"/> after it drops or calls
+    /// <see cref="NetwSession.StepAway"/>, or <c>0</c> to despawn them when it
+    /// leaves.
+    /// </summary>
+    public double ReturnWindowSeconds
+    {
+        get
+        {
+            double answered = default;
+            NetwThunks.Ptrcall0_Double(
+                _bindGetReturnWindowSeconds,
+                Checked,
+                ref answered);
+            return answered;
+        }
+        set
+        {
+            double slot0 = value;
+            long discarded = default;
+            NetwThunks.Ptrcall1_Double_Long(
+                _bindSetReturnWindowSeconds,
+                Checked,
+                in slot0,
+                ref discarded);
+        }
+    }
+
     private static readonly IntPtr _bindApp =
         NetwApi.MethodBind("NetwSessionConfig", "app", 243073128UL);
 
@@ -457,6 +498,25 @@ public sealed class NetwSessionConfig : NetwRefCounted
         IntPtr answered = default;
         NetwThunks.Ptrcall1_Long_IntPtr(
             _bindTransferDeadline,
+            Checked,
+            in slot0,
+            ref answered);
+        return NetwSessionConfig.Adopt(answered);
+    }
+
+    private static readonly IntPtr _bindReturnWindow =
+        NetwApi.MethodBind("NetwSessionConfig", "return_window", 1487641699UL);
+
+    /// <summary>
+    /// Sets <see cref="NetwSessionConfig.ReturnWindowSeconds"/>, how long the
+    /// server keeps a departed player's entities.
+    /// </summary>
+    public NetwSessionConfig ReturnWindow(double seconds)
+    {
+        double slot0 = seconds;
+        IntPtr answered = default;
+        NetwThunks.Ptrcall1_Double_IntPtr(
+            _bindReturnWindow,
             Checked,
             in slot0,
             ref answered);

@@ -46,7 +46,10 @@ public:
     void announce_exited(ExitReason p_reason, const godot::String &p_detail);
     void announce_player_joined(const godot::Ref<NetwPlayer> &p_who);
     void announce_local_joined(const godot::Ref<NetwPlayer> &p_who);
-    void announce_player_left(const godot::Ref<NetwPlayer> &p_who);
+    void announce_player_left(
+        const godot::Ref<NetwPlayer> &p_who,
+        enums::NetwPlayer::LeaveReason p_reason
+    );
     void announce_join_failed(int64_t p_code, const godot::String &p_reason);
     void announce_scene_ready(const godot::Ref<NetwScene> &p_scene);
     void announce_server_transferred(
@@ -77,6 +80,7 @@ public:
     void set_peer_bandwidth(int64_t p_peer, int64_t p_kbps);
 
     godot::Ref<NetwPromise> leave();
+    godot::Ref<NetwPromise> step_away();
     void pause(const godot::String &p_reason);
     void unpause();
     godot::Ref<NetwPromise> save_entities();

@@ -49,6 +49,7 @@ public:
     bool drop_armed(int64_t route);
     bool books_node(godot::Node *node) const;
     int armed_count() const;
+    godot::PackedInt64Array armed_routes() const;
 
     Record *issue(const Record &record);
     Record *spawned_of(int64_t route);

@@ -220,6 +220,7 @@ void NetwMultiplayer::session_follow_relabel(
             player_local().is_valid() ? ROLE_LISTEN_SERVER
                                       : ROLE_DEDICATED_SERVER
         );
+        transfer_former = p_former_now;
         if (spawns != nullptr) {
             promoted = spawns->promote_received();
         }
@@ -231,6 +232,7 @@ void NetwMultiplayer::session_follow_relabel(
         }
     } else if (was_server) {
         session_set_role(ROLE_CLIENT);
+        transfer_note_dying();
         if (spawns != nullptr) {
             spawns->demote_spawned();
         }
@@ -269,7 +271,7 @@ void NetwMultiplayer::session_follow_relabel(
     transfer_generation += 1;
     resync_generation = transfer_generation;
     if (!succeeds) {
-        transfer_queue_resync();
+        transfer_queue_resync(was_server);
     }
     installing_transfer = false;
 
@@ -400,6 +402,9 @@ void NetwMultiplayer::session_announce_transfer() {
     }
     const TransferInstall installed = transfer_installed;
     transfer_installed = TransferInstall();
+    if (session_core.is_server_role()) {
+        player_despawn_heard_kept();
+    }
     if (session_handle.is_valid()) {
         session_handle->announce_server_transferred(
             installed.successor_was,
@@ -566,7 +571,42 @@ void NetwMultiplayer::transfer_await_resync(
     transfer_settle_resync();
 }
 
-void NetwMultiplayer::transfer_queue_resync() {
+void NetwMultiplayer::transfer_note_death(int64_t p_route) {
+    spawn::Pipeline *spawns = spawn_plane();
+    if (spawns != nullptr && spawns->holds_spawned_route(p_route)) {
+        transfer_gone.push_back(p_route);
+    }
+}
+
+void NetwMultiplayer::transfer_note_dying() {
+    transfer_called = false;
+    spawn::Pipeline *spawns = spawn_plane();
+    if (spawns == nullptr) {
+        return;
+    }
+    const PackedInt64Array issued = spawns->get_spawn_book()->spawned_routes();
+    for (int at = 0; at < issued.size(); ++at) {
+        const Ref<NetwEntity> entity = wrapper_for_route(issued[at]);
+        if (entity.is_valid() && entity::stage_is_leaving(entity->get_stage())
+            && !transfer_gone.has(issued[at])) {
+            transfer_gone.push_back(issued[at]);
+        }
+    }
+}
+
+void NetwMultiplayer::transfer_despawn_gone(int64_t p_route) {
+    const Ref<NetwEntity> entity = wrapper_for_route(p_route);
+    if (entity.is_null() || entity->get_owner() == nullptr
+        || entity::stage_is_leaving(entity->get_stage())) {
+        return;
+    }
+    const bool admitted = halt_admits_despawn;
+    halt_admits_despawn = true;
+    entity->despawn(Ref<NetwDespawnOpts>());
+    halt_admits_despawn = admitted;
+}
+
+void NetwMultiplayer::transfer_queue_resync(bool p_former) {
     session::ResyncHead head;
     head.route_floor = uint64_t(MAX(liveness_core->route_floor(), 0));
     for (const KeyValue<int64_t, PlayerRow> &row : players) {
@@ -586,6 +626,9 @@ void NetwMultiplayer::transfer_queue_resync() {
     PackedInt64Array held = spawns != nullptr
         ? spawns->get_spawn_book()->recv_routes()
         : PackedInt64Array();
+    const PackedInt64Array gone = p_former ? transfer_gone : PackedInt64Array();
+    transfer_gone = PackedInt64Array();
+    held.append_array(gone);
     held.sort();
     LocalVector<session::ResyncRoute> rows;
     rows.reserve(uint32_t(held.size()));
@@ -598,6 +641,7 @@ void NetwMultiplayer::transfer_queue_resync() {
         const AnchorRevision anchor = anchor_installed(route);
         const Ref<NetwEntity> entity = wrapper_for_route(route);
         session::ResyncRoute row;
+        row.gone = gone.has(route);
         row.route_delta = uint64_t(route - previous);
         row.anchor = anchor.revision;
         row.anchor_author = anchor.author;
@@ -702,6 +746,12 @@ void NetwMultiplayer::session_receive_resync(
         uint64_t route = 0;
         for (const session::ResyncRoute &row : chunk.routes) {
             route += row.route_delta;
+            if (row.gone) {
+                if (p_sender == transfer_former) {
+                    transfer_despawn_gone(int64_t(route));
+                }
+                continue;
+            }
             spawn::Record *record = book->spawned_of(int64_t(route));
             Node *node = record != nullptr ? record->node() : nullptr;
             if (node == nullptr || !node->is_inside_tree()) {
@@ -926,9 +976,14 @@ Error NetwMultiplayer::session_transfer_server(int64_t p_peer) {
     if (databases.holds_writes()) {
         return ERR_BUSY;
     }
-    const Variant answered
-        = transport->call(StringName(VERB_TRANSFER_SERVER), p_peer);
-    return Error(int(answered));
+    player_despawn_kept();
+    transfer_called = true;
+    const Error answered
+        = Error(int(transport->call(StringName(VERB_TRANSFER_SERVER), p_peer)));
+    if (answered != OK) {
+        transfer_called = false;
+    }
+    return answered;
 }
 
 } // namespace netw

@@ -610,9 +610,26 @@ private:
     };
     godot::LocalVector<TurnedAwayPeer> turned_away_peers;
     void session_poll_turned_away();
+    bool session_leave_returning = false;
+    godot::Ref<NetwPromise> session_departing;
+    godot::Ref<NetwPromise> session_depart(bool p_returning);
     godot::Ref<NetwPromise> session_close_peer();
     godot::Ref<NetwPromise> session_close_now();
+    godot::Ref<NetwPromise> session_close_client(bool p_waits);
+    void session_settle_client_leave(
+        const godot::Ref<godot::MultiplayerPeer> &p_link,
+        const godot::Ref<NetwPromise> &p_left
+    );
+    bool session_sends_leave() const;
+    void session_send_leave(bool p_returning);
+    void session_receive_leave(int64_t p_sender, bool p_returning);
+    void session_receive_player_left(const session::PlayerLeft &p_left);
+    void session_watch_window_close(bool p_watch);
+    void session_on_window_close();
+    void session_end_on_quit();
     void session_poll_shutdown();
+    bool session_server_shut_down = false;
+    void session_poll_server_shutdown();
     void session_leave_drained(
         const godot::Ref<NetwPromise> &p_drained,
         const godot::Ref<NetwPromise> &p_left
@@ -666,6 +683,8 @@ private:
         uint8_t shutdown = 0;
         uint8_t kick_request = 0;
         uint8_t leave_request = 0;
+        uint8_t leave = 0;
+        uint8_t player_left = 0;
         uint8_t pause = 0;
         uint8_t unpause = 0;
     } control_channels;
@@ -865,6 +884,7 @@ private:
             = enums::NetwSession::TRANSFER_REJOIN;
         int64_t transfer_deadline_ticks
             = NetwSessionConfig::DEFAULT_TRANSFER_DEADLINE_TICKS;
+        double return_window = 0.0;
     };
     SessionSettings session_settings;
     godot::Ref<NetwClockConfig> clock_fallback;
@@ -1034,10 +1054,23 @@ private:
         bool admitted = false;
         bool handled = false;
         int64_t incarnation = 0;
+        enums::NetwPlayer::LeaveReason leave_reason
+            = enums::NetwPlayer::LEAVE_DROPPED;
     };
     godot::HashMap<int64_t, PlayerRow> players;
     godot::HashMap<int64_t, int64_t> player_id_of_peer;
     int64_t player_incarnation_next = 1;
+
+    struct KeptEntity {
+        int64_t player_id = 0;
+        godot::String account;
+        int64_t deadline_msec = 0;
+        bool owned = false;
+        bool controlled = false;
+        bool despawns = false;
+    };
+    godot::HashMap<uint64_t, KeptEntity> kept_entities;
+    godot::HashSet<uint64_t> kept_by_server;
 
     PlayerRow *player_row(int64_t p_peer);
     const PlayerRow *player_row(int64_t p_peer) const;
@@ -3270,6 +3303,9 @@ public:
     bool transfer_violated = false;
     bool transfer_awaits_roster = false;
     godot::PackedInt64Array transfer_authored;
+    bool transfer_called = false;
+    godot::PackedInt64Array transfer_gone;
+    int64_t transfer_former = 0;
     mutable bool relabel_shaping_warned = false;
 
     struct ResyncRaise {
@@ -3336,7 +3372,10 @@ public:
     void transfer_readmitted();
     void transfer_reset_resync();
     void transfer_await_resync(const godot::PackedInt32Array &p_survivors);
-    void transfer_queue_resync();
+    void transfer_note_death(int64_t p_route);
+    void transfer_note_dying();
+    void transfer_despawn_gone(int64_t p_route);
+    void transfer_queue_resync(bool p_former);
     void transfer_send_resync();
     void transfer_settle_resync();
     void transfer_receive_held_resync();
@@ -4382,6 +4421,8 @@ public:
     void session_submit_request(const JoinRequest &p_request);
 
     godot::Ref<NetwPromise> session_leave();
+    godot::Ref<NetwPromise> session_step_away();
+    void session_leave_on_quit();
     void session_settle_leave(const godot::Ref<NetwPromise> &p_left);
 
     void session_pause(const godot::String &p_reason);
@@ -4984,8 +5025,15 @@ public:
     ) const;
     godot::Ref<NetwPlayer> scene_caller_player(godot::Node *p_requester);
     void player_publish_joined(int64_t p_peer);
-    void player_publish_left(const godot::Ref<NetwPlayer> &p_who);
+    void player_publish_left(
+        const godot::Ref<NetwPlayer> &p_who,
+        enums::NetwPlayer::LeaveReason p_reason
+    );
     void player_release_id(const godot::Ref<NetwPlayer> &p_who);
+    void player_note_leave(
+        int64_t p_peer,
+        enums::NetwPlayer::LeaveReason p_reason
+    );
 
     int64_t player_incarnation(int64_t p_peer) const;
     godot::TypedArray<NetwEntity> player_entities_held(
@@ -4994,6 +5042,14 @@ public:
     );
     bool player_is_active(int64_t p_peer, int64_t p_incarnation) const;
     bool player_holds(const godot::Ref<NetwPlayer> &p_who) const;
+    bool player_keep_entity(NetwEntity *p_entity, int64_t p_peer);
+    void player_hand_back(int64_t p_peer);
+    void player_expire_kept(int64_t p_now_msec);
+    void player_despawn_kept();
+    bool player_kept_despawns(uint64_t p_id) const;
+    void player_tell_kept(int64_t p_peer);
+    void player_hear_kept(uint64_t p_id, bool p_kept);
+    void player_despawn_heard_kept();
     godot::Error player_kick(
         const godot::Ref<NetwPlayer> &p_who,
         const godot::String &p_reason

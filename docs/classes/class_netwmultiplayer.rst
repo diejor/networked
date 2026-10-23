@@ -7872,7 +7872,7 @@ Disconnects and returns to :ref:`NetwSession.STATE_OFFLINE<class_NetwSession_con
 
 |void| **session_notify_shutdown**\ (\ reason\: :godot:`String` = ""\ ) :ref:`🔗<class_NetwMultiplayer_method_session_notify_shutdown>`
 
-Notifies :ref:`SESSION_SERVER_DISCONNECTING<class_NetwMultiplayer_constant_SESSION_SERVER_DISCONNECTING>` with ``reason`` on every peer. It does not disconnect anyone.
+Notifies :ref:`SESSION_SERVER_DISCONNECTING<class_NetwMultiplayer_constant_SESSION_SERVER_DISCONNECTING>` with ``reason`` on every peer. Every client ends its session when the notice arrives.
 
 .. rst-class:: classref-item-separator
 

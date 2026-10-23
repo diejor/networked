@@ -13,7 +13,7 @@ signal start_pressed()
 func _ready() -> void:
 	hide()
 	session.player_joined.connect(on_roster_changed)
-	session.player_left.connect(on_roster_changed)
+	session.player_left.connect(on_roster_changed.unbind(1))
 	session.local_joined.connect(on_local_joined)
 	session.scene_ready.connect(on_scene_ready)
 	session.exiting.connect(hide.unbind(2))

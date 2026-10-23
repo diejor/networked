@@ -719,7 +719,14 @@ void NetwEntity::_on_peer_disconnected(int64_t p_peer_id) {
     if (owner == nullptr || !owner->is_inside_tree() || !is_on_server()) {
         return;
     }
-    switch (control()->disconnect_verdict(p_peer_id, get_peer_id())) {
+    const entity::Control::Verdict verdict
+        = control()->disconnect_verdict(p_peer_id, get_peer_id());
+    NetwMultiplayer *core = session_core();
+    if (verdict != entity::Control::NOTHING && core != nullptr
+        && core->player_keep_entity(this, p_peer_id)) {
+        return;
+    }
+    switch (verdict) {
         case entity::Control::DESPAWN_REPRESENTED: {
             NETW_INFO(
                 sys::ENTITY,
@@ -1550,7 +1557,24 @@ void NetwEntity::refuse_control(
     reply.hold = uint8_t(control()->hold);
     reply.op = p_op;
     reply.outcome = uint8_t(p_outcome);
+    NetwMultiplayer *core = session_core();
+    reply.kept = core != nullptr
+        && core->player_kept_despawns(get_rid_handle().get_id());
     plane->reply_control(this, reply, p_requester);
+}
+
+void NetwEntity::restate_control(int64_t p_peer) {
+    ReplicationCore *plane = get_replication_plane();
+    NetwMultiplayer *core = session_core();
+    if (plane == nullptr || core == nullptr) {
+        return;
+    }
+    session::ControlApply restated;
+    restated.controller = uint64_t(MAX(steering(), int64_t(0)));
+    restated.revision = control()->revision;
+    restated.hold = uint8_t(control()->hold);
+    restated.kept = core->player_kept_despawns(get_rid_handle().get_id());
+    plane->reply_control(this, restated, p_peer);
 }
 
 void NetwEntity::decide_control(
@@ -1558,7 +1582,8 @@ void NetwEntity::decide_control(
     int64_t p_hold,
     int64_t p_issuer,
     uint64_t p_op,
-    const PackedByteArray &p_final_state
+    const PackedByteArray &p_final_state,
+    bool p_sends_owner
 ) {
     const bool tenure_changed = control()->decide(p_peer, p_hold);
     control_moved();
@@ -1581,11 +1606,48 @@ void NetwEntity::decide_control(
     decision.op = p_op;
     decision.outcome = uint8_t(entity::Control::Outcome::GRANTED);
     decision.final_state = p_final_state;
+    decision.has_owner = p_sends_owner;
+    decision.kept = core != nullptr
+        && core->player_kept_despawns(get_rid_handle().get_id());
+    decision.peer = uint64_t(MAX(get_peer_id(), int64_t(0)));
+    decision.player_id = uint64_t(MAX(get_player_id(), int64_t(0)));
     plane->broadcast_control(this, decision, p_issuer);
 }
 
 void NetwEntity::apply_control_change(int64_t p_peer) {
     decide_control(p_peer, entity::Control::HOLD_NONE, 0, 0);
+}
+
+void NetwEntity::reassign(
+    int64_t p_peer,
+    int64_t p_player_id,
+    int64_t p_controller
+) {
+    set_peer_id(p_peer);
+    set_player_id(p_player_id);
+    written_player.unref();
+    decide_control(
+        p_controller,
+        entity::Control::HOLD_NONE,
+        0,
+        0,
+        PackedByteArray(),
+        true
+    );
+}
+
+void NetwEntity::revert_to_server(int64_t p_departed) {
+    if (get_peer_id() != p_departed) {
+        apply_control_change(entity::Control::SERVER);
+        return;
+    }
+    const int64_t controller = control()->resolve();
+    reassign(
+        0,
+        0,
+        controller == p_departed ? int64_t(entity::Control::SERVER)
+                                 : controller
+    );
 }
 
 void NetwEntity::raise_control(uint64_t p_floor) {
@@ -1606,18 +1668,28 @@ void NetwEntity::raise_control(uint64_t p_floor) {
     decision.revision = held->revision;
     decision.tenure_changed = true;
     decision.hold = uint8_t(held->hold);
+    decision.kept = core != nullptr
+        && core->player_kept_despawns(get_rid_handle().get_id());
     plane->broadcast_control(this, decision, 0);
 }
 
 void NetwEntity::_handle_control_apply(const session::ControlApply &p_applied) {
+    NetwMultiplayer *core = session_core();
+    if (core != nullptr) {
+        core->player_hear_kept(get_rid_handle().get_id(), p_applied.kept);
+    }
     if (control()->install(
             p_applied.revision,
             p_applied.tenure_changed,
             int64_t(p_applied.hold)
         )) {
+        if (p_applied.has_owner) {
+            set_peer_id(int64_t(p_applied.peer));
+            set_player_id(int64_t(p_applied.player_id));
+            written_player.unref();
+        }
         control_moved();
         adopt_controller(int64_t(p_applied.controller));
-        NetwMultiplayer *core = session_core();
         if (p_applied.tenure_changed && core != nullptr) {
             core->row_streams_follow_tenure(get_route(), control()->tenure);
         }

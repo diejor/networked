@@ -7,6 +7,7 @@
 #include "godot/rid.hpp"
 #include "godot/templates.hpp"
 #include "godot/variant.hpp"
+#include "netw/api/enums.hpp"
 #include "netw/api/promise.hpp"
 #include "netw/api/scene.hpp"
 
@@ -15,7 +16,7 @@ namespace netw {
 class NetwEntity;
 class NetwMultiplayer;
 
-class NetwPlayer : public godot::RefCounted {
+class NetwPlayer : public godot::RefCounted, public enums::NetwPlayer {
     GDCLASS(NetwPlayer, godot::RefCounted)
 
     godot::ObjectID core_id;

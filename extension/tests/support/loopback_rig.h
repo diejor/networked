@@ -50,7 +50,7 @@ class LoopbackRig {
     godot::Vector<godot::Ref<netw::LocalMultiplayerPeer>> client_peers;
     godot::Vector<godot::HashMap<godot::StringName, godot::RID>>
         client_declared;
-    godot::Vector<godot::Node *> owned_nodes;
+    godot::Vector<godot::ObjectID> owned_nodes;
     godot::Vector<godot::Node *> mounts;
     godot::Vector<godot::NodePath> mounted_paths;
     godot::RID last_spawn;
@@ -87,6 +87,10 @@ class LoopbackRig {
 
     static godot::Node2D *make_marker() {
         return memnew(godot::Marker2D);
+    }
+
+    static godot::Node *live_node(godot::ObjectID p_id) {
+        return godot::Object::cast_to<godot::Node>(netw::gd::object_of(p_id));
     }
 
     static void install_services(
@@ -368,7 +372,7 @@ class LoopbackRig {
             );
         }
         if (!p_decl.is_mounted()) {
-            owned_nodes.push_back(owner);
+            owned_nodes.push_back(netw::gd::instance_id(owner));
         }
         return owner;
     }
@@ -411,12 +415,14 @@ public:
                 );
             }
         }
-        for (godot::Node *node : owned_nodes) {
+        for (const godot::ObjectID owned : owned_nodes) {
+            godot::Node *node = live_node(owned);
             if (node != nullptr && node->get_parent() != nullptr) {
                 node->get_parent()->remove_child(node);
             }
         }
-        for (godot::Node *node : owned_nodes) {
+        for (const godot::ObjectID owned : owned_nodes) {
+            godot::Node *node = live_node(owned);
             if (node != nullptr) {
                 memdelete(node);
             }
@@ -461,7 +467,7 @@ public:
         godot::Node *branch_node = memnew(godot::Node);
         branch_node->set_name(p_name);
         p_scene->add_child(branch_node);
-        owned_nodes.push_back(branch_node);
+        owned_nodes.push_back(netw::gd::instance_id(branch_node));
         mounts.push_back(branch_node);
         REQUIRE_MESSAGE(p_api != nullptr, "a mount needs a session");
         if (p_api != nullptr) {
@@ -815,7 +821,7 @@ public:
     ) {
         Carrier *owner = memnew(Carrier);
         owner->set_name(p_name);
-        owned_nodes.push_back(owner);
+        owned_nodes.push_back(netw::gd::instance_id(owner));
         return netw::NetwEntity::ensure(owner);
     }
 
@@ -876,7 +882,7 @@ public:
         }
         marker->set_name("Marker");
         level->add_child(marker);
-        owned_nodes.push_back(level);
+        owned_nodes.push_back(netw::gd::instance_id(level));
 
         NETW_CHECK_GT(int(api->entity_admit(scene)), 0);
         NETW_CHECK_EQ(int(api->entity_bind_node(scene, level)), int(godot::OK));
@@ -910,7 +916,11 @@ public:
         return scenes;
     }
 
-    godot::RID mirror_scene(int p_client, const godot::StringName &p_name) {
+    godot::RID mirror_scene(
+        int p_client,
+        const godot::StringName &p_name,
+        bool p_mounted = false
+    ) {
         const godot::RID origin = entity_of(p_name);
         REQUIRE_MESSAGE(origin.is_valid(), "the scene was never declared");
         const int route = int(server()->entity_get_route(origin));
@@ -937,11 +947,14 @@ public:
                 )
             )
         );
-        owned_nodes.push_back(level);
+        owned_nodes.push_back(netw::gd::instance_id(level));
         NETW_CHECK_EQ(
             int(api->entity_bind_node(mirror, level)),
             int(godot::OK)
         );
+        if (p_mounted) {
+            branch(p_client)->add_child(level);
+        }
 
         REQUIRE_MESSAGE(api != nullptr, "the client has no scene core");
         api->scene_root_online(level);
