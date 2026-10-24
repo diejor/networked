@@ -116,12 +116,11 @@ class MatchScenario final : public netw_test::FrameScenario {
                 = results.get(stand->peer_id(0), Variant());
         }
         Object *arena = netw::gd::live_object(host()->get("arena"));
-        seen.opened = arena != nullptr && arena->is_class("NetwScene");
+        seen.opened = arena != nullptr && arena->is_class("Node");
         if (!seen.opened) {
             return false;
         }
-        Node *client_root
-            = stand->node_at(0, route_of(arena->get("root")));
+        Node *client_root = stand->node_at(0, route_of(arena));
         const Array players = host()->get("players");
         seen.players = int(players.size());
         seen.players_on_client = 0;
@@ -172,8 +171,8 @@ NETW_FRAME_SCENARIO(MatchScenario, match_preload_scenario);
 
 TEST_CASE(
     "[Networked][Scene][Frame] MP1 a host preloads a level on every client, "
-    "changes scene once each one has it, and spawns players the clients see "
-    "under the new scene"
+    "spawns it once each one has it, and spawns players the clients see "
+    "under it"
 ) {
     const MatchEvidence &seen = match_evidence();
     REQUIRE(seen.driven);

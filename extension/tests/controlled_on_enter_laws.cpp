@@ -1,3 +1,4 @@
+#include "support/level_spawn.h"
 #include "support/loopback_rig.h"
 
 #if defined(NETW_TIER_HOSTED)
@@ -70,11 +71,8 @@ bool last_answer_of(Node *p_camera) {
     return answer;
 }
 
-Node *isolated_scene(NetwMultiplayer *p_api, const char *p_path) {
-    Node *root = p_api->scene_spawn(
-        String(p_path),
-        NetwMultiplayer::SCENE_ISOLATION_OWN_WORLD
-    );
+Node *isolated_scene(LoopbackRig &p_rig, const char *p_path) {
+    Node *root = netw_test::spawn_level(p_rig, String(p_path), true);
     REQUIRE(root != nullptr);
     REQUIRE(NetwMultiplayer::scene_world_of(root) != nullptr);
     return root;
@@ -96,9 +94,9 @@ TEST_CASE(
     rig.mount();
     NetwMultiplayer *api = rig.server();
     Node *first
-        = isolated_scene(api, "res://tests/support/declared_level.tscn");
+        = isolated_scene(rig, "res://tests/support/declared_level.tscn");
     Node *second
-        = isolated_scene(api, "res://tests/support/isolated_level.tscn");
+        = isolated_scene(rig, "res://tests/support/isolated_level.tscn");
     rig.pump(6);
 
     Array host_peer;

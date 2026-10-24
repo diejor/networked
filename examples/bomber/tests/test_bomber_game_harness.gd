@@ -95,7 +95,7 @@ func test_exit_returns_every_peer_to_the_lobby() -> void:
 	var world: NetwScene = host.session.find_scene(&"World")
 	(world.root.get_node(^"Winner/ExitGame") as Button).pressed.emit()
 	for i in 120:
-		if host.session.find_scene(&"World") == null:
+		if lobby(host).visible and lobby(client).visible:
 			break
 		await game.sync_ticks(1)
 

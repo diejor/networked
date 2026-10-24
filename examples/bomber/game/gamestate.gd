@@ -1,15 +1,19 @@
 class_name BomberGamestate
 extends NetwService
 
-const WORLD_SCENE := "res://examples/bomber/game/world.tscn"
-
 signal game_error(what: String)
+
+@export var world_scene: PackedScene
 
 @onready var session: NetwSession = Netw.session(self)
 
 var world: NetwScene:
 	get:
 		return session.find_scene(&"World")
+
+
+func _init() -> void:
+	Netw.configure_spawn(make_world)
 
 
 func _ready() -> void:
@@ -23,7 +27,19 @@ func on_session_exited(reason: NetwSession.ExitReason, detail: String) -> void:
 
 func begin_game() -> void:
 	assert(multiplayer.is_server())
-	Netw.change_scene_to_file(self, WORLD_SCENE).then(open_match)
+	var level: Node = Netw.spawn(make_world)
+	get_parent().add_child(level)
+	var players: Node = level.get_node(^"Players")
+	for player: NetwPlayer in session.players:
+		players.add_child(
+			Netw.spawn_player(
+				player,
+				level.spawn_player,
+				player.username,
+				player.peer_id,
+				players.get_child_count(),
+			),
+		)
 
 
 func end_game() -> void:
@@ -31,18 +47,8 @@ func end_game() -> void:
 		Netw.despawn(world.root)
 
 
-func open_match(running: NetwScene) -> void:
-	var players: Node = running.root.get_node(^"Players")
-	for player: NetwPlayer in running.viewers:
-		players.add_child(
-			Netw.spawn_player(
-				player,
-				running.root.spawn_player,
-				player.username,
-				player.peer_id,
-				players.get_child_count(),
-			),
-		)
+func make_world() -> Node:
+	return world_scene.instantiate()
 
 
 func get_player_color(p_name: String) -> Color:

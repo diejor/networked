@@ -74,12 +74,6 @@ at a time.
 Everything under that root belongs to the world, nested spawns included. No
 per-synchronizer visibility filter, and no tree order to get right.
 
-Swap worlds with the call you already know, made multiplayer-correct.
-
-.. code-block:: gdscript
-
-    Netw.change_scene_to_file(self, "res://arena.tscn")
-
 Move between them with plain :godot:`Node.reparent <Node#class-node-method-reparent>`.
 
 .. code-block:: gdscript

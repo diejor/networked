@@ -2,7 +2,6 @@
 #include "support/frame_drive.h"
 #include "support/loopback_rig.h"
 #include "support/netw_test.h"
-#include "support/scripted_loads.h"
 #include "support/stock_stand.h"
 
 #include "godot/callable.hpp"
@@ -191,7 +190,7 @@ class NativeChangeScenario final : public netw_test::FrameScenario {
         for (int at = 0; at < drained.size(); ++at) {
             const Dictionary row = drained[at];
             const String text = row[String("text")];
-            if (!text.contains("Netw.change_scene_to_file")) {
+            if (!text.contains("A SceneTree scene change freed")) {
                 continue;
             }
             if (seen.reports == 0) {
@@ -289,147 +288,7 @@ TEST_CASE(
     CHECK(seen.first_text.contains(
         "A SceneTree scene change freed the scene that held this session"
     ));
-}
-
-namespace {
-
-constexpr int LOADING_PUMPS = 30;
-
-Ref<PackedScene> a_minted_level(const char *p_stem) {
-    Node2D *shape = memnew(Node2D);
-    shape->set_name(p_stem);
-    const Ref<PackedScene> packed = netw_test::pack_stock_scene(
-        shape,
-        netw_test::mint_scene_path(p_stem)
-    );
-    memdelete(shape);
-    return packed;
-}
-
-Ref<netw::NetwPromise> change_session_to(
-    netw_test::LoopbackRig &p_rig,
-    const Ref<PackedScene> &p_level
-) {
-    return p_rig.server()->scene_change_to_file(
-        nullptr,
-        p_level->get_path(),
-        netw::NetwMultiplayer::SCENE_CHANGE_SESSION
-    );
-}
-
-} // namespace
-
-TEST_CASE(
-    "[Networked][Scene][SceneTree] LS1 LS2 a change to a scene that is still "
-    "loading returns at once, refuses a second change while it loads, and "
-    "settles once the scene is in place"
-) {
-    netw_test::ScriptedLoads loads;
-    const Ref<PackedScene> level = a_minted_level("Arena");
-    const Ref<PackedScene> other = a_minted_level("Lobby");
-    netw_test::LoopbackRig rig;
-    rig.mount();
-
-    const Ref<netw::NetwPromise> changed = change_session_to(rig, level);
-    const Ref<netw::NetwPromise> second = change_session_to(rig, other);
-    rig.pump(LOADING_PUMPS);
-
-    CHECK_FALSE(changed->get_is_settled());
-    CHECK(rig.server()->live_scenes().is_empty());
-    CHECK(second->get_is_failed());
-    NETW_CHECK_EQ(second->get_code(), int(ERR_BUSY));
-
-    loads.finish();
-    rig.pump();
-
-    REQUIRE(changed->get_is_completed());
-    const Ref<netw::NetwScene> arena = changed->get_result();
-    CHECK(arena.is_valid());
-    NETW_CHECK_EQ(rig.server()->live_scenes().size(), 1);
-}
-
-TEST_CASE(
-    "[Networked][Scene][SceneTree] LS3 a session that ends while its next "
-    "scene loads fails the change and applies nothing"
-) {
-    netw_test::ScriptedLoads loads;
-    const Ref<PackedScene> level = a_minted_level("Arena");
-    netw_test::LoopbackRig rig;
-    rig.mount();
-    const Ref<netw::NetwPromise> changed = change_session_to(rig, level);
-
-    rig.server()->clear_session_state();
-    loads.finish();
-    rig.pump();
-
-    CHECK(changed->get_is_failed());
-    NETW_CHECK_EQ(changed->get_code(), int(ERR_UNAVAILABLE));
-    CHECK(rig.server()->live_scenes().is_empty());
-}
-
-TEST_CASE(
-    "[Networked][Scene][SceneTree] LS6 a change still loading when the server "
-    "moves to another peer fails and applies nothing, even once the server "
-    "moves back"
-) {
-    const bool RETURNS[] = {false, true};
-    for (const bool returns : RETURNS) {
-        INFO(doctest::String(returns ? "moved back" : "moved away"));
-        netw_test::ScriptedLoads loads;
-        const Ref<PackedScene> level = a_minted_level("Arena");
-        netw_test::LoopbackRig rig(1, true);
-        rig.mount();
-        rig.join(-1, StringName("host"));
-        rig.join(0, StringName("guest"));
-        rig.pump(LOADING_PUMPS);
-        const Ref<netw::NetwPromise> changed = change_session_to(rig, level);
-
-        const int64_t successor = rig.client(0)->get_unique_id();
-        REQUIRE(
-            rig.server()->get_session()->transfer_server(successor) == OK
-        );
-        rig.pump(LOADING_PUMPS);
-        REQUIRE(rig.client(0)->is_host());
-        if (returns) {
-            const int64_t former = rig.server()->get_unique_id();
-            REQUIRE(
-                rig.client(0)->get_session()->transfer_server(former) == OK
-            );
-            rig.pump(LOADING_PUMPS);
-            REQUIRE(rig.server()->is_host());
-        }
-        loads.finish();
-        rig.pump();
-
-        CHECK(changed->get_is_failed());
-        NETW_CHECK_EQ(changed->get_code(), int(ERR_UNAVAILABLE));
-        CHECK(rig.server()->live_scenes().is_empty());
-    }
-}
-
-TEST_CASE(
-    "[Networked][Scene][SceneTree] LS4 LS5 a change to a scene the game "
-    "already holds settles before the call returns, by path or as a "
-    "PackedScene"
-) {
-    const Ref<PackedScene> held = netw::gd::load_scene(
-        String("res://tests/support/declared_level.tscn")
-    );
-    REQUIRE(held.is_valid());
-    const bool AS_PACKED[] = {false, true};
-    for (const bool as_packed : AS_PACKED) {
-        INFO(doctest::String(as_packed ? "packed" : "path"));
-        netw_test::LoopbackRig rig;
-        rig.mount();
-        const Ref<netw::NetwPromise> changed = as_packed
-            ? rig.server()->scene_change_to_packed(
-                  nullptr,
-                  held,
-                  netw::NetwMultiplayer::SCENE_CHANGE_SESSION
-              )
-            : change_session_to(rig, held);
-        CHECK(changed->get_is_completed());
-    }
+    CHECK(seen.first_text.contains("spawn levels with Netw.spawn"));
 }
 
 } // namespace NetwTests

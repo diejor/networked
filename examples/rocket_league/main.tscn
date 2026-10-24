@@ -6,9 +6,11 @@
 [ext_resource type="Script" uid="uid://ckmcc5fdus6tj" path="res://examples/rocket_league/scripts/camera_3d.gd" id="5_cam"]
 [ext_resource type="PackedScene" uid="uid://d3oi0cvp3b3i0" path="res://examples/shared/in_lobby.tscn" id="6_lobby"]
 [ext_resource type="PackedScene" uid="uid://cdiscordpanel" path="res://examples/shared/discord_panel.tscn" id="7_discord"]
+[ext_resource type="PackedScene" uid="uid://c7rlarenamain" path="res://examples/rocket_league/scenes/arena.tscn" id="8_arena"]
 
 [node name="Main" type="Node" unique_id=218129197]
 script = ExtResource("1_sess")
+arena_scene = ExtResource("8_arena")
 
 [node name="LobbyProviders" type="Node" parent="." unique_id=2141029247]
 

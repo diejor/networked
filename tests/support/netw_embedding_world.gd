@@ -30,12 +30,25 @@ func provider() -> String:
 
 func register_probe(api: NetwMultiplayer) -> void:
 	api.spawn_register_constructor(&"probe", make_probe, [TYPE_STRING])
+	api.spawn_register_constructor(&"level", make_level, [TYPE_STRING])
 
 
 func make_probe(probe_name: String) -> Node:
 	var node := _PROBE_SCENE.instantiate()
 	node.name = probe_name
 	return node
+
+
+func make_level(path: String) -> Node:
+	return load(path).instantiate()
+
+
+func spawn_level(api: NetwMultiplayer, scene: PackedScene) -> Node:
+	var level := api.entity_get_node(
+		api.spawn_registered(&"level", [scene.resource_path]),
+	)
+	api.root.add_child(level)
+	return level
 
 
 func spawn_probe(name: String) -> int:

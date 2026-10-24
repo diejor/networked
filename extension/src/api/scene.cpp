@@ -6,6 +6,7 @@
 #include "netw/api/entity_options.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/participant.hpp"
+#include "netw/scene_core.hpp"
 
 using namespace godot;
 
@@ -202,6 +203,7 @@ Error NetwScene::unwatch(const Ref<NetwPlayer> &p_player) {
 bool NetwScene::is_watching(const Ref<NetwPlayer> &p_player) const {
     NetwMultiplayer *session = core();
     return session != nullptr && p_player.is_valid()
+        && session->get_scene_core()->is_live(get_rid())
         && session->scene_subscribes(get_rid(), p_player->get_peer_id());
 }
 
@@ -229,9 +231,6 @@ void NetwScene::_bind_methods() {
     BIND_ENUM_CONSTANT(SCENE_EVENT_VIEWER);
     BIND_ENUM_CONSTANT(SCENE_EVENT_PLAYER_ENTITY);
     BIND_ENUM_CONSTANT(SCENE_EVENT_ENTITY);
-    BIND_ENUM_CONSTANT(SCENE_CHANGE_SESSION);
-    BIND_ENUM_CONSTANT(SCENE_CHANGE_PLAYER);
-    BIND_ENUM_CONSTANT(SCENE_CHANGE_SCENE);
     BIND_ENUM_CONSTANT(SCENE_ISOLATION_NONE);
     BIND_ENUM_CONSTANT(SCENE_ISOLATION_OWN_WORLD);
     ClassDB::bind_method(D_METHOD("get_rid"), &NetwScene::get_rid);

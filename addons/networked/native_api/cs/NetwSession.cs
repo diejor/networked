@@ -902,34 +902,11 @@ public sealed class NetwSession : NetwRefCounted
         return result;
     }
 
-    private static readonly IntPtr _bindCreateScene =
-        NetwApi.MethodBind("NetwSession", "create_scene", 1885263807UL);
-
-    /// <summary>
-    /// Spawns <paramref name="scene"/> as a new scene with no players in it.
-    /// <paramref name="isolation"/> decides whether it has its own physics and
-    /// rendering world. <b>Server Only.</b>
-    /// </summary>
-    public NetwScene CreateScene(PackedScene scene, NetwScene.SceneIsolation isolation =
-        (NetwScene.SceneIsolation)0)
-    {
-        IntPtr slot0 = scene?.NativeInstance ?? IntPtr.Zero;
-        long slot1 = (long)isolation;
-        IntPtr answered = default;
-        NetwThunks.Ptrcall2_IntPtr_Long_IntPtr(
-            _bindCreateScene,
-            Checked,
-            in slot0,
-            in slot1,
-            ref answered);
-        return NetwScene.Adopt(answered);
-    }
-
     private static readonly IntPtr _bindFindScene =
         NetwApi.MethodBind("NetwSession", "find_scene", 375475711UL);
 
     /// <summary>
-    /// Returns the newest scene whose root node is named
+    /// Returns the scene whose <see cref="NetwScene.Label"/> is
     /// <paramref name="label"/>, or <c>null</c>.
     /// </summary>
     public NetwScene FindScene(StringName label)

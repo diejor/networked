@@ -319,6 +319,18 @@ bool Record::has_recipient(int peer) const {
     return false;
 }
 
+bool Record::mark_failed(int peer) {
+    if (has_failed(peer)) {
+        return false;
+    }
+    failed_peers.push_back(int32_t(peer));
+    return true;
+}
+
+bool Record::has_failed(int peer) const {
+    return failed_peers.find(int32_t(peer)) >= 0;
+}
+
 PackedInt32Array Record::recipients() const {
     PackedInt32Array out;
     out.resize(int64_t(recipient_peers.size()));

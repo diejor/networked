@@ -1,4 +1,5 @@
 #include "support/fault_log.h"
+#include "support/level_spawn.h"
 #include "support/loopback_rig.h"
 
 #if defined(NETW_TIER_HOSTED)
@@ -254,10 +255,7 @@ TEST_CASE(
     LoopbackRig rig(1);
     rig.mount();
     netw::NetwMultiplayer *api = rig.server();
-    Node *level = api->scene_spawn(
-        path,
-        netw::NetwMultiplayer::SCENE_ISOLATION_OWN_WORLD
-    );
+    Node *level = netw_test::spawn_level(rig, path, true);
     REQUIRE(level != nullptr);
     rig.pump(6);
     const RID scene = api->entity_of(level);
@@ -829,46 +827,6 @@ TEST_CASE(
     NETW_CHECK_EQ(route_of(joined), host_route);
 }
 
-TEST_CASE(
-    "[Networked][Spawn][SceneTree] CN9 an entity placed in a level opened with "
-    "Netw.change_scene_to_file reaches a client under the server's route and "
-    "state"
-) {
-    const String path("res://tests/support/crate_level.tscn");
-    const Ref<PackedScene> held = netw::gd::load_scene(path);
-    REQUIRE(held.is_valid());
-    LoopbackRig rig(1);
-    rig.mount();
-    flow_clocks(rig, 30);
-    rig.join(-1, StringName("host"));
-    rig.join(0, StringName("guest"));
-    const Ref<netw::NetwPromise> changed = netw::Netw::change_scene_to_file(
-        rig.branch(-1),
-        path,
-        netw::NetwMultiplayer::SCENE_CHANGE_SESSION
-    );
-    rig.step_ticks(8);
-    REQUIRE(changed->get_is_completed());
-    const Ref<netw::NetwScene> level = changed->get_result();
-    REQUIRE(level.is_valid());
-    Node *hosted = rig.server()->scene_container(StringName("CrateLevel"));
-    REQUIRE(hosted != nullptr);
-    Node *crate = descend(hosted, "Crate");
-    REQUIRE(route_of(crate) > 0);
-    Object::cast_to<CanvasItem>(crate)->set_visible(false);
-    rig.step_ticks(12);
-
-    const CanvasItem *seen = Object::cast_to<CanvasItem>(
-        rig.route_node(int(route_of(crate)), 0)
-    );
-    Node *seen_level = rig.route_node(int(route_of(hosted)), 0);
-    const bool placed_under_level
-        = seen != nullptr && seen->get_parent() == seen_level;
-    CHECK(placed_under_level);
-    const bool synced = seen != nullptr && !seen->is_visible();
-    CHECK(synced);
-}
-
 const char *DECLARED_LEVEL = "res://tests/support/declared_level.tscn";
 const char *ISOLATED_LEVEL = "res://tests/support/isolated_level.tscn";
 
@@ -967,8 +925,7 @@ TEST_CASE(
     netw_test::FaultWatch expected_faults;
     expected_faults.expect_error(
         "[error][scene] 'IsolatedLevel' is isolated and was placed in the "
-        "editor. Open it with Netw.change_scene_to_file, or turn isolation "
-        "off.",
+        "editor. Spawn it with Netw.spawn, or turn isolation off.",
         1
     );
     const netw_test::FaultWatch faults;

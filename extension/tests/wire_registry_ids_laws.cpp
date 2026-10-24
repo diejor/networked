@@ -61,6 +61,7 @@ const Declared TRANSCRIBED[] = {
     {"LAGCOMP_CONFIRM", 48},
     {"SESSION_LEAVE", 49},
     {"SESSION_PLAYER_LEFT", 50},
+    {"SESSION_SPAWN_FAILED", 51},
 };
 
 constexpr int TRANSCRIBED_COUNT

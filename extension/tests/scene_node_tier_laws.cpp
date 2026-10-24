@@ -28,17 +28,11 @@ struct Mounted {
     RID scene;
 };
 
-Ref<PackedScene> a_packed(const char *p_stem, const char *p_path) {
-    Node *root = memnew(Node);
-    root->set_name(p_stem);
-    Ref<PackedScene> packed;
-    packed.instantiate();
-    packed->pack(root);
-    if (p_path != nullptr) {
-        packed->set_path(p_path);
-    }
-    memdelete(root);
-    return packed;
+Node *named_scene_node(
+    const Ref<NetwMultiplayer> &p_core,
+    const StringName &p_stem
+) {
+    return p_core->scene_get_node(p_core->scene_named(p_stem));
 }
 
 Mounted mount(
@@ -62,7 +56,7 @@ Mounted mount(
     made.entity->get_record()->adopt_handle(made.scene);
     REQUIRE(p_core->entity_of(made.root) == made.scene);
     p_core->get_scene_core()->scene_enter(made.scene, p_stem, p_owns_its_world);
-    REQUIRE(p_core->scene_container(p_stem) == made.root);
+    REQUIRE(named_scene_node(p_core, p_stem) == made.root);
     return made;
 }
 
@@ -143,60 +137,6 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted][SceneTree] SNT7 destroying takes the "
-    "container out of the tree now, and retiring at the same zero window "
-    "leaves it mounted, so the two take-downs are not one verb at two "
-    "linger values"
-) {
-    Ref<NetwMultiplayer> core;
-    core.instantiate();
-    Node *root = memnew(Node);
-    const Mounted arena = mount_plain(core, root, StringName("Arena"));
-    const Mounted annex = mount_plain(core, root, StringName("Annex"));
-
-    core->get_scene_core()->scene_retire(arena.scene, 0);
-    NETW_CHECK_EQ(arena.root->get_parent(), root);
-    CHECK_FALSE(arena.root->is_queued_for_deletion());
-    NETW_CHECK_EQ(core->get_scene_core()->retiring_scenes().size(), 1);
-
-    CHECK(core->scene_destroy(annex.scene));
-    NETW_CHECK_EQ(annex.root->get_parent(), nullptr);
-    CHECK(annex.root->is_queued_for_deletion());
-
-    CHECK_FALSE(core->scene_destroy(RID()));
-
-    root->remove_child(arena.root);
-    arena.root->queue_free();
-    memdelete(root);
-}
-
-TEST_CASE(
-    "[Networked][Scene][Hosted][SceneTree] SNT8 a drain window is counted in "
-    "pumps, and the pump that closes it is the one that frees the container "
-    "the record plane names"
-) {
-    Ref<NetwMultiplayer> core;
-    core.instantiate();
-    const Mounted slow = mount(core, memnew(Node), StringName("Arena"), false);
-    const Mounted quick = mount(core, memnew(Node), StringName("Annex"), false);
-
-    core->get_scene_core()->scene_retire(slow.scene, 2);
-    core->get_scene_core()->scene_retire(quick.scene, 1);
-    NETW_CHECK_EQ(core->get_scene_core()->retiring_scenes().size(), 2);
-
-    core->scene_pump_retired();
-
-    CHECK(quick.root->is_queued_for_deletion());
-    CHECK_FALSE(slow.root->is_queued_for_deletion());
-    NETW_CHECK_EQ(core->get_scene_core()->retiring_scenes().size(), 1);
-
-    core->scene_pump_retired();
-
-    CHECK(slow.root->is_queued_for_deletion());
-    NETW_CHECK_EQ(core->get_scene_core()->retiring_scenes().size(), 0);
-}
-
-TEST_CASE(
     "[Networked][Scene][Hosted] SNT9 a scene leaving the live book leaves its "
     "node mounted where the game put it, so forgetting a scene is a book "
     "edit and never a free"
@@ -212,7 +152,7 @@ TEST_CASE(
     core->scene_forget(arena.root);
 
     NETW_CHECK_EQ(core->get_scene_core()->live_count(), 1);
-    NETW_CHECK_EQ(core->scene_container(StringName("Arena")), nullptr);
+    NETW_CHECK_EQ(named_scene_node(core, StringName("Arena")), nullptr);
     NETW_CHECK_EQ(arena.root->get_parent(), root);
     NETW_CHECK_EQ(annex.root->get_parent(), root);
     CHECK_FALSE(core->scene_presented().is_valid());
@@ -258,137 +198,6 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Scene][Hosted] SNT11 an activation announces scene_activated "
-    "with the container it made current, exactly once whichever door was "
-    "used, and a refusal announces nothing at all"
-) {
-    netw_test::FaultWatch expected_faults;
-    expected_faults.expect_error(
-        "[error][scene] A PackedScene with no file path cannot be "
-        "activated. Save it to a file first.",
-        1
-    );
-    expected_faults.expect_error(
-        "[error][scene] Only a PackedScene saved to a file can be "
-        "activated. A scene name cannot be.",
-        3
-    );
-
-    Ref<NetwMultiplayer> core;
-    core.instantiate();
-    Node *root = memnew(Node);
-    const Mounted arena = mount_plain(core, root, StringName("Arena"));
-    const Ref<PackedScene> live = a_packed("Arena", "res://levels/arena.tscn");
-    const Ref<PackedScene> absent = a_packed("Annex", nullptr);
-    Recorder activations(
-        core.ptr(),
-        Vector<StringName>{StringName("scene_activated")}
-    );
-
-    NETW_CHECK_EQ(core->scene_activate(live), arena.root);
-    NETW_CHECK_EQ(activations.count(StringName("scene_activated")), 1);
-    const Array announced = activations.args(StringName("scene_activated"), 0);
-    NETW_CHECK_EQ(announced.size(), 1);
-    NETW_CHECK_EQ(
-        announced.is_empty() ? nullptr : Object::cast_to<Node>(announced[0]),
-        arena.root
-    );
-
-    NETW_CHECK_EQ(core->scene_activate(live), arena.root);
-    NETW_CHECK_EQ(activations.count(StringName("scene_activated")), 2);
-
-    NETW_CHECK_EQ(core->scene_activate(absent), nullptr);
-    NETW_CHECK_EQ(core->scene_activate(StringName("Annex")), nullptr);
-    NETW_CHECK_EQ(core->scene_activate(Variant()), nullptr);
-    NETW_CHECK_EQ(core->scene_activate(root), nullptr);
-    NETW_CHECK_EQ(activations.count(StringName("scene_activated")), 2);
-
-    memdelete(root);
-}
-
-TEST_CASE(
-    "[Networked][Scene][Hosted] SNT12 resolving a destination answers what is "
-    "already live WITHOUT activating it, so a session pointed at the scene it "
-    "already presents announces nothing"
-) {
-    netw_test::FaultWatch expected_faults;
-    expected_faults.expect_error(
-        "[error][scene] Only a PackedScene saved to a file can be "
-        "activated. A scene name cannot be.",
-        3
-    );
-
-    Ref<NetwMultiplayer> core;
-    core.instantiate();
-    Node *root = memnew(Node);
-    const Mounted arena = mount_plain(core, root, StringName("Arena"));
-    Recorder activations(core.ptr(), Vector<StringName>({"scene_activated"}));
-
-    NETW_CHECK_EQ(
-        core->scene_resolve_destination(StringName("Arena")),
-        arena.root
-    );
-    NETW_CHECK_EQ(core->scene_resolve_destination(arena.root), arena.root);
-    NETW_CHECK_EQ(activations.count(StringName("scene_activated")), 0);
-
-    NETW_CHECK_EQ(
-        core->scene_resolve_destination(StringName("Annex")),
-        nullptr
-    );
-    NETW_CHECK_EQ(core->scene_resolve_destination(root), nullptr);
-    NETW_CHECK_EQ(core->scene_resolve_destination(Variant()), nullptr);
-    NETW_CHECK_EQ(activations.count(StringName("scene_activated")), 0);
-
-    memdelete(root);
-}
-
-TEST_CASE(
-    "[Networked][Scene][Hosted][SceneTree] SNT13 a session change owing nobody "
-    "a move "
-    "lands on the spot, retiring every scene but the destination, and a "
-    "destination nothing can bring up CLOSES the transition rather than "
-    "leaving it armed against the next change"
-) {
-    netw_test::FaultWatch expected_faults;
-    expected_faults.expect_error(
-        "[error][scene] Only a PackedScene saved to a file can be "
-        "activated. A scene name cannot be.",
-        1
-    );
-
-    Ref<NetwMultiplayer> core;
-    core.instantiate();
-    Node *root = memnew(Node);
-    const Mounted arena = mount_plain(core, root, StringName("Arena"));
-    const Mounted annex = mount_plain(core, root, StringName("Annex"));
-
-    const Ref<netw::NetwPromise> refused = core->scene_apply_change(
-        Ref<netw::NetwPlayer>(),
-        StringName("Nowhere"),
-        NetwMultiplayer::SCENE_CHANGE_SESSION,
-        nullptr
-    );
-    REQUIRE(refused.is_valid());
-    CHECK(refused->get_is_failed());
-    NETW_CHECK_EQ(arena.root->get_parent(), root);
-    NETW_CHECK_EQ(annex.root->get_parent(), root);
-
-    const Ref<netw::NetwPromise> changed = core->scene_apply_change(
-        Ref<netw::NetwPlayer>(),
-        StringName("Annex"),
-        NetwMultiplayer::SCENE_CHANGE_SESSION,
-        nullptr
-    );
-    REQUIRE(changed.is_valid());
-    CHECK(changed->get_is_settled());
-    NETW_CHECK_EQ(changed->get_code(), int(OK));
-    NETW_CHECK_EQ(annex.root->get_parent(), root);
-    NETW_CHECK_EQ(arena.root->get_parent(), nullptr);
-
-    memdelete(root);
-}
-
-TEST_CASE(
     "[Networked][Scene][Hosted] SNT14 forgetting a container announces "
     "scene_despawned for it after the record plane has dropped it, a null "
     "container is not a departure, and a node the session never held still "
@@ -414,7 +223,7 @@ TEST_CASE(
         departed.is_empty() ? nullptr : Object::cast_to<Node>(departed[0]),
         arena.root
     );
-    NETW_CHECK_EQ(core->scene_container(StringName("Arena")), nullptr);
+    NETW_CHECK_EQ(named_scene_node(core, StringName("Arena")), nullptr);
 
     Node *stranger = memnew(Node);
     root->add_child(stranger);
@@ -482,7 +291,7 @@ TEST_CASE(
     NETW_CHECK_EQ(entries.count(StringName("scene_spawned")), 0);
 
     CHECK(core->scene_remember(arena));
-    NETW_CHECK_EQ(core->scene_container(StringName("Arena")), arena);
+    NETW_CHECK_EQ(named_scene_node(core, StringName("Arena")), arena);
     NETW_CHECK_EQ(entries.count(StringName("scene_spawned")), 1);
     const Array entered = entries.args(StringName("scene_spawned"), 0);
     NETW_CHECK_EQ(entered.size(), 1);
@@ -622,7 +431,7 @@ TEST_CASE(
 
     NETW_CHECK_EQ(seen.count(StringName("viewer")), announced + 1);
 
-    core->scene_close_admission(arena.root);
+    core->scene_close_admission(arena.scene);
 
     NETW_CHECK_EQ(
         int(core->membership_book().members_of(arena.scene).size()),

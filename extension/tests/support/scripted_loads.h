@@ -59,10 +59,19 @@ public:
     ScriptedLoads(const ScriptedLoads &) = delete;
     ScriptedLoads &operator=(const ScriptedLoads &) = delete;
 
-    void finish() {
+    static uint64_t &foreign_frame() {
         static uint64_t frame = uint64_t(1) << 40;
+        return frame;
+    }
+
+    void finish() {
         loading = false;
-        netw::SceneLoads::shared().poll(++frame);
+        netw::SceneLoads::shared().poll(++foreign_frame());
+    }
+
+    void finish_at_next_session_poll() {
+        netw::SceneLoads::shared().poll(++foreign_frame());
+        loading = false;
     }
 };
 

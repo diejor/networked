@@ -4,13 +4,14 @@ const MATCH := "res://tests/support/match_level.tscn"
 
 var warm: PackedScene
 var loads: NetwGroupPromise
-var arena: NetwScene
+var arena: Node
 var players: Array[Node] = []
 
 
 func _init() -> void:
 	Netw.configure_entity(self)
 	Netw.configure_rpc(preload_level).timeout(60.0)
+	Netw.configure_spawn(make_match)
 	Netw.configure_spawn(make_player)
 
 
@@ -19,15 +20,16 @@ func start_match() -> void:
 	await loads.wait()
 	if loads.is_failed or false in loads.results.values():
 		return
-	Netw.change_scene_to_file(self, MATCH).then(open_match)
-
-
-func open_match(opened: NetwScene) -> void:
-	arena = opened
-	for player: NetwPlayer in arena.viewers:
+	arena = Netw.spawn(make_match)
+	add_child(arena)
+	for player: NetwPlayer in Netw.session(self).players:
 		var made: Node = Netw.spawn_player(player, make_player, player.peer_id)
-		arena.root.add_child(made)
+		arena.add_child(made)
 		players.append(made)
+
+
+func make_match() -> Node:
+	return load(MATCH).instantiate()
 
 
 func make_player(peer_id: int) -> Node:

@@ -118,17 +118,6 @@ func _spawn_bullet(dir: Vector2, tier: int) -> Node:
 muzzle.add_child(Netw.spawn(_spawn_bullet, dir, 2))
 ```
 
-## Change scene
-
-Like `SceneTree.change_scene_to_file`, made multiplayer-correct. On the server it
-applies. On a client it becomes a request the server decides.
-
-```gdscript
-var promise := Netw.change_scene_to_file(self, "res://match.tscn")
-if await promise.completed != OK:
-	status.text = "Could not start the match."
-```
-
 ## Reparent
 
 Yes, you can move nodes around with `Node.reparent`.

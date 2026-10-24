@@ -26,7 +26,9 @@ The :ref:`NetwScene<class_NetwScene>` label and isolation are read when its root
     func _init() -> void:
         Netw.configure_scene(self).labeled(&"Level1").isolated()
 
-\ Each :ref:`NetwEntity<class_NetwEntity>` below the root reaches it through :ref:`NetwEntity.scene<class_NetwEntity_property_scene>`.
+\ A scene placed in the main scene must be in the tree before the server starts hosting, and must not be :ref:`isolated()<class_NetwSceneConfig_method_isolated>`.
+
+Each :ref:`NetwEntity<class_NetwEntity>` below the root reaches it through :ref:`NetwEntity.scene<class_NetwEntity_property_scene>`.
 
 .. rst-class:: classref-reftable-group
 

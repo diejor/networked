@@ -1,4 +1,5 @@
 #include "support/fault_log.h"
+#include "support/level_spawn.h"
 #include "support/mesh_stand.h"
 
 #if defined(NETW_TIER_HOSTED)
@@ -235,12 +236,11 @@ struct ComposedWorld {
         NETW_CHECK_EQ(int(nine->embed_settle()), int(OK));
 
         NETW_CHECK_EQ(int(host->embed_settle()), int(OK));
+        netw_test::register_level(host);
+        netw_test::register_level(seven);
+        netw_test::register_level(nine);
         REQUIRE(
-            host->scene_spawn(
-                String(LEVEL_PATH),
-                NetwMultiplayer::SCENE_ISOLATION_NONE
-            )
-            != nullptr
+            netw_test::spawn_level(host, String(LEVEL_PATH), false) != nullptr
         );
         stand.step_ticks(6);
 
@@ -308,6 +308,7 @@ struct ComposedWorld {
         at_late = mount_under_root("CWLate");
         stand.mount(LATECOMER, at_late);
         NETW_CHECK_EQ(int(late->embed_settle()), int(OK));
+        netw_test::register_level(late);
         teach_player(late);
         REQUIRE(stand.join(LATECOMER, StringName("eleven")).is_valid());
         const Ref<NetwScene> handle = host->scene_handle_of(world);
@@ -892,46 +893,6 @@ TEST_CASE(
     NETW_CHECK_EQ(NetwEntity::of(at_seven)->get_controller(), int64_t(MEMBER));
     NETW_CHECK_EQ(NetwEntity::of(at_nine)->get_controller(), int64_t(MEMBER));
     NETW_CHECK_EQ(int64_t(at_nine->get_multiplayer_authority()), int64_t(1));
-}
-
-TEST_CASE(
-    "[Networked][Session][SceneTree] CW11 the server creates a scene through "
-    "its session and finds it by its root name, while member 7 creates none"
-) {
-    netw_test::FaultWatch expected_faults;
-    expected_faults.expect_error(
-        "[error][scene] Condition \"!is_host()\" is true. Returning: "
-        "RID(). NetwMultiplayer.scene_create runs only on the "
-        "server.",
-        1
-    );
-
-    const netw_test::FaultWatch faults;
-    ComposedWorld cw;
-    const Ref<PackedScene> packed = netw::gd::load_scene(String(LEVEL_PATH));
-    REQUIRE(packed.is_valid());
-    const Ref<netw::NetwSession> session = cw.host->get_session();
-    REQUIRE(session.is_valid());
-    const int before = int(cw.host->scene_list().size());
-
-    const Ref<NetwScene> made
-        = session->create_scene(packed, NetwMultiplayer::SCENE_ISOLATION_NONE);
-    REQUIRE(made.is_valid());
-    NETW_CHECK_EQ(int(cw.host->scene_list().size()), before + 1);
-
-    const Ref<NetwScene> found
-        = session->find_scene(StringName("DeclaredLevel"));
-    REQUIRE(found.is_valid());
-    const bool finds_the_new_one = found->get_rid() == made->get_rid();
-    CHECK(finds_the_new_one);
-    CHECK(session->find_scene(StringName("NoSuchLevel")).is_null());
-
-    const Ref<netw::NetwSession> member = cw.seven->get_session();
-    REQUIRE(member.is_valid());
-    CHECK(member->create_scene(packed, NetwMultiplayer::SCENE_ISOLATION_NONE)
-              .is_null());
-    NETW_CHECK_EQ(int(cw.seven->scene_list().size()), before);
-    NETW_CHECK_EQ(faults.warnings_containing("shares one physics space"), 1);
 }
 
 } // namespace TestComposedWorld

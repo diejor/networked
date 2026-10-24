@@ -42,6 +42,7 @@ private:
     godot::ObjectID fn_host_id;
     godot::ObjectID spawner_id;
     godot::LocalVector<int32_t> recipient_peers;
+    godot::LocalVector<int32_t> failed_peers;
 
     int64_t route = 0;
     godot::StringName entity_id;
@@ -113,6 +114,8 @@ public:
     bool add_recipient(int peer);
     bool remove_recipient(int peer);
     bool has_recipient(int peer) const;
+    bool mark_failed(int peer);
+    bool has_failed(int peer) const;
     godot::PackedInt32Array recipients() const;
     const godot::LocalVector<int32_t> &recipient_list() const {
         return recipient_peers;

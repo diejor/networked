@@ -59,11 +59,6 @@ public:
         int64_t sender
     );
     static godot::StringName scene_container_meta();
-    static void scene_retire(
-        NetwMultiplayer *session,
-        const godot::RID &scene,
-        int drain_pumps
-    );
     static display::Runtime *display_runtime_of(
         NetwMultiplayer *session,
         const godot::RID &entity

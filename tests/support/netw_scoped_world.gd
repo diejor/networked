@@ -37,7 +37,7 @@ func host() -> NetwMultiplayer:
 	await pump_until(func() -> bool: return api.is_online)
 	_host_api = api
 	if _initial_scene != null:
-		api.scene_create(_initial_scene.resource_path)
+		spawn_level(api, _initial_scene)
 	return _host_api
 
 

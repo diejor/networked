@@ -251,10 +251,14 @@ private:
     void reconcile_nested_child(int64_t p_route);
     void settle_move(int64_t p_route, int64_t p_author = 0);
     void settle_death(int64_t p_route);
+    void despawn_now(int64_t p_route, godot::Node *p_within);
     void settle_absence(int64_t p_route);
     bool holds_received_route(int64_t p_route) const;
     bool holds_spawned_route(int64_t p_route) const;
-    void despawn_tracked_route(int64_t p_route);
+    void despawn_tracked_route(
+        int64_t p_route,
+        godot::Node *p_within = nullptr
+    );
     void send_reparent(
         Record *p_record,
         godot::Node *p_node,

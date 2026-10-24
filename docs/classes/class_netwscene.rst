@@ -21,7 +21,7 @@ Description
 
 A multiplayer scene is a :ref:`NetwEntity<class_NetwEntity>`, available as :ref:`entity<class_NetwScene_property_entity>`. Reach it with :ref:`Netw.scene()<class_Netw_method_scene>` or :ref:`NetwEntity.scene<class_NetwEntity_property_scene>`. An entity declared with :ref:`Netw.configure_scene()<class_Netw_method_configure_scene>` resolves to itself, any other entity to its closest scene ancestor. Each scene has one handle, so ``==`` compares scenes.
 
-A scene replicates to a player while an entity spawned for them is in it, or while the player watches it with :ref:`watch()<class_NetwScene_method_watch>`. :ref:`unwatch()<class_NetwScene_method_unwatch>` does not remove a player whose entity is still in the scene.
+A scene replicates to a player while one of their :ref:`NetwPlayer.entities<class_NetwPlayer_property_entities>` is in it, or while the player watches it with :ref:`watch()<class_NetwScene_method_watch>`. :ref:`unwatch()<class_NetwScene_method_unwatch>` does not remove a player whose entity is still in the scene.
 
 ::
 
@@ -120,13 +120,7 @@ Emitted when ``entity`` leaves :ref:`player_entities<class_NetwScene_property_pl
 
 **viewer_entered**\ (\ player\: :ref:`NetwPlayer<class_NetwPlayer>`\ ) :ref:`🔗<class_NetwScene_signal_viewer_entered>`
 
-Emitted when this scene starts replicating to ``player``. :ref:`viewers<class_NetwScene_property_viewers>` already includes them. On the server, spawn arriving players here.
-
-::
-
-    func place(player: NetwPlayer, level: NetwScene) -> void:
-        if player.entities.is_empty():
-            level.root.add_child(Netw.spawn_player(player, make_player))
+Emitted when this scene starts replicating to ``player``. :ref:`viewers<class_NetwScene_property_viewers>` already includes them.
 
 .. rst-class:: classref-item-separator
 
@@ -169,7 +163,7 @@ A player started or stopped seeing the scene. The :ref:`NetwMultiplayer.scene_ob
 
 :ref:`SceneEvent<enum_NetwScene_SceneEvent>` **SCENE_EVENT_PLAYER_ENTITY** = ``1``
 
-An entity spawned for a player entered or left. The callback receives ``(present, entity)``.
+An entity in :ref:`player_entities<class_NetwScene_property_player_entities>` entered or left. The callback receives ``(present, entity)``.
 
 .. _class_NetwScene_constant_SCENE_EVENT_ENTITY:
 
@@ -178,40 +172,6 @@ An entity spawned for a player entered or left. The callback receives ``(present
 :ref:`SceneEvent<enum_NetwScene_SceneEvent>` **SCENE_EVENT_ENTITY** = ``2``
 
 Any entity, player entities included, entered or left. The callback receives ``(present, entity)``.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _enum_NetwScene_SceneChange:
-
-.. rst-class:: classref-enumeration
-
-enum **SceneChange**: :ref:`🔗<enum_NetwScene_SceneChange>`
-
-.. _class_NetwScene_constant_SCENE_CHANGE_SESSION:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`SceneChange<enum_NetwScene_SceneChange>` **SCENE_CHANGE_SESSION** = ``0``
-
-Every player moves to the new scene, and every other scene is removed with its entities.
-
-.. _class_NetwScene_constant_SCENE_CHANGE_PLAYER:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`SceneChange<enum_NetwScene_SceneChange>` **SCENE_CHANGE_PLAYER** = ``1``
-
-Only the selected :ref:`NetwPlayer<class_NetwPlayer>` moves. Their old entities are despawned, and no scene is removed.
-
-.. _class_NetwScene_constant_SCENE_CHANGE_SCENE:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`SceneChange<enum_NetwScene_SceneChange>` **SCENE_CHANGE_SCENE** = ``2``
-
-Everyone in the selected **NetwScene** moves, and it is removed with its entities.
 
 .. rst-class:: classref-item-separator
 
@@ -290,7 +250,7 @@ The :ref:`NetwEntity<class_NetwEntity>` on :ref:`root<class_NetwScene_property_r
 
 - :godot:`StringName` **get_label**\ (\ )
 
-The name :ref:`Netw.scene()<class_Netw_method_scene>` finds this scene by. See :ref:`NetwSceneConfig.labeled()<class_NetwSceneConfig_method_labeled>`.
+The name :ref:`NetwSession.find_scene()<class_NetwSession_method_find_scene>` finds this scene by. See :ref:`NetwSceneConfig.labeled()<class_NetwSceneConfig_method_labeled>`.
 
 .. rst-class:: classref-item-separator
 
@@ -403,7 +363,7 @@ Method Descriptions
 
 :godot:`bool` **is_watching**\ (\ player\: :ref:`NetwPlayer<class_NetwPlayer>`\ ) |const| :ref:`🔗<class_NetwScene_method_is_watching>`
 
-Whether this scene replicates to ``player``, either because an entity spawned for them is in it or because of :ref:`watch()<class_NetwScene_method_watch>`.
+Whether this scene replicates to ``player``, either because one of their :ref:`NetwPlayer.entities<class_NetwPlayer_property_entities>` is in it or because of :ref:`watch()<class_NetwScene_method_watch>`.
 
 .. rst-class:: classref-item-separator
 
@@ -449,7 +409,7 @@ Removes a ``callback`` registered with :ref:`observe()<class_NetwScene_method_ob
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **unwatch**\ (\ player\: :ref:`NetwPlayer<class_NetwPlayer>`\ ) :ref:`🔗<class_NetwScene_method_unwatch>`
 
-Undoes :ref:`watch()<class_NetwScene_method_watch>`. The scene keeps replicating to ``player`` while an entity spawned for them is in it.
+Undoes :ref:`watch()<class_NetwScene_method_watch>`. The scene keeps replicating to ``player`` while one of their :ref:`NetwPlayer.entities<class_NetwPlayer_property_entities>` is in it.
 
 .. code:: text
 

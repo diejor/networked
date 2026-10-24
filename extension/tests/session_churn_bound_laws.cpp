@@ -9,6 +9,7 @@
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/script/model.hpp"
 #include "support/declared_nodes.h"
+#include "support/level_spawn.h"
 #include "support/minted_script.h"
 #include "support/value_flow_stand.h"
 
@@ -136,10 +137,10 @@ public:
     }
 
     void scene_lives_and_dies() {
-        NetwMultiplayer *server = rig.server();
-        Node *root = server->scene_spawn(
+        Node *root = netw_test::spawn_level(
+            rig,
             String("res://tests/support/declared_level.tscn"),
-            NetwMultiplayer::SCENE_ISOLATION_NONE
+            false
         );
         REQUIRE(root != nullptr);
         rig.step_ticks(2);
@@ -147,8 +148,7 @@ public:
             spawn(root);
         }
         rig.step_ticks(6);
-        CHECK(server->scene_destroy(server->entity_of(root)));
-        rig.step_ticks(6);
+        despawn_container(int(NetwEntity::of(root)->get_route()));
     }
 
     void peer_joins_and_leaves() {

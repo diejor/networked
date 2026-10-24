@@ -46,12 +46,6 @@ TEST_CASE(
         "entity that has not spawned yet.",
         1
     );
-    expected_faults.expect_error(
-        "[error][scene] Condition \"!is_host()\" is true. Returning: "
-        "RID(). NetwMultiplayer.scene_create runs only on the "
-        "server.",
-        1
-    );
 
     Ref<NetwMultiplayer> session;
     session.instantiate();
@@ -59,13 +53,6 @@ TEST_CASE(
     const RID entity = session->entity_create();
 
     NETW_CHECK_EQ(session->scene_declare(entity), ERR_UNAUTHORIZED);
-    NETW_CHECK_EQ(
-        session->scene_create(Variant(), NetwMultiplayer::SCENE_ISOLATION_NONE)
-                .is_valid()
-            ? 1
-            : 0,
-        0
-    );
 }
 
 TEST_CASE(
@@ -100,43 +87,6 @@ TEST_CASE(
             .get_type(),
         Variant::NIL
     );
-}
-
-TEST_CASE(
-    "[Networked][Session][Hosted] L5 a scene recipe that is neither a path "
-    "nor null is refused before anything spawns"
-) {
-    netw_test::FaultWatch expected_faults;
-    expected_faults.expect_error(
-        "[error][scene] Condition \"recipe_type != Variant::NIL && "
-        "recipe_type != Variant::STRING\" is true. Returning: RID()."
-        " NetwMultiplayer.scene_create got a int. Pass a scene file"
-        " path, or null for an empty scene.",
-        1
-    );
-    expected_faults.expect_error(
-        "[error][scene] Condition \"recipe_type != Variant::NIL && "
-        "recipe_type != Variant::STRING\" is true. Returning: RID()."
-        " NetwMultiplayer.scene_create got a StringName. Pass a "
-        "scene file path, or null for an empty scene.",
-        1
-    );
-
-    Ref<NetwMultiplayer> session = hosting();
-    const int before = int(session->scene_list().size());
-
-    CHECK_FALSE(
-        session
-            ->scene_create(Variant(42), NetwMultiplayer::SCENE_ISOLATION_NONE)
-            .is_valid()
-    );
-    CHECK_FALSE(session
-                    ->scene_create(
-                        Variant(StringName("res://level.tscn")),
-                        NetwMultiplayer::SCENE_ISOLATION_NONE
-                    )
-                    .is_valid());
-    NETW_CHECK_EQ(int(session->scene_list().size()), before);
 }
 
 } // namespace TestNetwSessionSceneVerb

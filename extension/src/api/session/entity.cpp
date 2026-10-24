@@ -289,6 +289,7 @@ void NetwMultiplayer::entity_move(Node *p_owner, Node *p_new_parent) {
         "An entity move needs both a node and a new parent, and one was "
         "null."
     );
+    owner = scene_outer_of(owner);
     NETW_TRACE(sys::ENTITY, "Moving an entity under %s.", parent->get_name());
     if (owner->is_inside_tree()) {
         owner->reparent(parent);
@@ -440,7 +441,7 @@ void NetwMultiplayer::entity_enter_tree(
         }
     }
 
-    if (!is_reparent) {
+    if (!is_reparent && !entity::stage_is_leaving(p_record->get_stage())) {
         handle = p_record->get_handle();
         if (wrapper != nullptr) {
             stamped = wrapper->get_multiplayer();
@@ -1537,13 +1538,19 @@ void NetwMultiplayer::entity_capture_exit(Object *p_wrapper) {
         return;
     }
     persist_capture_exit(entity->get_owner());
-    if (entity->get_declares_scene()) {
+    const bool scene_pending = entity->get_declares_scene()
+        && entity::stage_can_begin_despawn(entity->get_stage());
+    if (entity->get_declares_scene() && !scene_pending) {
         scene_root_offline(entity->get_owner());
     }
     const uint64_t instance = uint64_t(entity->get_instance_id());
     EntityDeparture *standing = entity_departures.getptr(instance);
     EntityDeparture fresh;
     EntityDeparture &row = standing != nullptr ? *standing : fresh;
+    if (scene_pending && !row.scene_pending) {
+        row.scene_pending = true;
+        row.scene_outer = gd::instance_id(scene_outer_of(entity->get_owner()));
+    }
     if (standing == nullptr) {
         row.applied = applying_remote_frame;
         Node *owner = entity->get_owner();
@@ -1653,6 +1660,14 @@ void NetwMultiplayer::entity_settle_departure(int64_t p_instance) {
     membership_audit_held += 1;
 #endif
     const entity::Outcome outcome = entity_departure_outcome(row);
+    if (row.scene_pending) {
+        scene_root_settle_exit(
+            row.entity,
+            row.owner_id,
+            row.scene_outer,
+            outcome == entity::Outcome::MOVE
+        );
+    }
     switch (outcome) {
         case entity::Outcome::MOVE:
             entity_commit_move(row);
@@ -2125,6 +2140,10 @@ bool NetwMultiplayer::spawn_visible_to(
         || persist_withholds(p_node)) {
         return false;
     }
+    const spawn::Record *record = p_book->spawned_of(p_route);
+    if (record != nullptr && record->has_failed(int(p_peer_id))) {
+        return false;
+    }
     return spawn_locally_desired(p_peer_id, p_node);
 }
 
@@ -2507,7 +2526,7 @@ bool NetwMultiplayer::spawn_reparent_node(
     if (p_node == nullptr || p_parent == nullptr) {
         return false;
     }
-    if (p_node->get_parent() == p_parent) {
+    if (scene_outer_of(p_node)->get_parent() == p_parent) {
         if (p_route > 0 && p_anchor > 0) {
             entity_install_anchor(p_route, p_anchor, p_anchor_author);
         }
@@ -2604,6 +2623,7 @@ void NetwMultiplayer::spawn_carry_begin(
     carry.anchor = p_anchor;
     carry.anchor_author = p_anchor_author;
     carry.author = p_author;
+    carry.hush = guard_hush_areas(p_node);
     carry.guard = guard_hold(p_node);
     const int64_t id = ++spawn_carry_next;
     spawn_carries.insert(id, carry);
@@ -2649,7 +2669,8 @@ void NetwMultiplayer::spawn_carry_advance(int64_t p_id) {
     const uint64_t anchor = carry->anchor;
     const uint64_t anchor_author = carry->anchor_author;
     const Variant pose = world_pose_of(node);
-    Node *held = node->get_parent();
+    Node *placed = scene_outer_of(node);
+    Node *held = placed->get_parent();
     const bool was_applying = applying_remote_frame;
     const int64_t was_author = admitting_author;
     const int64_t was_route = admitting_route;
@@ -2657,9 +2678,9 @@ void NetwMultiplayer::spawn_carry_advance(int64_t p_id) {
     admitting_author = carry->author;
     admitting_route = carry->author != 0 ? route : 0;
     if (held != nullptr) {
-        held->remove_child(node);
+        held->remove_child(placed);
     }
-    spawn_place_node(parent, node);
+    spawn_place_node(parent, placed);
     applying_remote_frame = was_applying;
     admitting_author = was_author;
     admitting_route = was_route;
@@ -2682,6 +2703,7 @@ void NetwMultiplayer::spawn_carry_abandon(int64_t p_id) {
     const SpawnCarry carry = *found;
     spawn_carries.erase(p_id);
     guard_let_go(carry.guard);
+    guard_hush_release(carry.hush);
     NETW_TRACE(
         sys::SPAWN,
         "Reparent %d was abandoned before it finished.",
@@ -2724,6 +2746,7 @@ void NetwMultiplayer::spawn_carry_finish(int64_t p_id) {
     const SpawnCarry carry = *found;
     spawn_carries.erase(p_id);
     guard_let_go(carry.guard);
+    guard_hush_release(carry.hush);
 }
 
 bool NetwMultiplayer::spawn_send_reparent(
@@ -2740,7 +2763,7 @@ bool NetwMultiplayer::spawn_send_reparent(
     wire::WriteStream stream;
     AnchorRevision installed = anchor_installed(p_record->get_route());
     if (!verb_head_write(stream, p_record->get_route())
-        || !anchor_encode(stream, p_node->get_parent())
+        || !anchor_encode(stream, scene_outer_of(p_node)->get_parent())
         || !stream.varuint(installed.revision, 5)
         || !stream.varuint(installed.author, 5) || !stream.align_verify()) {
         NETW_WARN(
@@ -2772,7 +2795,8 @@ bool NetwMultiplayer::spawn_despawn_route(
     int64_t p_route,
     const PackedInt32Array &p_connected,
     int64_t p_channel,
-    const Callable &p_undeclare
+    const Callable &p_undeclare,
+    Node *p_within
 ) {
     if (p_book == nullptr) {
         return false;
@@ -2785,6 +2809,11 @@ bool NetwMultiplayer::spawn_despawn_route(
         const int64_t doomed = plan[at];
         spawn::Record *record = p_book->spawned_of(doomed);
         if (record == nullptr) {
+            continue;
+        }
+        Node *held = record->node();
+        if (p_within != nullptr && held != p_within
+            && (held == nullptr || !p_within->is_ancestor_of(held))) {
             continue;
         }
         const Ref<NetwEntity> entity = NetwEntity::of(record->node());
@@ -2847,6 +2876,70 @@ void NetwMultiplayer::spawn_detach_before_despawn(NetwEntity *p_dying) {
     for (int at = 0; at < roots.size(); ++at) {
         entity_move(book->spawned_of(roots[at])->node(), above);
     }
+}
+
+void NetwMultiplayer::spawn_report_failed(
+    int64_t p_route,
+    const String &p_reason
+) {
+    if (is_host() || p_route <= 0) {
+        return;
+    }
+    session::SpawnFailed frame;
+    frame.route = p_route;
+    frame.reason = p_reason;
+    send_to(
+        SERVER_PEER,
+        0,
+        spawn_failed_channel,
+        session::frame_write(frame),
+        true,
+        0,
+        String(),
+        false
+    );
+}
+
+void NetwMultiplayer::spawn_receive_failed_frame(
+    const PackedByteArray &p_payload,
+    int p_sender
+) {
+    spawn::Pipeline *spawns = spawn_plane();
+    session::SpawnFailed frame;
+    if (!is_host() || spawns == nullptr
+        || !session::frame_read(p_payload, frame)) {
+        return;
+    }
+    spawn::Record *record = spawns->get_spawn_book()->spawned_of(frame.route);
+    if (record == nullptr || !record->has_recipient(p_sender)
+        || !record->mark_failed(p_sender)) {
+        return;
+    }
+    const Ref<NetwPlayer> player = player_of(p_sender);
+    const String method = String(record->get_fn_method());
+    NETW_WARN(
+        sys::SPAWN,
+        "Player '%s' could not spawn route %d, because '%s' %s on their "
+        "peer. Make '%s' return a Node on every peer.",
+        player.is_valid() ? String(player->get_username())
+                          : String::num_int64(p_sender),
+        int(frame.route),
+        method,
+        frame.reason,
+        method
+    );
+    const RID entity = liveness_core->rid_from_route(int(frame.route));
+    if (scene_is_declared(entity)) {
+        scene_sync_viewer(entity, p_sender);
+    }
+}
+
+bool NetwMultiplayer::spawn_failed_for(int64_t p_route, int64_t p_peer) {
+    spawn::Pipeline *spawns = spawn_plane();
+    const spawn::Record *record = spawns != nullptr && p_route > 0
+        ? spawns->get_spawn_book()->spawned_of(p_route)
+        : nullptr;
+    return record != nullptr && record->has_failed(int(p_peer));
 }
 
 void NetwMultiplayer::spawn_reanchor(

@@ -49,15 +49,6 @@
 				The per-peer game data of [param type] stored for [param peer], created on first use. See [method NetwMultiplayer.peer_get_bucket].
 			</description>
 		</method>
-		<method name="create_scene">
-			<return type="NetwScene" />
-			<param index="0" name="scene" type="PackedScene" />
-			<param index="1" name="isolation" type="int" enum="NetwScene.SceneIsolation" default="0" />
-			<description>
-				Spawns [param scene] as a new scene with no players in it. [param isolation] decides whether it has its own physics and rendering world.
-				[b]Server Only.[/b]
-			</description>
-		</method>
 		<method name="database" qualifiers="const">
 			<return type="NetwDatabase" />
 			<param index="0" name="name" type="StringName" />
@@ -76,7 +67,7 @@
 			<return type="NetwScene" />
 			<param index="0" name="label" type="StringName" />
 			<description>
-				Returns the newest scene whose root node is named [param label], or [code]null[/code].
+				Returns the scene whose [member NetwScene.label] is [param label], or [code]null[/code].
 			</description>
 		</method>
 		<method name="install_physics_stepper">

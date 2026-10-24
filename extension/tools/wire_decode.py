@@ -528,6 +528,12 @@ AGAINST_SPEC = [
         "why": "WIRE.md 16, the route of the scene the server released",
     },
     {
+        "record": "SpawnFailed",
+        "bytes": bytes([0x07, 0x10, 0x00]) + b"returned no Node",
+        "values": {"route": 7, "reason": "returned no Node"},
+        "why": "WIRE.md 16, a client that could not build route 7",
+    },
+    {
         "record": "SceneViewersHead",
         "bytes": bytes([0x07, 0x01, 0x02, 0x03, 0x02]),
         "values": {"route": 7, "epoch": 1, "generation": 2, "revision": 3, "count": 2},
@@ -751,6 +757,11 @@ CAPTURE_MAGICS_BY_FORMAT = {
         0x98: "DatagramAcked",
     },
     16: {
+        0x58: "DatagramReliable",
+        0x78: "DatagramUnreliable",
+        0x98: "DatagramAcked",
+    },
+    17: {
         0x58: "DatagramReliable",
         0x78: "DatagramUnreliable",
         0x98: "DatagramAcked",

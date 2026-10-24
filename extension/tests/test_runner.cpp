@@ -609,11 +609,6 @@ void NetwNativeTests::_bind_methods() {
     );
     ClassDB::bind_static_method(
         "NetwNativeTests",
-        D_METHOD("scene_retire", "session", "scene", "drain_pumps"),
-        &NetwNativeTests::scene_retire
-    );
-    ClassDB::bind_static_method(
-        "NetwNativeTests",
         D_METHOD("display_clock_tick", "session", "delta", "tick"),
         &NetwNativeTests::display_clock_tick
     );
@@ -871,17 +866,6 @@ bool NetwNativeTests::rpc_sender_admits(
 
 StringName NetwNativeTests::scene_container_meta() {
     return NetwMultiplayer::scene_container_meta();
-}
-
-void NetwNativeTests::scene_retire(
-    NetwMultiplayer *session,
-    const RID &p_scene,
-    int p_drain_pumps
-) {
-    if (session == nullptr) {
-        return;
-    }
-    session->get_scene_core()->scene_retire(p_scene, p_drain_pumps);
 }
 
 display::Runtime *NetwNativeTests::display_runtime_of(

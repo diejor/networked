@@ -37,8 +37,7 @@ func host() -> NetwMultiplayer:
 	_host_api.multiplayer_peer = _loopback_server_peer()
 	await pump_until(func() -> bool: return _host_api.is_online)
 	if _initial_scene != null:
-		var level := _host_api.scene_create(_initial_scene.resource_path)
-		_scene_decl = _host_api.entity_get_node(level)
+		_scene_decl = spawn_level(_host_api, _initial_scene)
 	return _host_api
 
 

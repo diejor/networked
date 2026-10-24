@@ -1,4 +1,5 @@
 #include "support/fault_log.h"
+#include "support/level_spawn.h"
 #include "support/loopback_rig.h"
 
 #if defined(NETW_TIER_HOSTED)
@@ -372,10 +373,7 @@ TEST_CASE(
     LoopbackRig rig(1);
     rig.mount();
     netw::NetwMultiplayer *api = rig.server();
-    Node *authored = api->scene_spawn(
-        path,
-        netw::NetwMultiplayer::SCENE_ISOLATION_OWN_WORLD
-    );
+    Node *authored = netw_test::spawn_level(rig, path, true);
     const bool spawned = authored != nullptr;
     REQUIRE(spawned);
     rig.pump(6);

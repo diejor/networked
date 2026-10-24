@@ -1,7 +1,7 @@
-# WIRE v16, the carrier format
+# WIRE v17, the carrier format
 
 The byte layout of every datagram, frame and payload Networked writes.
-`FORMAT_VERSION` is 16. `src/wire/registry.cpp` is the one declaration of the
+`FORMAT_VERSION` is 17. `src/wire/registry.cpp` is the one declaration of the
 channel table and `tools/wire_decode.py` reads a capture against this page.
 
 ---
@@ -158,6 +158,7 @@ id   name                    kind    rel fresh del agg direction  payload
 48   LAGCOMP_CONFIRM         session R   -     fit -   srv -> cli planned
 49   SESSION_LEAVE           session R   -     fit -   cli -> srv planned
 50   SESSION_PLAYER_LEFT     session R   -     fit -   srv -> cli planned
+51   SESSION_SPAWN_FAILED    session R   -     fit -   cli -> srv planned
 100+ user channels           routed  -   -     -   -   either     raw
 ```
 
@@ -967,6 +968,7 @@ SESSION_LEAVE_REQUEST  [reason string]
 SESSION_KICK_REQUEST   [peer svarint 5][reason string]
 SESSION_LEAVE          [returning bool1]
 SESSION_PLAYER_LEFT    [player_id varuint 5][reason int_range 0..3]
+SESSION_SPAWN_FAILED   [route varuint 5][reason string]
 ```
 
 A reason is a string a game wrote and a player reads, bounded by the 1023 byte
@@ -978,6 +980,12 @@ connection, giving up after 2 seconds. `returning` is set by
 client before it closes the leaving one, and `reason` is a
 `NetwPlayer.LeaveReason`. A client that never receives it reads
 `LEAVE_DROPPED`.
+
+A client whose spawn function returns no Node, fails or awaits sends
+SESSION_SPAWN_FAILED once for that route. The server reads it only from a peer
+it sent the route to, and from then until the route is despawned it sends that
+peer nothing more of the route or its children, and drops the peer from the
+viewers of a level the route roots.
 
 ```text
 SESSION_SCENE_RELEASED  [route varuint 5]
@@ -1272,7 +1280,7 @@ column list no `describe()` layout carries.
 
 `format` decides how the first byte of each datagram is read and whether a
 REPLY carries the failed bit, and nothing else in the file depends on it, so
-`tools/wire_decode.py` reads a v10 to v16 capture without being told which
+`tools/wire_decode.py` reads a v10 to v17 capture without being told which
 it holds.
 
 The armed path is claimed once per process by the first session to move a

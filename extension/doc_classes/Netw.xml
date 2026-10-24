@@ -4,6 +4,31 @@
 		Static entry points for the Networked API.
 	</brief_description>
 	<description>
+		[b]Levels[/b]
+		A level is spawned like any other node, with [method configure_scene] in its root. A player receives the level while one of their [member NetwPlayer.entities] is in it, so spawn players into it with [method spawn_player], here and in the [method configure_join] handler. [NetwScene] covers the rest.
+		[codeblock]
+		# arena.gd
+		func _init() -&gt; void:
+		    Netw.configure_scene(self)
+
+		# game.gd
+		func _init() -&gt; void:
+		    Netw.configure_spawn(make_arena)
+		    Netw.configure_spawn(make_car)
+
+		func make_arena() -&gt; Node:
+		    return preload("res://arena.tscn").instantiate()
+
+		func make_car() -&gt; Node:
+		    return preload("res://car.tscn").instantiate()
+
+		func start_match(lobby: Node) -&gt; void:
+		    Netw.despawn(lobby)
+		    var arena: Node = Netw.spawn(make_arena)
+		    add_child(arena)
+		    for player: NetwPlayer in Netw.session(self).players:
+		        arena.add_child(Netw.spawn_player(player, make_car))
+		[/codeblock]
 	</description>
 	<tutorials>
 	</tutorials>
@@ -14,34 +39,6 @@
 			<description>
 				Creates a [NetwAction] whose server callback is [param authority]. Call it on every peer, including the server. Repeated calls return the same object.
 				See [NetwAction] for requests and prediction.
-			</description>
-		</method>
-		<method name="change_scene_to_file" qualifiers="static">
-			<return type="NetwPromise" />
-			<param index="0" name="node" type="Node" />
-			<param index="1" name="path" type="String" />
-			<param index="2" name="scope" type="int" enum="NetwScene.SceneChange" default="0" />
-			<description>
-				Opens [param path] and moves players to it. [param scope] says who moves. Their nodes do not move, so spawn them in the [NetwScene] the promise gives. The scene loads in the background, and the promise settles when it is in place.
-				[codeblock]
-				func start_match() -&gt; void:
-				    Netw.change_scene_to_file(self, "res://match.tscn").then(spawn_players)
-
-				func spawn_players(arena: NetwScene) -&gt; void:
-				    for player: NetwPlayer in arena.viewers:
-				        arena.root.add_child(Netw.spawn_player(player, make_player))
-				[/codeblock]
-				[b]Server Only.[/b]
-			</description>
-		</method>
-		<method name="change_scene_to_packed" qualifiers="static">
-			<return type="NetwPromise" />
-			<param index="0" name="node" type="Node" />
-			<param index="1" name="packed" type="PackedScene" />
-			<param index="2" name="scope" type="int" enum="NetwScene.SceneChange" default="0" />
-			<description>
-				Like [method change_scene_to_file]. [param packed] must be saved to a file.
-				[b]Server Only.[/b]
 			</description>
 		</method>
 		<method name="channel" qualifiers="static">
@@ -286,6 +283,7 @@
 				[codeblock]
 				Netw.despawn(bullet)
 				[/codeblock]
+				Despawning the root of a [NetwScene] removes the scene at once, with everything in it.
 				See [NetwDespawnOpts] for [param opts]. Returns [constant @GlobalScope.ERR_DOES_NOT_EXIST] for a node that was not spawned, and [constant @GlobalScope.ERR_UNAVAILABLE] outside a session.
 				A client can call it when its player is the [member NetwEntity.controller] and [member NetwEntity.lifecycle] is [constant NetwEntity.LIFECYCLE_CONTROLLER]. The node is removed on that client at once, and comes back if the server refuses.
 			</description>
@@ -336,15 +334,6 @@
 				[b]Player request.[/b]
 			</description>
 		</method>
-		<method name="reload_current_scene" qualifiers="static">
-			<return type="NetwPromise" />
-			<param index="0" name="node" type="Node" />
-			<param index="1" name="scope" type="int" enum="NetwScene.SceneChange" default="0" />
-			<description>
-				Reloads the scene the server displays, like [method SceneTree.reload_current_scene].
-				[b]Server Only.[/b]
-			</description>
-		</method>
 		<method name="reparent" qualifiers="static">
 			<return type="NetwPromise" />
 			<param index="0" name="node" type="Node" />
@@ -354,7 +343,8 @@
 				[codeblock]
 				await Netw.reparent(avatar, level2.get_node(^"Players")).wait()
 				[/codeblock]
-				Unlike [method Node.reparent], it does not fire [Area3D] and [Area2D] enter and exit signals during the move, which works around [url=https://github.com/godotengine/godot/issues/14578]this issue[/url]. Otherwise [method Node.reparent] works fine.
+				A level keeps its [NetwScene], its viewers and every [member NetwPlayer.scene] when it moves. For a level made with [method NetwSceneConfig.isolated], pass the node [method spawn] returned or the level's root, and the node [method spawn] returned moves.
+				Unlike [method Node.reparent], it does not fire [Area3D] and [Area2D] enter and exit signals during the move, which works around [url=https://github.com/godotengine/godot/issues/14578]this issue[/url]. An overlap that really changed during the move is reported after it with the body and area enter and exit signals, and the shape signals are not sent for it. Otherwise [method Node.reparent] works fine.
 				The promise fails with [constant @GlobalScope.ERR_DOES_NOT_EXIST] when [param node] has no entity, and [constant @GlobalScope.ERR_UNAVAILABLE] outside a session.
 				A client can call it when its player is the [member NetwEntity.controller] and [member NetwEntity.lifecycle] is [constant NetwEntity.LIFECYCLE_CONTROLLER]. The node moves on that client at once, and moves back if the server refuses.
 			</description>
@@ -404,6 +394,7 @@
 				func _init() -&gt; void:
 				    Netw.configure_entity(self)
 				    Netw.configure_rpc(preload_level).timeout(60.0)
+				    Netw.configure_spawn(make_match)
 				    Netw.configure_spawn(make_player)
 
 				func start_match() -&gt; void:
@@ -411,11 +402,13 @@
 				    await loads.wait()
 				    if loads.is_failed or false in loads.results.values():
 				        return
-				    Netw.change_scene_to_file(self, MATCH).then(open_match)
+				    var arena: Node = Netw.spawn(make_match)
+				    add_child(arena)
+				    for player: NetwPlayer in Netw.session(self).players:
+				        arena.add_child(Netw.spawn_player(player, make_player))
 
-				func open_match(arena: NetwScene) -&gt; void:
-				    for player: NetwPlayer in arena.viewers:
-				        arena.root.add_child(Netw.spawn_player(player, make_player))
+				func make_match() -&gt; Node:
+				    return warm.instantiate()
 
 				@rpc("authority")
 				func preload_level(path: String) -&gt; bool:
@@ -437,6 +430,7 @@
 				    {
 				        Netw.ConfigureEntity(this);
 				        Netw.ConfigureRpc(this, MethodName.PreloadLevel).Timeout(60.0);
+				        Netw.ConfigureSpawn(this, MethodName.MakeMatch);
 				        Netw.ConfigureSpawn(this, MethodName.MakePlayer);
 				    }
 
@@ -445,10 +439,13 @@
 				        NetwGroupPromise loads = await Netw.RequestAll(this, MethodName.PreloadLevel, Match);
 				        if (loads.IsFailed || loads.Results.Values.Any(loaded =&gt; !loaded.AsBool()))
 				            return;
-				        NetwScene arena = await Netw.ChangeSceneToFile(this, Match).AsTask(NetwScene.From);
-				        foreach (NetwPlayer player in arena.Viewers)
-				            arena.Root.AddChild(Netw.SpawnPlayer(player, this, MethodName.MakePlayer));
+				        Node arena = Netw.Spawn(this, MethodName.MakeMatch);
+				        AddChild(arena);
+				        foreach (NetwPlayer player in Netw.Session(this).Players)
+				            arena.AddChild(Netw.SpawnPlayer(player, this, MethodName.MakePlayer));
 				    }
+
+				    public Node MakeMatch() =&gt; warm.Instantiate();
 
 				    public Variant PreloadLevel(string path) =&gt; NetwPromise.FromTask(Preload(path));
 
@@ -570,38 +567,40 @@
 			<return type="Node" />
 			<param index="0" name="fn" type="Callable" />
 			<description>
-				Calls [param fn] with the arguments after it on every peer, and returns the node it created here. Add it to the tree yourself.
+				Calls [param fn] with the arguments after it on every peer, and returns the node it made here. Add the node before the next tick, under a node every peer has.
 				[codeblock]
-				muzzle.add_child(Netw.spawn(_spawn_bullet, dir, 2))
+				muzzle.add_child(Netw.spawn(make_bullet, direction))
 				[/codeblock]
-				Register [param fn] with [method configure_spawn] first, and add the node to the tree before the next tick.
-				The entity has no [member NetwEntity.player], so it stays when any player leaves. [method spawn_player] makes one that is despawned with its player.
+				Register [param fn] with [method configure_spawn] first. A player who joins later calls [param fn] too, with the same arguments.
+				The node outlives every player. [method spawn_player] makes one that is despawned with its player.
 				A client can call it when the node sets [member NetwEntity.lifecycle] to [constant NetwEntity.LIFECYCLE_CONTROLLER]. That client's player becomes its [member NetwEntity.controller]. The client sees it at once and loses it if the server refuses.
-				[param fn] must return the node without waiting. Use [method spawn_async] when it awaits, and load first with [method request_all] when every peer should start together.
+				[param fn] returns without waiting. Use [method spawn_async] when it awaits.
 			</description>
 		</method>
 		<method name="spawn_async" qualifiers="vararg static">
 			<return type="NetwPromise" />
 			<param index="0" name="fn" type="Callable" />
 			<description>
-				Calls [param fn] with the arguments after it on every peer, as [method spawn] does, and lets [param fn] await. The [NetwPromise] settles with the node once [param fn] returns here. A client holds what the server sends for the node until its own copy is built.
+				Like [method spawn], and [param fn] may await. The [NetwPromise] settles with the node once [param fn] returns on this peer. Add the node before the next tick.
 				[codeblocks]
 				[gdscript]
-				func start(path: String) -> void:
+				func start(path: String) -&gt; void:
 				    var level: Node = await Netw.spawn_async(make_level, path).wait()
 				    add_child(level)
 
-				func make_level(path: String) -> Node:
+				func make_level(path: String) -&gt; Node:
+				    loading_screen.show()
 				    ResourceLoader.load_threaded_request(path)
 				    while ResourceLoader.load_threaded_get_status(path) \
 				            == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
 				        await get_tree().process_frame
+				    loading_screen.hide()
 				    return ResourceLoader.load_threaded_get(path).instantiate()
 				[/gdscript]
 				[csharp]
 				public async void Start(string path)
 				{
-				    Node level = await Netw.SpawnAsync(this, MethodName.MakeLevel, path).AsTask(v => v.As&lt;Node&gt;());
+				    Node level = await Netw.SpawnAsync(this, MethodName.MakeLevel, path).AsTask(v =&gt; v.As&lt;Node&gt;());
 				    AddChild(level);
 				}
 
@@ -609,15 +608,17 @@
 
 				async Task&lt;Node&gt; LoadLevel(string path)
 				{
+				    loadingScreen.Show();
 				    ResourceLoader.LoadThreadedRequest(path);
 				    while (ResourceLoader.LoadThreadedGetStatus(path)
 				            == ResourceLoader.ThreadLoadStatus.InProgress)
 				        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+				    loadingScreen.Hide();
 				    return (ResourceLoader.LoadThreadedGet(path) as PackedScene).Instantiate();
 				}
 				[/csharp]
 				[/codeblocks]
-				Add the node to the tree before the next tick.
+				Every peer builds its own copy at its own pace. On a client, nodes spawned into it and RPCs sent to it wait until that client's copy is built. The promise says nothing about clients, and [method request_all] shows how to wait until every peer has loaded a level before you spawn it.
 				[b]Server Only.[/b]
 			</description>
 		</method>

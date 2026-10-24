@@ -189,6 +189,7 @@ TEST_CASE(
 
     stand(core, annex.root, local);
     CHECK_FALSE(core->scene_presented().is_valid());
+    core->scene_presentation_warn_split();
 
     memdelete(root);
 }

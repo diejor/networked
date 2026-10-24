@@ -2106,35 +2106,6 @@
 				Replies [param value] to request [param txn] from [param peer].
 			</description>
 		</method>
-		<method name="scene_change_to_file">
-			<return type="NetwPromise" />
-			<param index="0" name="requester" type="Node" />
-			<param index="1" name="path" type="String" />
-			<param index="2" name="scope" type="int" enum="NetwScene.SceneChange" default="0" />
-			<description>
-				See [method Netw.change_scene_to_file]. [param requester] selects the player for [constant NetwScene.SCENE_CHANGE_PLAYER] and the [NetwScene] for [constant NetwScene.SCENE_CHANGE_SCENE].
-				[b]Server Only.[/b]
-			</description>
-		</method>
-		<method name="scene_change_to_packed">
-			<return type="NetwPromise" />
-			<param index="0" name="requester" type="Node" />
-			<param index="1" name="packed" type="PackedScene" />
-			<param index="2" name="scope" type="int" enum="NetwScene.SceneChange" default="0" />
-			<description>
-				See [method Netw.change_scene_to_packed].
-				[b]Server Only.[/b]
-			</description>
-		</method>
-		<method name="scene_create">
-			<return type="RID" />
-			<param index="0" name="recipe" type="Variant" />
-			<param index="1" name="isolation" type="int" enum="NetwScene.SceneIsolation" default="0" />
-			<description>
-				Spawns a multiplayer scene from the scene file path [param recipe] and returns it, or an invalid [RID] on failure. [code]null[/code] creates an empty scene. [param isolation] decides whether it has its own physics and rendering world.
-				[b]Server Only.[/b]
-			</description>
-		</method>
 		<method name="scene_declare">
 			<return type="int" enum="Error" />
 			<param index="0" name="entity" type="RID" />
@@ -2152,13 +2123,6 @@
 				┠╴ERR_DOES_NOT_EXIST  the entity does not exist
 				┖╴ERR_UNCONFIGURED    the entity already has a node
 				[/codeblock]
-			</description>
-		</method>
-		<method name="scene_destroy">
-			<return type="bool" />
-			<param index="0" name="scene" type="RID" />
-			<description>
-				Frees the node of [param scene] immediately. Returns [code]false[/code] when it has none.
 			</description>
 		</method>
 		<method name="scene_find">
@@ -2254,26 +2218,10 @@
 				Calls [param callback] when [param event] happens on [param scene]. Adding the same callback twice has no effect. Return [code]true[/code] from [param callback] to stop receiving events. [method scene_unobserve] removes it.
 			</description>
 		</method>
-		<method name="scene_packed_stem" qualifiers="static">
-			<return type="StringName" />
-			<param index="0" name="packed" type="PackedScene" />
-			<description>
-				Returns the root node name of [param packed], or empty.
-			</description>
-		</method>
 		<method name="scene_presented" qualifiers="const">
 			<return type="RID" />
 			<description>
 				Returns the scene this peer displays, or an invalid [RID]. See [member NetwPlayer.scene].
-			</description>
-		</method>
-		<method name="scene_reload_current">
-			<return type="NetwPromise" />
-			<param index="0" name="requester" type="Node" />
-			<param index="1" name="scope" type="int" enum="NetwScene.SceneChange" default="0" />
-			<description>
-				See [method Netw.reload_current_scene].
-				[b]Server Only.[/b]
 			</description>
 		</method>
 		<method name="scene_set_param">
@@ -4116,36 +4064,33 @@
 		<constant name="SCENE_SPAWNED" value="8" enum="Notification">
 			A scene was spawned, before any player enters it. It happens once per scene. The callback receives [code](scene: Node)[/code].
 		</constant>
-		<constant name="SCENE_ACTIVATED" value="9" enum="Notification">
-			A scene became the displayed scene. The callback receives [code](scene: Node)[/code].
-		</constant>
-		<constant name="SCENE_DESPAWNED" value="10" enum="Notification">
+		<constant name="SCENE_DESPAWNED" value="9" enum="Notification">
 			A scene was removed. The callback receives [code](scene: Node)[/code].
 		</constant>
-		<constant name="SCENE_ENTITY_MOVED" value="11" enum="Notification">
+		<constant name="SCENE_ENTITY_MOVED" value="10" enum="Notification">
 			An entity finished moving from one scene to another, before the move's [NetwPromise] resolves. The callback receives [code](entity: NetwEntity, from: Node, to: Node)[/code].
 		</constant>
-		<constant name="SCENE_STARTUP_SPAWNED" value="12" enum="Notification">
+		<constant name="SCENE_STARTUP_SPAWNED" value="11" enum="Notification">
 			Startup finished on the server, even if nothing was spawned. It happens once. The callback receives no arguments.
 		</constant>
-		<constant name="CLOCK_BEFORE_TICK_LOOP" value="13" enum="Notification">
+		<constant name="CLOCK_BEFORE_TICK_LOOP" value="12" enum="Notification">
 			A physics frame is about to run its ticks, even when there are none. [method clock_step] does not send it. The callback receives no arguments.
 		</constant>
-		<constant name="CLOCK_AFTER_TICK_LOOP" value="14" enum="Notification">
+		<constant name="CLOCK_AFTER_TICK_LOOP" value="13" enum="Notification">
 			A physics frame has run its ticks, even when there were none. [method clock_step] does not send it. The callback receives no arguments.
 		</constant>
-		<constant name="CLOCK_SYNCHRONIZED" value="15" enum="Notification">
+		<constant name="CLOCK_SYNCHRONIZED" value="14" enum="Notification">
 			The clock synchronized with the server for the first time. It happens once. The callback receives no arguments.
 		</constant>
-		<constant name="CLOCK_CONFIGURED" value="16" enum="Notification">
+		<constant name="CLOCK_CONFIGURED" value="15" enum="Notification">
 			The clock settings were applied. Emitted once with no arguments. Check
 			[method clock_is_configured] if it may have already happened. Peer assignment
 			and [method NetwAction.request] are refused during this callback.
 		</constant>
-		<constant name="CLOCK_TICKRATE_MISMATCH" value="17" enum="Notification">
+		<constant name="CLOCK_TICKRATE_MISMATCH" value="16" enum="Notification">
 			A peer runs a tickrate that differs from this peer's, and [method clock_set_mismatch_action] is [constant NetwClock.MISMATCH_ACTION_SIGNAL]. The callback receives [code](peer_id: int, their_tickrate: int)[/code].
 		</constant>
-		<constant name="CLOCK_PONG_RECEIVED" value="18" enum="Notification">
+		<constant name="CLOCK_PONG_RECEIVED" value="17" enum="Notification">
 			The server answered a [method clock_send_ping] and the clock has adjusted.
 			[codeblock lang=text]
 			Dictionary
@@ -4161,109 +4106,109 @@
 			[/codeblock]
 			The callback receives [code](data: Dictionary)[/code].
 		</constant>
-		<constant name="CLOCK_STABILITY_CHANGED" value="19" enum="Notification">
+		<constant name="CLOCK_STABILITY_CHANGED" value="18" enum="Notification">
 			[method clock_is_stable] changed. The callback receives [code](is_stable: bool)[/code].
 		</constant>
-		<constant name="SESSION_STATE_CHANGED" value="20" enum="Notification">
+		<constant name="SESSION_STATE_CHANGED" value="19" enum="Notification">
 			The notification form of [signal NetwSession.state_changed]. The callback receives [code](old_state: int, new_state: int)[/code].
 		</constant>
-		<constant name="SESSION_JOIN_SUBMITTED" value="21" enum="Notification">
+		<constant name="SESSION_JOIN_SUBMITTED" value="20" enum="Notification">
 			This peer sent its join request. It does not mean the join was accepted. The callback receives [code](username: StringName, args: Array)[/code].
 		</constant>
-		<constant name="SESSION_ENTERED" value="22" enum="Notification">
+		<constant name="SESSION_ENTERED" value="21" enum="Notification">
 			The session became [constant NetwSession.STATE_ONLINE]. The callback receives no arguments.
 		</constant>
-		<constant name="SESSION_JOIN_FAILED" value="23" enum="Notification">
+		<constant name="SESSION_JOIN_FAILED" value="22" enum="Notification">
 			This peer's join was rejected. Games usually use [signal NetwSession.join_failed]. The callback receives [code](error: int, reason: String)[/code].
 		</constant>
-		<constant name="SESSION_ENDED" value="24" enum="Notification">
+		<constant name="SESSION_ENDED" value="23" enum="Notification">
 			The session stopped being [constant NetwSession.STATE_ONLINE]. The callback receives no arguments.
 		</constant>
-		<constant name="SESSION_RECLAIMED" value="25" enum="Notification">
+		<constant name="SESSION_RECLAIMED" value="24" enum="Notification">
 			Right after [constant SESSION_ENDED]. Free nodes the session owned here. The callback receives no arguments.
 		</constant>
-		<constant name="PEER_AUTHENTICATING" value="26" enum="Notification">
+		<constant name="PEER_AUTHENTICATING" value="25" enum="Notification">
 			Same as [signal SceneMultiplayer.peer_authenticating], from [member inner]. The callback receives [code](peer_id: int)[/code].
 		</constant>
-		<constant name="PEER_AUTHENTICATION_FAILED" value="27" enum="Notification">
+		<constant name="PEER_AUTHENTICATION_FAILED" value="26" enum="Notification">
 			Same as [signal SceneMultiplayer.peer_authentication_failed], from [member inner]. The callback receives [code](peer_id: int)[/code].
 		</constant>
-		<constant name="SESSION_POLL_STARTED" value="28" enum="Notification">
+		<constant name="SESSION_POLL_STARTED" value="27" enum="Notification">
 			A [method MultiplayerAPI.poll] is starting. [code]delta[/code] is the time since the previous one. The callback receives [code](delta: float)[/code].
 		</constant>
-		<constant name="TABLE_RECEIVED" value="29" enum="Notification">
+		<constant name="TABLE_RECEIVED" value="28" enum="Notification">
 			A table changed, by [method table_commit] or by an update from the server. The callback receives [code](table: RID, tick: int)[/code].
 		</constant>
-		<constant name="DATABASE_FAILED" value="30" enum="Notification">
+		<constant name="DATABASE_FAILED" value="29" enum="Notification">
 			An entity failed to load or save in a database. [code]detail[/code] names the record and the reason. The callback receives [code](database: RID, error: int, detail: String)[/code].
 		</constant>
-		<constant name="PERSIST_LOADED" value="31" enum="Notification">
+		<constant name="PERSIST_LOADED" value="30" enum="Notification">
 			An entity finished loading. [code]found[/code] is [code]false[/code] when there was no save, and a failed load sends [constant DATABASE_FAILED]. The callback receives [code](entity: RID, found: bool)[/code].
 		</constant>
-		<constant name="PERSIST_SAVED" value="32" enum="Notification">
+		<constant name="PERSIST_SAVED" value="31" enum="Notification">
 			An entity finished saving, and a failed save sends [constant DATABASE_FAILED]. The callback receives [code](entity: RID)[/code].
 		</constant>
-		<constant name="PEER_PACKET" value="33" enum="Notification">
+		<constant name="PEER_PACKET" value="32" enum="Notification">
 			Same as [signal SceneMultiplayer.peer_packet], for packets sent with [method send_bytes]. The callback receives [code](id: int, packet: PackedByteArray)[/code].
 		</constant>
-		<constant name="PEER_KICKED" value="34" enum="Notification">
+		<constant name="PEER_KICKED" value="33" enum="Notification">
 			The server kicked this peer, before the connection closes. The callback receives [code](reason: String)[/code].
 		</constant>
-		<constant name="SESSION_SERVER_DISCONNECTING" value="35" enum="Notification">
+		<constant name="SESSION_SERVER_DISCONNECTING" value="34" enum="Notification">
 			The server called [method session_notify_shutdown]. The callback receives [code](reason: String)[/code].
 		</constant>
-		<constant name="PEER_KICK_REQUESTED" value="36" enum="Notification">
+		<constant name="PEER_KICK_REQUESTED" value="35" enum="Notification">
 			On the server, a peer asked to kick another with [method peer_request_kick]. The callback receives [code](requester_id: int, target_id: int, reason: String)[/code].
 		</constant>
-		<constant name="SESSION_DISCONNECT_REQUESTED" value="37" enum="Notification">
+		<constant name="SESSION_DISCONNECT_REQUESTED" value="36" enum="Notification">
 			On the server, a peer asked to leave with [method session_request_leave]. The callback receives [code](peer_id: int, reason: String)[/code].
 		</constant>
-		<constant name="SESSION_TREE_PAUSED" value="38" enum="Notification">
+		<constant name="SESSION_TREE_PAUSED" value="37" enum="Notification">
 			The session was paused with [method NetwSession.pause]. The callback receives [code](reason: String)[/code].
 		</constant>
-		<constant name="SESSION_TREE_UNPAUSED" value="39" enum="Notification">
+		<constant name="SESSION_TREE_UNPAUSED" value="38" enum="Notification">
 			The session was unpaused, or it ended while paused. The callback receives no arguments.
 		</constant>
-		<constant name="SERVICE_REGISTERED" value="40" enum="Notification">
+		<constant name="SERVICE_REGISTERED" value="39" enum="Notification">
 			A service was registered. The callback receives [code](service: Object)[/code].
 		</constant>
-		<constant name="SERVICE_UNREGISTERED" value="41" enum="Notification">
+		<constant name="SERVICE_UNREGISTERED" value="40" enum="Notification">
 			A service was unregistered. The callback receives [code](service: Object)[/code].
 		</constant>
-		<constant name="ENTITY_LIVE" value="42" enum="Notification">
+		<constant name="ENTITY_LIVE" value="41" enum="Notification">
 			An entity spawned on this peer at [code]route[/code]. The callback receives [code](route: int, entity: NetwEntity)[/code].
 		</constant>
-		<constant name="ENTITY_LINGERING" value="43" enum="Notification">
+		<constant name="ENTITY_LINGERING" value="42" enum="Notification">
 			An entity started despawning and entered [constant ENTITY_STATE_LINGERING]. The callback receives [code](route: int, entity: NetwEntity)[/code].
 		</constant>
-		<constant name="ENTITY_DEAD" value="44" enum="Notification">
+		<constant name="ENTITY_DEAD" value="43" enum="Notification">
 			The entity at [code]route[/code] was despawned, after [signal NetwEntity.despawned]. It happens once, and a peer that only stops seeing the entity gets [constant ENTITY_HIDDEN]. The callback receives [code](route: int)[/code].
 		</constant>
-		<constant name="ENTITY_HIDDEN" value="45" enum="Notification">
+		<constant name="ENTITY_HIDDEN" value="44" enum="Notification">
 			This peer stopped seeing an entity that still exists on the server, after [signal NetwEntity.hidden]. If it becomes visible again, the same route gets a new node. The callback receives [code](route: int, entity: NetwEntity)[/code].
 		</constant>
-		<constant name="PLAYER_JOINED" value="46" enum="Notification">
+		<constant name="PLAYER_JOINED" value="45" enum="Notification">
 			A player's join was accepted, including this peer's own. The callback receives [code](player: NetwPlayer)[/code].
 		</constant>
-		<constant name="PLAYER_LOCAL_JOINED" value="47" enum="Notification">
+		<constant name="PLAYER_LOCAL_JOINED" value="46" enum="Notification">
 			This peer's own join was accepted, before [constant PLAYER_JOINED]. The callback receives [code](player: NetwPlayer)[/code].
 		</constant>
-		<constant name="PLAYER_LEFT" value="48" enum="Notification">
+		<constant name="PLAYER_LEFT" value="47" enum="Notification">
 			A player left or was kicked. [member NetwPlayer.is_active] is already [code]false[/code]. The callback receives [code](player: NetwPlayer)[/code].
 		</constant>
-		<constant name="SCENE_LIVE" value="49" enum="Notification">
+		<constant name="SCENE_LIVE" value="48" enum="Notification">
 			A scene is ready on this peer, and every node in it is in the tree and ready. The callback receives [code](scene: NetwScene)[/code].
 		</constant>
-		<constant name="CONNECTION_PROGRESSED" value="50" enum="Notification">
+		<constant name="CONNECTION_PROGRESSED" value="49" enum="Notification">
 			The notification form of [signal NetwConnection.progressed].
 		</constant>
-		<constant name="CONNECTION_FAILED" value="51" enum="Notification">
+		<constant name="CONNECTION_FAILED" value="50" enum="Notification">
 			The notification form of [signal NetwConnection.failed].
 		</constant>
-		<constant name="CONNECTION_JOIN_ADDRESS_CHANGED" value="52" enum="Notification">
+		<constant name="CONNECTION_JOIN_ADDRESS_CHANGED" value="51" enum="Notification">
 			The notification form of [signal NetwConnection.join_address_changed].
 		</constant>
-		<constant name="CONNECTION_INVITED" value="53" enum="Notification">
+		<constant name="CONNECTION_INVITED" value="52" enum="Notification">
 			The notification form of [signal NetwConnection.invited]. The callback receives [code](endpoint: RID)[/code].
 		</constant>
 	</constants>

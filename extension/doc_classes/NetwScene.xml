@@ -5,7 +5,7 @@
 	</brief_description>
 	<description>
 		A multiplayer scene is a [NetwEntity], available as [member entity]. Reach it with [method Netw.scene] or [member NetwEntity.scene]. An entity declared with [method Netw.configure_scene] resolves to itself, any other entity to its closest scene ancestor. Each scene has one handle, so [code]==[/code] compares scenes.
-		A scene replicates to a player while an entity spawned for them is in it, or while the player watches it with [method watch]. [method unwatch] does not remove a player whose entity is still in the scene.
+		A scene replicates to a player while one of their [member NetwPlayer.entities] is in it, or while the player watches it with [method watch]. [method unwatch] does not remove a player whose entity is still in the scene.
 		[codeblock]
 		lobby.watch(player)
 		arena.add_child(Netw.spawn_player(player, make_player))
@@ -21,7 +21,7 @@
 			<return type="bool" />
 			<param index="0" name="player" type="NetwPlayer" />
 			<description>
-				Whether this scene replicates to [param player], either because an entity spawned for them is in it or because of [method watch].
+				Whether this scene replicates to [param player], either because one of their [member NetwPlayer.entities] is in it or because of [method watch].
 			</description>
 		</method>
 		<method name="observe">
@@ -52,7 +52,7 @@
 			<return type="int" enum="Error" />
 			<param index="0" name="player" type="NetwPlayer" />
 			<description>
-				Undoes [method watch]. The scene keeps replicating to [param player] while an entity spawned for them is in it.
+				Undoes [method watch]. The scene keeps replicating to [param player] while one of their [member NetwPlayer.entities] is in it.
 				[codeblock lang=text]
 				Error
 				┠╴OK                      the watch is withdrawn
@@ -90,7 +90,7 @@
 			The [NetwEntity] on [member root], or [code]null[/code] once the scene is freed.
 		</member>
 		<member name="label" type="StringName" setter="" getter="get_label">
-			The name [method Netw.scene] finds this scene by. See [method NetwSceneConfig.labeled].
+			The name [method NetwSession.find_scene] finds this scene by. See [method NetwSceneConfig.labeled].
 		</member>
 		<member name="local_player_entities" type="NetwEntity[]" setter="" getter="get_local_player_entities">
 			Every entity in [member player_entities] that was spawned for this peer.
@@ -127,12 +127,7 @@
 		<signal name="viewer_entered">
 			<param index="0" name="player" type="NetwPlayer" />
 			<description>
-				Emitted when this scene starts replicating to [param player]. [member viewers] already includes them. On the server, spawn arriving players here.
-				[codeblock]
-				func place(player: NetwPlayer, level: NetwScene) -&gt; void:
-				    if player.entities.is_empty():
-				        level.root.add_child(Netw.spawn_player(player, make_player))
-				[/codeblock]
+				Emitted when this scene starts replicating to [param player]. [member viewers] already includes them.
 			</description>
 		</signal>
 		<signal name="viewer_exited">
@@ -147,19 +142,10 @@
 			A player started or stopped seeing the scene. The [method NetwMultiplayer.scene_observe] callback receives [code](present, peer_id)[/code].
 		</constant>
 		<constant name="SCENE_EVENT_PLAYER_ENTITY" value="1" enum="SceneEvent">
-			An entity spawned for a player entered or left. The callback receives [code](present, entity)[/code].
+			An entity in [member player_entities] entered or left. The callback receives [code](present, entity)[/code].
 		</constant>
 		<constant name="SCENE_EVENT_ENTITY" value="2" enum="SceneEvent">
 			Any entity, player entities included, entered or left. The callback receives [code](present, entity)[/code].
-		</constant>
-		<constant name="SCENE_CHANGE_SESSION" value="0" enum="SceneChange">
-			Every player moves to the new scene, and every other scene is removed with its entities.
-		</constant>
-		<constant name="SCENE_CHANGE_PLAYER" value="1" enum="SceneChange">
-			Only the selected [NetwPlayer] moves. Their old entities are despawned, and no scene is removed.
-		</constant>
-		<constant name="SCENE_CHANGE_SCENE" value="2" enum="SceneChange">
-			Everyone in the selected [NetwScene] moves, and it is removed with its entities.
 		</constant>
 		<constant name="SCENE_ISOLATION_NONE" value="0" enum="SceneIsolation">
 			The scene shares the physics and rendering world with the rest of the game.

@@ -233,6 +233,7 @@ Dictionary frame_spec_records() {
     out["KickRequest"] = KickRequest::wire.spec_dump();
     out["SessionLeave"] = SessionLeave::wire.spec_dump();
     out["PlayerLeft"] = PlayerLeft::wire.spec_dump();
+    out["SpawnFailed"] = SpawnFailed::wire.spec_dump();
     out["SceneReleased"] = SceneReleased::wire.spec_dump();
     out["SceneViewersHead"] = SceneViewersHead::wire.spec_dump();
     out["SceneViewerRow"] = SceneViewerRow::wire.spec_dump();

@@ -198,18 +198,13 @@ TEST_CASE(
     }
 
     SUBCASE("a declared despawn cannot be taken back by landing again") {
-        expected_faults.expect_error(
-            "[error][entity] Entity '*' cannot move from stage 3 to"
-            " stage 2.",
-            1
-        );
-
         Ref<netw::NetwDespawnOpts> opts;
         opts.instantiate();
         stand.entity->despawn(opts);
         stand.body()->reparent(stand.away);
         stand.settle();
 
+        NETW_CHECK_EQ(int(expected_faults.errors()), 0);
         NETW_CHECK_EQ(stand.seen.count("despawned"), 1);
         NETW_CHECK_EQ(stand.seen.count("reparented"), 0);
         stand.pair.authored = nullptr;

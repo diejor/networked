@@ -1,6 +1,6 @@
 extends Node
 
-const ARENA := "res://examples/rocket_league/scenes/arena.tscn"
+@export var arena_scene: PackedScene
 
 @onready var session: NetwSession = Netw.session(self)
 
@@ -9,6 +9,7 @@ func _init() -> void:
 	Netw.configure_lagcomp(self)
 	Netw.configure_session(self).app(&"netw-example-rocket-league")
 	Netw.configure_clock(self).ticks_per_second(60)
+	Netw.configure_spawn(make_arena)
 	Netw.configure_join(join_match)
 
 
@@ -16,12 +17,15 @@ func _ready() -> void:
 	%InLobby.start_pressed.connect(start_match)
 
 
+func make_arena() -> Node:
+	return arena_scene.instantiate()
+
+
 func start_match() -> void:
-	Netw.change_scene_to_file(self, ARENA).then(open_match)
-
-
-func open_match(arena: NetwScene) -> void:
-	for player: NetwPlayer in arena.viewers:
+	var level: Node = Netw.spawn(make_arena)
+	add_child(level)
+	var arena: NetwScene = Netw.scene(level)
+	for player: NetwPlayer in session.players:
 		add_car(arena, player)
 
 

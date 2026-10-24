@@ -395,12 +395,17 @@ TEST_CASE(
 struct Failure {
     const char *outcome;
     const char *warning;
+    const char *reported;
 };
 
 const Failure FAILURES[] = {
-    {"null", "*did not return a Node*"},
-    {"promise fails", "*failed with 'slow'*"},
-    {"host freed", "*was freed before it returned*"},
+    {"null",
+     "*Spawn function 'make' did not return a Node*",
+     "*because 'make' returned no Node on their peer*"},
+    {"promise fails",
+     "*Spawn function 'make' failed with 'slow'*",
+     "*because 'make' failed with 'slow' on their peer*"},
+    {"host freed", "*was freed before it returned*", nullptr},
 };
 
 TEST_CASE(
@@ -416,6 +421,9 @@ TEST_CASE(
         stand.client_host->set(StringName("outcome"), String(failure.outcome));
         netw_test::FaultWatch faults;
         faults.expect_warning(failure.warning, 1);
+        if (failure.reported != nullptr) {
+            faults.expect_warning(failure.reported, 1);
+        }
 
         const int route = int(NetwEntity::of(spawn_made(stand))->get_route());
         stand.sim.step_ticks(4);

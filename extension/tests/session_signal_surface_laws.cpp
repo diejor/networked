@@ -30,7 +30,6 @@ TEST_CASE(
 
     SUBCASE("the scene machine's own edges") {
         CHECK_FALSE(announces(session, "scene_spawned"));
-        CHECK_FALSE(announces(session, "scene_activated"));
         CHECK_FALSE(announces(session, "scene_despawned"));
         CHECK_FALSE(announces(session, "scene_entity_moved"));
         CHECK_FALSE(announces(session, "scene_startup_spawned"));

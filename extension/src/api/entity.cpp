@@ -2107,6 +2107,10 @@ void NetwEntity::despawn(const Ref<NetwDespawnOpts> &p_opts) {
             api->get_bindings()->find(owner),
             opts->get_flush_save()
         );
+        api->scene_root_despawning(
+            this,
+            api->is_host() && !opts->get_linger()
+        );
     }
     if (owner->get_multiplayer_authority() != 1) {
         owner->set_multiplayer_authority(1);
@@ -2140,6 +2144,9 @@ void NetwEntity::_remote_despawn(
     }
     if (get_stage() != STAGE_DESPAWNING) {
         return;
+    }
+    if (NetwMultiplayer *api = session_core()) {
+        api->scene_root_despawning(this, false);
     }
     if (opts->get_linger()) {
         transition(int64_t(entity::Stage::LINGERING));

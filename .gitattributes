@@ -11,3 +11,5 @@ extension/thirdparty/** linguist-vendored
 docs/tools/vendor/** linguist-vendored
 
 docs/tools/make_rst.py linguist-generated
+
+addons/discord_social_sdk/lib/** export-ignore

@@ -588,15 +588,7 @@ Methods
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | |void|                                                              | :ref:`rpc_send_reply<class_NetwMultiplayer_method_rpc_send_reply>`\ (\ peer\: :godot:`int`, route\: :godot:`int`, txn\: :godot:`int`, value\: :godot:`Variant`\ )                                                                                                                                                                                                                                                                                                                       |
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`                               | :ref:`scene_change_to_file<class_NetwMultiplayer_method_scene_change_to_file>`\ (\ requester\: :godot:`Node`, path\: :godot:`String`, scope\: :ref:`SceneChange<enum_NetwScene_SceneChange>` = 0\ )                                                                                                                                                                                                                                                                                     |
-   +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`                               | :ref:`scene_change_to_packed<class_NetwMultiplayer_method_scene_change_to_packed>`\ (\ requester\: :godot:`Node`, packed\: :godot:`PackedScene`, scope\: :ref:`SceneChange<enum_NetwScene_SceneChange>` = 0\ )                                                                                                                                                                                                                                                                          |
-   +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`RID`                                                        | :ref:`scene_create<class_NetwMultiplayer_method_scene_create>`\ (\ recipe\: :godot:`Variant`, isolation\: :ref:`SceneIsolation<enum_NetwScene_SceneIsolation>` = 0\ )                                                                                                                                                                                                                                                                                                                   |
-   +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Error <@GlobalScope#enum_@globalscope_Error>`               | :ref:`scene_declare<class_NetwMultiplayer_method_scene_declare>`\ (\ entity\: :godot:`RID`\ )                                                                                                                                                                                                                                                                                                                                                                                           |
-   +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`                                                       | :ref:`scene_destroy<class_NetwMultiplayer_method_scene_destroy>`\ (\ scene\: :godot:`RID`\ )                                                                                                                                                                                                                                                                                                                                                                                            |
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`RID`                                                        | :ref:`scene_find<class_NetwMultiplayer_method_scene_find>`\ (\ stem\: :godot:`StringName`\ )                                                                                                                                                                                                                                                                                                                                                                                            |
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -624,11 +616,7 @@ Methods
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | |void|                                                              | :ref:`scene_observe<class_NetwMultiplayer_method_scene_observe>`\ (\ scene\: :godot:`RID`, event\: :ref:`SceneEvent<enum_NetwScene_SceneEvent>`, callback\: :godot:`Callable`\ )                                                                                                                                                                                                                                                                                                        |
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`StringName`                                                 | :ref:`scene_packed_stem<class_NetwMultiplayer_method_scene_packed_stem>`\ (\ packed\: :godot:`PackedScene`\ ) |static|                                                                                                                                                                                                                                                                                                                                                                  |
-   +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`RID`                                                        | :ref:`scene_presented<class_NetwMultiplayer_method_scene_presented>`\ (\ ) |const|                                                                                                                                                                                                                                                                                                                                                                                                      |
-   +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwPromise<class_NetwPromise>`                               | :ref:`scene_reload_current<class_NetwMultiplayer_method_scene_reload_current>`\ (\ requester\: :godot:`Node`, scope\: :ref:`SceneChange<enum_NetwScene_SceneChange>` = 0\ )                                                                                                                                                                                                                                                                                                             |
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Error <@GlobalScope#enum_@globalscope_Error>`               | :ref:`scene_set_param<class_NetwMultiplayer_method_scene_set_param>`\ (\ scene\: :godot:`RID`, param\: :ref:`SceneParam<enum_NetwMultiplayer_SceneParam>`, value\: :godot:`Variant`\ )                                                                                                                                                                                                                                                                                                  |
    +---------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -3189,19 +3177,11 @@ A :ref:`NetwAction.TIMING_TICK_ALIGNED_STATE_READY<class_NetwAction_constant_TIM
 
 A scene was spawned, before any player enters it. It happens once per scene. The callback receives ``(scene: Node)``.
 
-.. _class_NetwMultiplayer_constant_SCENE_ACTIVATED:
-
-.. rst-class:: classref-enumeration-constant
-
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **SCENE_ACTIVATED** = ``9``
-
-A scene became the displayed scene. The callback receives ``(scene: Node)``.
-
 .. _class_NetwMultiplayer_constant_SCENE_DESPAWNED:
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **SCENE_DESPAWNED** = ``10``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **SCENE_DESPAWNED** = ``9``
 
 A scene was removed. The callback receives ``(scene: Node)``.
 
@@ -3209,7 +3189,7 @@ A scene was removed. The callback receives ``(scene: Node)``.
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **SCENE_ENTITY_MOVED** = ``11``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **SCENE_ENTITY_MOVED** = ``10``
 
 An entity finished moving from one scene to another, before the move's :ref:`NetwPromise<class_NetwPromise>` resolves. The callback receives ``(entity: NetwEntity, from: Node, to: Node)``.
 
@@ -3217,7 +3197,7 @@ An entity finished moving from one scene to another, before the move's :ref:`Net
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **SCENE_STARTUP_SPAWNED** = ``12``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **SCENE_STARTUP_SPAWNED** = ``11``
 
 Startup finished on the server, even if nothing was spawned. It happens once. The callback receives no arguments.
 
@@ -3225,7 +3205,7 @@ Startup finished on the server, even if nothing was spawned. It happens once. Th
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **CLOCK_BEFORE_TICK_LOOP** = ``13``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **CLOCK_BEFORE_TICK_LOOP** = ``12``
 
 A physics frame is about to run its ticks, even when there are none. :ref:`clock_step()<class_NetwMultiplayer_method_clock_step>` does not send it. The callback receives no arguments.
 
@@ -3233,7 +3213,7 @@ A physics frame is about to run its ticks, even when there are none. :ref:`clock
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **CLOCK_AFTER_TICK_LOOP** = ``14``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **CLOCK_AFTER_TICK_LOOP** = ``13``
 
 A physics frame has run its ticks, even when there were none. :ref:`clock_step()<class_NetwMultiplayer_method_clock_step>` does not send it. The callback receives no arguments.
 
@@ -3241,7 +3221,7 @@ A physics frame has run its ticks, even when there were none. :ref:`clock_step()
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **CLOCK_SYNCHRONIZED** = ``15``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **CLOCK_SYNCHRONIZED** = ``14``
 
 The clock synchronized with the server for the first time. It happens once. The callback receives no arguments.
 
@@ -3249,7 +3229,7 @@ The clock synchronized with the server for the first time. It happens once. The 
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **CLOCK_CONFIGURED** = ``16``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **CLOCK_CONFIGURED** = ``15``
 
 The clock settings were applied. Emitted once with no arguments. Check
 
@@ -3261,7 +3241,7 @@ and :ref:`NetwAction.request()<class_NetwAction_method_request>` are refused dur
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **CLOCK_TICKRATE_MISMATCH** = ``17``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **CLOCK_TICKRATE_MISMATCH** = ``16``
 
 A peer runs a tickrate that differs from this peer's, and :ref:`clock_set_mismatch_action()<class_NetwMultiplayer_method_clock_set_mismatch_action>` is :ref:`NetwClock.MISMATCH_ACTION_SIGNAL<class_NetwClock_constant_MISMATCH_ACTION_SIGNAL>`. The callback receives ``(peer_id: int, their_tickrate: int)``.
 
@@ -3269,7 +3249,7 @@ A peer runs a tickrate that differs from this peer's, and :ref:`clock_set_mismat
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **CLOCK_PONG_RECEIVED** = ``18``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **CLOCK_PONG_RECEIVED** = ``17``
 
 The server answered a :ref:`clock_send_ping()<class_NetwMultiplayer_method_clock_send_ping>` and the clock has adjusted.
 
@@ -3292,7 +3272,7 @@ The server answered a :ref:`clock_send_ping()<class_NetwMultiplayer_method_clock
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **CLOCK_STABILITY_CHANGED** = ``19``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **CLOCK_STABILITY_CHANGED** = ``18``
 
 :ref:`clock_is_stable()<class_NetwMultiplayer_method_clock_is_stable>` changed. The callback receives ``(is_stable: bool)``.
 
@@ -3300,7 +3280,7 @@ The server answered a :ref:`clock_send_ping()<class_NetwMultiplayer_method_clock
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **SESSION_STATE_CHANGED** = ``20``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **SESSION_STATE_CHANGED** = ``19``
 
 The notification form of :ref:`NetwSession.state_changed<class_NetwSession_signal_state_changed>`. The callback receives ``(old_state: int, new_state: int)``.
 
@@ -3308,7 +3288,7 @@ The notification form of :ref:`NetwSession.state_changed<class_NetwSession_signa
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **SESSION_JOIN_SUBMITTED** = ``21``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **SESSION_JOIN_SUBMITTED** = ``20``
 
 This peer sent its join request. It does not mean the join was accepted. The callback receives ``(username: StringName, args: Array)``.
 
@@ -3316,7 +3296,7 @@ This peer sent its join request. It does not mean the join was accepted. The cal
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **SESSION_ENTERED** = ``22``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **SESSION_ENTERED** = ``21``
 
 The session became :ref:`NetwSession.STATE_ONLINE<class_NetwSession_constant_STATE_ONLINE>`. The callback receives no arguments.
 
@@ -3324,7 +3304,7 @@ The session became :ref:`NetwSession.STATE_ONLINE<class_NetwSession_constant_STA
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **SESSION_JOIN_FAILED** = ``23``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **SESSION_JOIN_FAILED** = ``22``
 
 This peer's join was rejected. Games usually use :ref:`NetwSession.join_failed<class_NetwSession_signal_join_failed>`. The callback receives ``(error: int, reason: String)``.
 
@@ -3332,7 +3312,7 @@ This peer's join was rejected. Games usually use :ref:`NetwSession.join_failed<c
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **SESSION_ENDED** = ``24``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **SESSION_ENDED** = ``23``
 
 The session stopped being :ref:`NetwSession.STATE_ONLINE<class_NetwSession_constant_STATE_ONLINE>`. The callback receives no arguments.
 
@@ -3340,7 +3320,7 @@ The session stopped being :ref:`NetwSession.STATE_ONLINE<class_NetwSession_const
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **SESSION_RECLAIMED** = ``25``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **SESSION_RECLAIMED** = ``24``
 
 Right after :ref:`SESSION_ENDED<class_NetwMultiplayer_constant_SESSION_ENDED>`. Free nodes the session owned here. The callback receives no arguments.
 
@@ -3348,7 +3328,7 @@ Right after :ref:`SESSION_ENDED<class_NetwMultiplayer_constant_SESSION_ENDED>`. 
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **PEER_AUTHENTICATING** = ``26``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **PEER_AUTHENTICATING** = ``25``
 
 Same as :godot:`SceneMultiplayer.peer_authenticating <SceneMultiplayer#class_SceneMultiplayer_signal_peer_authenticating>`, from :ref:`inner<class_NetwMultiplayer_property_inner>`. The callback receives ``(peer_id: int)``.
 
@@ -3356,7 +3336,7 @@ Same as :godot:`SceneMultiplayer.peer_authenticating <SceneMultiplayer#class_Sce
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **PEER_AUTHENTICATION_FAILED** = ``27``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **PEER_AUTHENTICATION_FAILED** = ``26``
 
 Same as :godot:`SceneMultiplayer.peer_authentication_failed <SceneMultiplayer#class_SceneMultiplayer_signal_peer_authentication_failed>`, from :ref:`inner<class_NetwMultiplayer_property_inner>`. The callback receives ``(peer_id: int)``.
 
@@ -3364,7 +3344,7 @@ Same as :godot:`SceneMultiplayer.peer_authentication_failed <SceneMultiplayer#cl
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **SESSION_POLL_STARTED** = ``28``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **SESSION_POLL_STARTED** = ``27``
 
 A :godot:`MultiplayerAPI.poll() <MultiplayerAPI#class_MultiplayerAPI_method_poll>` is starting. ``delta`` is the time since the previous one. The callback receives ``(delta: float)``.
 
@@ -3372,7 +3352,7 @@ A :godot:`MultiplayerAPI.poll() <MultiplayerAPI#class_MultiplayerAPI_method_poll
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **TABLE_RECEIVED** = ``29``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **TABLE_RECEIVED** = ``28``
 
 A table changed, by :ref:`table_commit()<class_NetwMultiplayer_method_table_commit>` or by an update from the server. The callback receives ``(table: RID, tick: int)``.
 
@@ -3380,7 +3360,7 @@ A table changed, by :ref:`table_commit()<class_NetwMultiplayer_method_table_comm
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **DATABASE_FAILED** = ``30``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **DATABASE_FAILED** = ``29``
 
 An entity failed to load or save in a database. ``detail`` names the record and the reason. The callback receives ``(database: RID, error: int, detail: String)``.
 
@@ -3388,7 +3368,7 @@ An entity failed to load or save in a database. ``detail`` names the record and 
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **PERSIST_LOADED** = ``31``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **PERSIST_LOADED** = ``30``
 
 An entity finished loading. ``found`` is ``false`` when there was no save, and a failed load sends :ref:`DATABASE_FAILED<class_NetwMultiplayer_constant_DATABASE_FAILED>`. The callback receives ``(entity: RID, found: bool)``.
 
@@ -3396,7 +3376,7 @@ An entity finished loading. ``found`` is ``false`` when there was no save, and a
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **PERSIST_SAVED** = ``32``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **PERSIST_SAVED** = ``31``
 
 An entity finished saving, and a failed save sends :ref:`DATABASE_FAILED<class_NetwMultiplayer_constant_DATABASE_FAILED>`. The callback receives ``(entity: RID)``.
 
@@ -3404,7 +3384,7 @@ An entity finished saving, and a failed save sends :ref:`DATABASE_FAILED<class_N
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **PEER_PACKET** = ``33``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **PEER_PACKET** = ``32``
 
 Same as :godot:`SceneMultiplayer.peer_packet <SceneMultiplayer#class_SceneMultiplayer_signal_peer_packet>`, for packets sent with :ref:`send_bytes()<class_NetwMultiplayer_method_send_bytes>`. The callback receives ``(id: int, packet: PackedByteArray)``.
 
@@ -3412,7 +3392,7 @@ Same as :godot:`SceneMultiplayer.peer_packet <SceneMultiplayer#class_SceneMultip
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **PEER_KICKED** = ``34``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **PEER_KICKED** = ``33``
 
 The server kicked this peer, before the connection closes. The callback receives ``(reason: String)``.
 
@@ -3420,7 +3400,7 @@ The server kicked this peer, before the connection closes. The callback receives
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **SESSION_SERVER_DISCONNECTING** = ``35``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **SESSION_SERVER_DISCONNECTING** = ``34``
 
 The server called :ref:`session_notify_shutdown()<class_NetwMultiplayer_method_session_notify_shutdown>`. The callback receives ``(reason: String)``.
 
@@ -3428,7 +3408,7 @@ The server called :ref:`session_notify_shutdown()<class_NetwMultiplayer_method_s
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **PEER_KICK_REQUESTED** = ``36``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **PEER_KICK_REQUESTED** = ``35``
 
 On the server, a peer asked to kick another with :ref:`peer_request_kick()<class_NetwMultiplayer_method_peer_request_kick>`. The callback receives ``(requester_id: int, target_id: int, reason: String)``.
 
@@ -3436,7 +3416,7 @@ On the server, a peer asked to kick another with :ref:`peer_request_kick()<class
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **SESSION_DISCONNECT_REQUESTED** = ``37``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **SESSION_DISCONNECT_REQUESTED** = ``36``
 
 On the server, a peer asked to leave with :ref:`session_request_leave()<class_NetwMultiplayer_method_session_request_leave>`. The callback receives ``(peer_id: int, reason: String)``.
 
@@ -3444,7 +3424,7 @@ On the server, a peer asked to leave with :ref:`session_request_leave()<class_Ne
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **SESSION_TREE_PAUSED** = ``38``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **SESSION_TREE_PAUSED** = ``37``
 
 The session was paused with :ref:`NetwSession.pause()<class_NetwSession_method_pause>`. The callback receives ``(reason: String)``.
 
@@ -3452,7 +3432,7 @@ The session was paused with :ref:`NetwSession.pause()<class_NetwSession_method_p
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **SESSION_TREE_UNPAUSED** = ``39``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **SESSION_TREE_UNPAUSED** = ``38``
 
 The session was unpaused, or it ended while paused. The callback receives no arguments.
 
@@ -3460,7 +3440,7 @@ The session was unpaused, or it ended while paused. The callback receives no arg
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **SERVICE_REGISTERED** = ``40``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **SERVICE_REGISTERED** = ``39``
 
 A service was registered. The callback receives ``(service: Object)``.
 
@@ -3468,7 +3448,7 @@ A service was registered. The callback receives ``(service: Object)``.
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **SERVICE_UNREGISTERED** = ``41``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **SERVICE_UNREGISTERED** = ``40``
 
 A service was unregistered. The callback receives ``(service: Object)``.
 
@@ -3476,7 +3456,7 @@ A service was unregistered. The callback receives ``(service: Object)``.
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **ENTITY_LIVE** = ``42``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **ENTITY_LIVE** = ``41``
 
 An entity spawned on this peer at ``route``. The callback receives ``(route: int, entity: NetwEntity)``.
 
@@ -3484,7 +3464,7 @@ An entity spawned on this peer at ``route``. The callback receives ``(route: int
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **ENTITY_LINGERING** = ``43``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **ENTITY_LINGERING** = ``42``
 
 An entity started despawning and entered :ref:`ENTITY_STATE_LINGERING<class_NetwMultiplayer_constant_ENTITY_STATE_LINGERING>`. The callback receives ``(route: int, entity: NetwEntity)``.
 
@@ -3492,7 +3472,7 @@ An entity started despawning and entered :ref:`ENTITY_STATE_LINGERING<class_Netw
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **ENTITY_DEAD** = ``44``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **ENTITY_DEAD** = ``43``
 
 The entity at ``route`` was despawned, after :ref:`NetwEntity.despawned<class_NetwEntity_signal_despawned>`. It happens once, and a peer that only stops seeing the entity gets :ref:`ENTITY_HIDDEN<class_NetwMultiplayer_constant_ENTITY_HIDDEN>`. The callback receives ``(route: int)``.
 
@@ -3500,7 +3480,7 @@ The entity at ``route`` was despawned, after :ref:`NetwEntity.despawned<class_Ne
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **ENTITY_HIDDEN** = ``45``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **ENTITY_HIDDEN** = ``44``
 
 This peer stopped seeing an entity that still exists on the server, after :ref:`NetwEntity.hidden<class_NetwEntity_signal_hidden>`. If it becomes visible again, the same route gets a new node. The callback receives ``(route: int, entity: NetwEntity)``.
 
@@ -3508,7 +3488,7 @@ This peer stopped seeing an entity that still exists on the server, after :ref:`
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **PLAYER_JOINED** = ``46``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **PLAYER_JOINED** = ``45``
 
 A player's join was accepted, including this peer's own. The callback receives ``(player: NetwPlayer)``.
 
@@ -3516,7 +3496,7 @@ A player's join was accepted, including this peer's own. The callback receives `
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **PLAYER_LOCAL_JOINED** = ``47``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **PLAYER_LOCAL_JOINED** = ``46``
 
 This peer's own join was accepted, before :ref:`PLAYER_JOINED<class_NetwMultiplayer_constant_PLAYER_JOINED>`. The callback receives ``(player: NetwPlayer)``.
 
@@ -3524,7 +3504,7 @@ This peer's own join was accepted, before :ref:`PLAYER_JOINED<class_NetwMultipla
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **PLAYER_LEFT** = ``48``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **PLAYER_LEFT** = ``47``
 
 A player left or was kicked. :ref:`NetwPlayer.is_active<class_NetwPlayer_property_is_active>` is already ``false``. The callback receives ``(player: NetwPlayer)``.
 
@@ -3532,7 +3512,7 @@ A player left or was kicked. :ref:`NetwPlayer.is_active<class_NetwPlayer_propert
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **SCENE_LIVE** = ``49``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **SCENE_LIVE** = ``48``
 
 A scene is ready on this peer, and every node in it is in the tree and ready. The callback receives ``(scene: NetwScene)``.
 
@@ -3540,7 +3520,7 @@ A scene is ready on this peer, and every node in it is in the tree and ready. Th
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **CONNECTION_PROGRESSED** = ``50``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **CONNECTION_PROGRESSED** = ``49``
 
 The notification form of :ref:`NetwConnection.progressed<class_NetwConnection_signal_progressed>`.
 
@@ -3548,7 +3528,7 @@ The notification form of :ref:`NetwConnection.progressed<class_NetwConnection_si
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **CONNECTION_FAILED** = ``51``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **CONNECTION_FAILED** = ``50``
 
 The notification form of :ref:`NetwConnection.failed<class_NetwConnection_signal_failed>`.
 
@@ -3556,7 +3536,7 @@ The notification form of :ref:`NetwConnection.failed<class_NetwConnection_signal
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **CONNECTION_JOIN_ADDRESS_CHANGED** = ``52``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **CONNECTION_JOIN_ADDRESS_CHANGED** = ``51``
 
 The notification form of :ref:`NetwConnection.join_address_changed<class_NetwConnection_signal_join_address_changed>`.
 
@@ -3564,7 +3544,7 @@ The notification form of :ref:`NetwConnection.join_address_changed<class_NetwCon
 
 .. rst-class:: classref-enumeration-constant
 
-:ref:`Notification<enum_NetwMultiplayer_Notification>` **CONNECTION_INVITED** = ``53``
+:ref:`Notification<enum_NetwMultiplayer_Notification>` **CONNECTION_INVITED** = ``52``
 
 The notification form of :ref:`NetwConnection.invited<class_NetwConnection_signal_invited>`. The callback receives ``(endpoint: RID)``.
 
@@ -7055,48 +7035,6 @@ Replies ``value`` to request ``txn`` from ``peer``.
 
 ----
 
-.. _class_NetwMultiplayer_method_scene_change_to_file:
-
-.. rst-class:: classref-method
-
-:ref:`NetwPromise<class_NetwPromise>` **scene_change_to_file**\ (\ requester\: :godot:`Node`, path\: :godot:`String`, scope\: :ref:`SceneChange<enum_NetwScene_SceneChange>` = 0\ ) :ref:`🔗<class_NetwMultiplayer_method_scene_change_to_file>`
-
-See :ref:`Netw.change_scene_to_file()<class_Netw_method_change_scene_to_file>`. ``requester`` selects the player for :ref:`NetwScene.SCENE_CHANGE_PLAYER<class_NetwScene_constant_SCENE_CHANGE_PLAYER>` and the :ref:`NetwScene<class_NetwScene>` for :ref:`NetwScene.SCENE_CHANGE_SCENE<class_NetwScene_constant_SCENE_CHANGE_SCENE>`.
-
-\ **Server Only.**
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwMultiplayer_method_scene_change_to_packed:
-
-.. rst-class:: classref-method
-
-:ref:`NetwPromise<class_NetwPromise>` **scene_change_to_packed**\ (\ requester\: :godot:`Node`, packed\: :godot:`PackedScene`, scope\: :ref:`SceneChange<enum_NetwScene_SceneChange>` = 0\ ) :ref:`🔗<class_NetwMultiplayer_method_scene_change_to_packed>`
-
-See :ref:`Netw.change_scene_to_packed()<class_Netw_method_change_scene_to_packed>`.
-
-\ **Server Only.**
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwMultiplayer_method_scene_create:
-
-.. rst-class:: classref-method
-
-:godot:`RID` **scene_create**\ (\ recipe\: :godot:`Variant`, isolation\: :ref:`SceneIsolation<enum_NetwScene_SceneIsolation>` = 0\ ) :ref:`🔗<class_NetwMultiplayer_method_scene_create>`
-
-Spawns a multiplayer scene from the scene file path ``recipe`` and returns it, or an invalid :godot:`RID` on failure. ``null`` creates an empty scene. ``isolation`` decides whether it has its own physics and rendering world.
-
-\ **Server Only.**
-
-.. rst-class:: classref-item-separator
-
-----
-
 .. _class_NetwMultiplayer_method_scene_declare:
 
 .. rst-class:: classref-method
@@ -7118,18 +7056,6 @@ Makes ``entity`` a multiplayer scene that replicates its nodes to the players in
     ┠╴ERR_UNAUTHORIZED    called on a client without the entity's route
     ┠╴ERR_DOES_NOT_EXIST  the entity does not exist
     ┖╴ERR_UNCONFIGURED    the entity already has a node
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwMultiplayer_method_scene_destroy:
-
-.. rst-class:: classref-method
-
-:godot:`bool` **scene_destroy**\ (\ scene\: :godot:`RID`\ ) :ref:`🔗<class_NetwMultiplayer_method_scene_destroy>`
-
-Frees the node of ``scene`` immediately. Returns ``false`` when it has none.
 
 .. rst-class:: classref-item-separator
 
@@ -7291,18 +7217,6 @@ Calls ``callback`` when ``event`` happens on ``scene``. Adding the same callback
 
 ----
 
-.. _class_NetwMultiplayer_method_scene_packed_stem:
-
-.. rst-class:: classref-method
-
-:godot:`StringName` **scene_packed_stem**\ (\ packed\: :godot:`PackedScene`\ ) |static| :ref:`🔗<class_NetwMultiplayer_method_scene_packed_stem>`
-
-Returns the root node name of ``packed``, or empty.
-
-.. rst-class:: classref-item-separator
-
-----
-
 .. _class_NetwMultiplayer_method_scene_presented:
 
 .. rst-class:: classref-method
@@ -7310,20 +7224,6 @@ Returns the root node name of ``packed``, or empty.
 :godot:`RID` **scene_presented**\ (\ ) |const| :ref:`🔗<class_NetwMultiplayer_method_scene_presented>`
 
 Returns the scene this peer displays, or an invalid :godot:`RID`. See :ref:`NetwPlayer.scene<class_NetwPlayer_property_scene>`.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwMultiplayer_method_scene_reload_current:
-
-.. rst-class:: classref-method
-
-:ref:`NetwPromise<class_NetwPromise>` **scene_reload_current**\ (\ requester\: :godot:`Node`, scope\: :ref:`SceneChange<enum_NetwScene_SceneChange>` = 0\ ) :ref:`🔗<class_NetwMultiplayer_method_scene_reload_current>`
-
-See :ref:`Netw.reload_current_scene()<class_Netw_method_reload_current_scene>`.
-
-\ **Server Only.**
 
 .. rst-class:: classref-item-separator
 

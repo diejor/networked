@@ -1,7 +1,5 @@
 #include "netw/scene_core.hpp"
 
-#include "godot/resource.hpp"
-#include "netw/api/scene.hpp"
 #include "netw/colors.hpp"
 #include "netw/log.hpp"
 #include "netw/profile.hpp"
@@ -181,48 +179,6 @@ void NetwSceneCore::scene_exit(const RID &scene) {
     promote_survivors();
 }
 
-void NetwSceneCore::scene_retire(const RID &scene, int drain_pumps) {
-    if (!scene.is_valid()) {
-        return;
-    }
-    scene_exit(scene);
-    for (uint32_t index = 0; index < retiring.size(); ++index) {
-        if (retiring[index].scene == scene) {
-            retiring[index].pumps_left = drain_pumps > 0 ? drain_pumps : 0;
-            return;
-        }
-    }
-    RetiringRow row;
-    row.scene = scene;
-    row.pumps_left = drain_pumps > 0 ? drain_pumps : 0;
-    retiring.push_back(row);
-}
-
-Array NetwSceneCore::pump_retired() {
-    Array closed;
-    LocalVector<RetiringRow> kept;
-    for (uint32_t index = 0; index < retiring.size(); ++index) {
-        const int32_t left = retiring[index].pumps_left - 1;
-        if (left > 0) {
-            RetiringRow row = retiring[index];
-            row.pumps_left = left;
-            kept.push_back(row);
-        } else {
-            closed.push_back(retiring[index].scene);
-        }
-    }
-    retiring = kept;
-    return closed;
-}
-
-Array NetwSceneCore::retiring_scenes() const {
-    Array out;
-    for (uint32_t index = 0; index < retiring.size(); ++index) {
-        out.push_back(retiring[index].scene);
-    }
-    return out;
-}
-
 bool NetwSceneCore::is_live(const RID &scene) const {
     for (uint32_t index = 0; index < live.size(); ++index) {
         if (live[index].scene == scene) {
@@ -268,168 +224,6 @@ int NetwSceneCore::live_count() const {
     return int(live.size());
 }
 
-bool NetwSceneCore::would_share_one_world() const {
-    if (live.is_empty()) {
-        return false;
-    }
-    for (uint32_t index = 0; index < live.size(); ++index) {
-        if (live[index].owns_its_world) {
-            return false;
-        }
-    }
-    return true;
-}
-
-bool NetwSceneCore::transition_open() {
-    if (transitioning) {
-        return false;
-    }
-    transitioning = true;
-    return true;
-}
-
-void NetwSceneCore::transition_arm(
-    const Variant &p_target,
-    const Array &p_sources,
-    const Ref<NetwPromise> &p_promise,
-    int p_scope,
-    const PackedInt64Array &p_arrivals
-) {
-    transition = Transition();
-    transition.target = p_target;
-    transition.sources = p_sources;
-    transition.promise = p_promise;
-    transition.scope = p_scope;
-    transition.arrivals = p_arrivals;
-}
-
-Variant NetwSceneCore::transition_target() const {
-    return transition.target;
-}
-
-Array NetwSceneCore::transition_sources() const {
-    return transition.sources;
-}
-
-int NetwSceneCore::transition_scope() const {
-    return transition.scope;
-}
-
-PackedInt64Array NetwSceneCore::transition_arrivals() const {
-    return transition.arrivals;
-}
-
-void NetwSceneCore::transition_fail(int p_code) {
-    const Ref<NetwPromise> promise = transition.promise;
-    transition_close();
-    if (promise.is_valid()) {
-        promise->reject(static_cast<Error>(p_code), String());
-    }
-}
-
-void NetwSceneCore::transition_land(const Ref<NetwScene> &p_destination) {
-    const Ref<NetwPromise> promise = transition.promise;
-    transition_close();
-    if (promise.is_valid()) {
-        promise->resolve(p_destination);
-    }
-}
-
-void NetwSceneCore::transition_close() {
-    transitioning = false;
-    transition = Transition();
-}
-
-void NetwSceneCore::change_wait_for_load(const LoadingChange &p_change) {
-    loading = p_change;
-}
-
-NetwSceneCore::LoadingChange NetwSceneCore::change_take_loaded() {
-    const LoadingChange taken = loading;
-    loading = LoadingChange();
-    return taken;
-}
-
-String NetwSceneCore::verify_scene_path(const String &path) {
-    const bool bounded = !path.is_empty()
-        && path.length() <= MAX_SCENE_PATH_LENGTH && path.begins_with("res://");
-    const String extension = bounded ? path.get_extension() : String();
-    if (!bounded || (extension != "tscn" && extension != "scn")) {
-        NETW_TRACE(
-            sys::SCENE,
-            "Refused scene path '%s', which is not a res:// scene.",
-            path
-        );
-        return String();
-    }
-    return path;
-}
-
-Ref<PackedScene> NetwSceneCore::packed_at(const String &reference) {
-    if (reference.is_empty()) {
-        return Ref<PackedScene>();
-    }
-    const Ref<PackedScene> packed
-        = netw::gd::load_scene(netw::gd::ensure_path(reference));
-    if (packed.is_null()) {
-        NETW_TRACE(sys::SCENE, "No packed scene loads from '%s'.", reference);
-    }
-    return packed;
-}
-
-Ref<Script> NetwSceneCore::packed_root_script(const Ref<PackedScene> &packed) {
-    if (packed.is_null()) {
-        return Ref<Script>();
-    }
-    const Ref<SceneState> state = packed->get_state();
-    if (state.is_null() || state->get_node_count() == 0) {
-        return Ref<Script>();
-    }
-    const int total = state->get_node_property_count(0);
-    for (int index = 0; index < total; index++) {
-        if (state->get_node_property_name(0, index) != StringName("script")) {
-            continue;
-        }
-        const Variant value = state->get_node_property_value(0, index);
-        Object *object = value;
-        return Ref<Script>(Object::cast_to<Script>(object));
-    }
-    return Ref<Script>();
-}
-
-Ref<Script> NetwSceneCore::scene_root_script_at(const String &reference) {
-    return packed_root_script(packed_at(reference));
-}
-
-NetwSceneCore::Destination NetwSceneCore::destination_kind(
-    const Variant &destination
-) {
-    switch (destination.get_type()) {
-        case Variant::STRING:
-        case Variant::STRING_NAME:
-            return DESTINATION_NAME;
-        case Variant::OBJECT:
-            break;
-        default:
-            return DESTINATION_NONE;
-    }
-    Object *object = destination;
-    if (object == nullptr) {
-        return DESTINATION_NONE;
-    }
-    PackedScene *packed = Object::cast_to<PackedScene>(object);
-    if (packed != nullptr) {
-        return packed->get_path().is_empty() ? DESTINATION_PACKED_UNPATHED
-                                             : DESTINATION_PACKED;
-    }
-    return Object::cast_to<Node>(object) != nullptr ? DESTINATION_NODE
-                                                    : DESTINATION_NONE;
-}
-
-bool NetwSceneCore::scope_names_an_operation(int scope) {
-    return scope >= SCOPE_SESSION && scope < SCOPE_MAX;
-}
-
 NetwSceneCore::Move NetwSceneCore::move_verdict(
     bool p_mover_live,
     bool p_target_live,
@@ -451,9 +245,7 @@ bool NetwSceneCore::isolation_owns_world(int isolation) {
 void NetwSceneCore::clear() {
     rows.clear();
     live.clear();
-    retiring.clear();
     named.clear();
-    transition = Transition();
 }
 
 bool NetwSceneCore::admission_park(const RID &p_scene, int64_t p_peer) {
@@ -518,33 +310,6 @@ bool NetwSceneCore::admission_is_parked(
         return false;
     }
     return false;
-}
-
-bool NetwSceneCore::spawn_warns_shared_world() const {
-    return !replacing && would_share_one_world();
-}
-
-void NetwSceneCore::spawn_note(const StringName &p_stem) const {
-    if (!spawn_warns_shared_world()) {
-        return;
-    }
-    const String subject = String(p_stem).is_empty()
-        ? String("Another scene")
-        : vformat("Scene '%s'", String(p_stem));
-    NETW_WARN(
-        sys::SCENE,
-        "%s now shares one physics space with the scene already active. Call "
-        "NetwSceneConfig.isolated on them if they should not touch.",
-        subject
-    );
-}
-
-bool NetwSceneCore::is_replacing() const {
-    return replacing;
-}
-
-void NetwSceneCore::set_replacing(bool p_value) {
-    replacing = p_value;
 }
 
 } // namespace netw

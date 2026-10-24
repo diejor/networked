@@ -14,10 +14,10 @@ namespace Networked;
 /// <see cref="NetwEntity.Scene"/>. An entity declared with
 /// <see cref="Netw.ConfigureScene"/> resolves to itself, any other entity to
 /// its closest scene ancestor. Each scene has one handle, so <c>==</c> compares
-/// scenes. A scene replicates to a player while an entity spawned for them is
-/// in it, or while the player watches it with <see cref="NetwScene.Watch"/>.
-/// <see cref="NetwScene.Unwatch"/> does not remove a player whose entity is
-/// still in the scene.
+/// scenes. A scene replicates to a player while one of their
+/// <see cref="NetwPlayer.Entities"/> is in it, or while the player watches it
+/// with <see cref="NetwScene.Watch"/>. <see cref="NetwScene.Unwatch"/> does not
+/// remove a player whose entity is still in the scene.
 /// <code>
 /// lobby.watch(player)
 /// arena.add_child(Netw.spawn_player(player, make_player))
@@ -56,8 +56,8 @@ public sealed class NetwScene : NetwRefCounted
         /// </summary>
         Viewer = 0,
         /// <summary>
-        /// An entity spawned for a player entered or left. The callback
-        /// receives <c>(present, entity)</c>.
+        /// An entity in <see cref="NetwScene.PlayerEntities"/> entered or left.
+        /// The callback receives <c>(present, entity)</c>.
         /// </summary>
         PlayerEntity = 1,
         /// <summary>
@@ -65,25 +65,6 @@ public sealed class NetwScene : NetwRefCounted
         /// receives <c>(present, entity)</c>.
         /// </summary>
         Entity = 2,
-    }
-
-    public enum SceneChange : long
-    {
-        /// <summary>
-        /// Every player moves to the new scene, and every other scene is
-        /// removed with its entities.
-        /// </summary>
-        Session = 0,
-        /// <summary>
-        /// Only the selected <see cref="NetwPlayer"/> moves. Their old entities
-        /// are despawned, and no scene is removed.
-        /// </summary>
-        Player = 1,
-        /// <summary>
-        /// Everyone in the selected <see cref="NetwScene"/> moves, and it is
-        /// removed with its entities.
-        /// </summary>
-        Scene = 2,
     }
 
     public enum SceneIsolation : long
@@ -135,13 +116,7 @@ public sealed class NetwScene : NetwRefCounted
 
     /// <summary>
     /// Emitted when this scene starts replicating to <c>player</c>.
-    /// <see cref="NetwScene.Viewers"/> already includes them. On the server,
-    /// spawn arriving players here.
-    /// <code>
-    /// func place(player: NetwPlayer, level: NetwScene) -&gt; void:
-    ///     if player.entities.is_empty():
-    ///         level.root.add_child(Netw.spawn_player(player, make_player))
-    /// </code>
+    /// <see cref="NetwScene.Viewers"/> already includes them.
     /// </summary>
     public event Action<NetwPlayer> ViewerEntered
     {
@@ -253,7 +228,7 @@ public sealed class NetwScene : NetwRefCounted
         NetwApi.MethodBind("NetwScene", "get_label", 2002593661UL);
 
     /// <summary>
-    /// The name <see cref="Netw.Scene"/> finds this scene by. See
+    /// The name <see cref="NetwSession.FindScene"/> finds this scene by. See
     /// <see cref="NetwSceneConfig.Labeled"/>.
     /// </summary>
     public StringName Label
@@ -467,7 +442,8 @@ public sealed class NetwScene : NetwRefCounted
 
     /// <summary>
     /// Undoes <see cref="NetwScene.Watch"/>. The scene keeps replicating to
-    /// <paramref name="player"/> while an entity spawned for them is in it.
+    /// <paramref name="player"/> while one of their
+    /// <see cref="NetwPlayer.Entities"/> is in it.
     /// <code>
     /// Error
     /// ┠╴OK                      the watch is withdrawn
@@ -495,8 +471,8 @@ public sealed class NetwScene : NetwRefCounted
 
     /// <summary>
     /// Whether this scene replicates to <paramref name="player"/>, either
-    /// because an entity spawned for them is in it or because of
-    /// <see cref="NetwScene.Watch"/>.
+    /// because one of their <see cref="NetwPlayer.Entities"/> is in it or
+    /// because of <see cref="NetwScene.Watch"/>.
     /// </summary>
     public bool IsWatching(NetwPlayer player)
     {

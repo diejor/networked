@@ -244,28 +244,6 @@ Ref<NetwPromise> NetwSession::save_entities() {
                           : NetwPromise::resolved(ERR_UNCONFIGURED);
 }
 
-Ref<NetwScene> NetwSession::create_scene(
-    const Ref<PackedScene> &p_scene,
-    NetwScene::SceneIsolation p_isolation
-) {
-    NetwMultiplayer *api = session();
-    if (api == nullptr) {
-        return Ref<NetwScene>();
-    }
-    Variant recipe;
-    if (p_scene.is_valid()) {
-        NETW_ERR_COND_V(
-            p_scene->get_path().is_empty(),
-            Ref<NetwScene>(),
-            sys::SCENE,
-            "NetwSession.create_scene needs a scene saved to a file. "
-            "Pass a PackedScene from load() or preload()."
-        );
-        recipe = p_scene->get_path();
-    }
-    return api->scene_handle_of(api->scene_create(recipe, p_isolation));
-}
-
 Ref<NetwScene> NetwSession::find_scene(const StringName &p_label) {
     NetwMultiplayer *api = session();
     if (api == nullptr) {
@@ -519,11 +497,6 @@ void NetwSession::_bind_methods() {
         D_METHOD("kick", "player", "reason"),
         &NetwSession::kick,
         DEFVAL(String())
-    );
-    ClassDB::bind_method(
-        D_METHOD("create_scene", "scene", "isolation"),
-        &NetwSession::create_scene,
-        DEFVAL(int64_t(NetwScene::SCENE_ISOLATION_NONE))
     );
     ClassDB::bind_method(
         D_METHOD("find_scene", "label"),

@@ -1183,8 +1183,8 @@ void Pipeline::publish_placed(Node *p_node, int64_t p_route) {
     if (owned) {
         NETW_ERROR(
             sys::SCENE,
-            "'%s' is isolated and was placed in the editor. Open it with "
-            "Netw.change_scene_to_file, or turn isolation off.",
+            "'%s' is isolated and was placed in the editor. Spawn it with "
+            "Netw.spawn, or turn isolation off.",
             p_node->get_name()
         );
         return;
@@ -1239,6 +1239,14 @@ void Pipeline::settle_death(int64_t p_route) {
     despawn_tracked_route(p_route);
 }
 
+void Pipeline::despawn_now(int64_t p_route, Node *p_within) {
+    if (!authors(lifecycle::Kind::DESPAWN, is_server_authority())
+        || !spawn_book.has_spawned(p_route)) {
+        return;
+    }
+    despawn_tracked_route(p_route, p_within);
+}
+
 bool Pipeline::holds_received_route(int64_t p_route) const {
     return spawn_book.is_recv(p_route);
 }
@@ -1257,7 +1265,7 @@ void Pipeline::settle_absence(int64_t p_route) {
     }
 }
 
-void Pipeline::despawn_tracked_route(int64_t p_route) {
+void Pipeline::despawn_tracked_route(int64_t p_route, Node *p_within) {
     NETW_STAGE(SPAWN, "Spawn despawn route", colors::LIVENESS);
     NETW_ZONE_VALUE(p_route);
     NetwMultiplayer *plane = core();
@@ -1274,7 +1282,8 @@ void Pipeline::despawn_tracked_route(int64_t p_route) {
             p_route,
             live ? connected_peers() : PackedInt32Array(),
             channel_despawn,
-            undeclare
+            undeclare,
+            p_within
         )
         && live) {
         schedule_carrier_flush();
@@ -2336,15 +2345,6 @@ SpawnBuild::Outcome Pipeline::build_spawn(
             return unresolved_args(r_built);
         }
         r_built.args = resolved;
-        if (id == NetwMultiplayer::scene_constructor_id()
-            && !r_built.args.is_empty()
-            && r_built.args[0].get_type() == Variant::STRING) {
-            const SpawnBuild::Outcome loaded
-                = wait_for_scene(r_built.args[0], r_built);
-            if (loaded != SpawnBuild::BUILT) {
-                return loaded;
-            }
-        }
         fn_waited = false;
         node = run_construct_stage(
             callable_mp(plane, &NetwMultiplayer::spawn_build_fn)
@@ -2452,6 +2452,10 @@ SpawnBuild::Outcome Pipeline::build_spawn(
                     route
                 );
             }
+            plane->spawn_report_failed(
+                route,
+                fn_waited ? String("awaited") : String("returned no Node")
+            );
             drops_spawn_unresolved += 1;
             return SpawnBuild::DROPPED;
         }
@@ -3294,6 +3298,9 @@ bool Pipeline::build_returned(
         method,
         p_route
     );
+    if (NetwMultiplayer *plane = core()) {
+        plane->spawn_report_failed(p_route, String("returned no Node"));
+    }
     return true;
 }
 
@@ -3316,6 +3323,12 @@ void Pipeline::build_failed(
         p_detail,
         p_route
     );
+    if (NetwMultiplayer *plane = core()) {
+        plane->spawn_report_failed(
+            p_route,
+            vformat("failed with '%s'", p_detail)
+        );
+    }
 }
 
 void Pipeline::drop_build(int64_t p_route) {

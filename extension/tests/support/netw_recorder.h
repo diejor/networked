@@ -23,7 +23,6 @@ inline int notification_named(const godot::StringName &p_name) {
         "predict_owner_divergence",
         "lagcomp_action_gate_fallback",
         "scene_spawned",
-        "scene_activated",
         "scene_despawned",
         "scene_entity_moved",
         "scene_startup_spawned",

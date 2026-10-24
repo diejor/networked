@@ -159,6 +159,16 @@ struct PlayerLeft {
     );
 };
 
+struct SpawnFailed {
+    int64_t route = 0;
+    godot::String reason;
+
+    static constexpr auto wire = netw::wire::describe(
+        netw::wire::field<&SpawnFailed::route>("route", netw::wire::varuint(5)),
+        netw::wire::field<&SpawnFailed::reason>("reason", netw::wire::string())
+    );
+};
+
 struct SceneReleased {
     int64_t route = 0;
 

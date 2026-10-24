@@ -9,6 +9,7 @@
 		func _init() -&gt; void:
 		    Netw.configure_scene(self).labeled(&amp;"Level1").isolated()
 		[/codeblock]
+		A scene placed in the main scene must be in the tree before the server starts hosting, and must not be [method isolated].
 		Each [NetwEntity] below the root reaches it through [member NetwEntity.scene].
 	</description>
 	<tutorials>

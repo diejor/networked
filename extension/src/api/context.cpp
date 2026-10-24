@@ -934,7 +934,8 @@ Ref<NetwPromise> Netw::spawn_async(const Callable &p_fn, const Array &p_args) {
 }
 
 Error Netw::despawn(Node *p_node, const Ref<NetwDespawnOpts> &p_opts) {
-    const Ref<NetwEntity> entity = NetwEntity::of(p_node);
+    const Ref<NetwEntity> entity
+        = NetwEntity::of(NetwMultiplayer::scene_inner_of(p_node));
     if (entity.is_null()) {
         NETW_ERROR(
             sys::SPAWN,
@@ -957,7 +958,8 @@ Error Netw::despawn(Node *p_node, const Ref<NetwDespawnOpts> &p_opts) {
 }
 
 Ref<NetwPromise> Netw::reparent(Node *p_node, Node *p_new_parent) {
-    const Ref<NetwEntity> entity = NetwEntity::of(p_node);
+    const Ref<NetwEntity> entity
+        = NetwEntity::of(NetwMultiplayer::scene_inner_of(p_node));
     if (entity.is_null()) {
         NETW_ERROR(
             sys::SCENE,
@@ -1060,58 +1062,6 @@ Variant Netw::rewind(
         return Variant();
     }
     return api->lagcomp_rewind_of(p_entities, p_tick, p_body);
-}
-
-Ref<NetwPromise> Netw::change_scene_to_file(
-    Node *p_node,
-    const String &p_path,
-    SceneChange p_scope
-) {
-    NetwMultiplayer *api = NetwMultiplayer::of(p_node);
-    if (api == nullptr) {
-        return NetwPromise::rejected(
-            ERR_UNAVAILABLE,
-            "a scene change requires an active session"
-        );
-    }
-    return api->scene_change_to_file(
-        p_node,
-        p_path,
-        NetwMultiplayer::SceneChange(p_scope)
-    );
-}
-
-Ref<NetwPromise> Netw::change_scene_to_packed(
-    Node *p_node,
-    const Ref<PackedScene> &p_packed,
-    SceneChange p_scope
-) {
-    NetwMultiplayer *api = NetwMultiplayer::of(p_node);
-    if (api == nullptr) {
-        return NetwPromise::rejected(
-            ERR_UNAVAILABLE,
-            "a scene change requires an active session"
-        );
-    }
-    return api->scene_change_to_packed(
-        p_node,
-        p_packed,
-        NetwMultiplayer::SceneChange(p_scope)
-    );
-}
-
-Ref<NetwPromise> Netw::reload_current_scene(Node *p_node, SceneChange p_scope) {
-    NetwMultiplayer *api = NetwMultiplayer::of(p_node);
-    if (api == nullptr) {
-        return NetwPromise::rejected(
-            ERR_UNAVAILABLE,
-            "a scene change requires an active session"
-        );
-    }
-    return api->scene_reload_current(
-        p_node,
-        NetwMultiplayer::SceneChange(p_scope)
-    );
 }
 
 Ref<NetwSceneConfig> Netw::configure_scene(Node *p_node) {
@@ -1340,24 +1290,6 @@ void Netw::_bind_methods() {
         &Netw::rewind
     );
 
-    ClassDB::bind_static_method(
-        "Netw",
-        D_METHOD("change_scene_to_file", "node", "path", "scope"),
-        &Netw::change_scene_to_file,
-        DEFVAL(enums::NetwScene::SCENE_CHANGE_SESSION)
-    );
-    ClassDB::bind_static_method(
-        "Netw",
-        D_METHOD("change_scene_to_packed", "node", "packed", "scope"),
-        &Netw::change_scene_to_packed,
-        DEFVAL(enums::NetwScene::SCENE_CHANGE_SESSION)
-    );
-    ClassDB::bind_static_method(
-        "Netw",
-        D_METHOD("reload_current_scene", "node", "scope"),
-        &Netw::reload_current_scene,
-        DEFVAL(enums::NetwScene::SCENE_CHANGE_SESSION)
-    );
     ClassDB::bind_static_method(
         "Netw",
         D_METHOD("configure_scene", "node"),

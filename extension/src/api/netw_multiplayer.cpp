@@ -191,6 +191,7 @@ NetwMultiplayer::NetwMultiplayer() {
     clock_channels.ping = declared_channel("CLOCK_PING");
     clock_channels.pong = declared_channel("CLOCK_PONG");
     scene_released_channel = declared_channel("SESSION_SCENE_RELEASED");
+    spawn_failed_channel = declared_channel("SESSION_SPAWN_FAILED");
     scene_viewers_channel = declared_channel("SESSION_SCENE_VIEWERS");
     session_join_channel = declared_channel("SESSION_JOIN");
     session_accept_channel = declared_channel("SESSION_ACCEPT");
@@ -204,6 +205,10 @@ NetwMultiplayer::NetwMultiplayer() {
     channel_book.register_protocol(
         scene_released_channel,
         callable_mp(this, &NetwMultiplayer::scene_receive_released_frame)
+    );
+    channel_book.register_protocol(
+        spawn_failed_channel,
+        callable_mp(this, &NetwMultiplayer::spawn_receive_failed_frame)
     );
     channel_book.register_protocol(
         scene_viewers_channel,
@@ -875,7 +880,7 @@ void NetwMultiplayer::membership_place_entity(const Ref<NetwEntity> &p_entity) {
     }
     const int64_t entity = membership_entity_id(handle);
     RID scene = scene_of(handle);
-    if (scene == handle) {
+    if (scene == handle || scene_despawned_roots.find(scene) >= 0) {
         scene = RID();
     }
     if (membership_destination_foreign(owner)) {
@@ -989,7 +994,10 @@ RID NetwMultiplayer::membership_residency_of(int64_t p_entity) const {
         return RID();
     }
     const RID scene = scene_of(handle);
-    return scene == handle ? RID() : scene;
+    if (scene == handle || scene_despawned_roots.find(scene) >= 0) {
+        return RID();
+    }
+    return scene;
 }
 
 void NetwMultiplayer::membership_note_divergence(
@@ -3362,7 +3370,7 @@ Error NetwMultiplayer::session_flush_tick(int64_t p_tick) {
     const Error err = embed_poll_transport();
     settle_advance();
     session_flush_deferred();
-    scene_pump_retired();
+    scene_presentation_warn_split();
     return err;
 }
 
@@ -3469,14 +3477,13 @@ Error NetwMultiplayer::NETW_API_VIRTUAL(poll)() {
         spawning->retry_build_parked();
         spawning->sweep_pending_spawns();
     }
-    scene_poll_loading_change();
     const bool clocked = clock_engine().get_configured();
     if (!clocked) {
         settle_advance();
     }
     session_flush_deferred();
     if (!clocked) {
-        scene_pump_retired();
+        scene_presentation_warn_split();
     }
     clock_engine().count_poll();
     if (config_is_consumed(session_decl::KIND_CLOCK_CONFIG)) {
@@ -5724,7 +5731,6 @@ bool NetwMultiplayer::disconnect_once(
 
 void NetwMultiplayer::clear_flat_family_state() {
     layer_forget_all();
-    scene_drop_loading_change();
     scene_clear_pending_facets();
     store_world.arrays.clear_session();
     display_clear_declarations();

@@ -61,17 +61,6 @@ func spawn_avatar() -> Node:
 
 func remember_level(level: NetwScene) -> void:
 	levels[level.root.scene_file_path] = level.root
-	if multiplayer.is_server():
-		level.viewer_entered.connect(place_player.bind(level))
-
-
-func place_player(player: NetwPlayer, level: NetwScene) -> void:
-	if not player.entities.is_empty():
-		return
-	var new_avatar := Netw.spawn_player(player, spawn_avatar)
-	var roster: Array[NetwPlayer] = session.players
-	(new_avatar as Node2D).position = START_POSE + START_STRIDE * roster.size()
-	level.root.add_child(new_avatar)
 
 
 func open_level(path: String) -> NetwScene:

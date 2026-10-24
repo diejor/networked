@@ -89,10 +89,6 @@ public:
         const godot::String &p_reason
     );
     godot::Error transfer_server(int64_t p_peer);
-    godot::Ref<NetwScene> create_scene(
-        const godot::Ref<godot::PackedScene> &p_scene,
-        enums::NetwScene::SceneIsolation p_isolation
-    );
     godot::Ref<NetwScene> find_scene(const godot::StringName &p_label);
     godot::Error install_physics_stepper(
         const godot::Ref<godot::World3D> &p_world,

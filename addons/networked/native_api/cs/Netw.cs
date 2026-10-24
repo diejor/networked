@@ -8,6 +8,37 @@ namespace Networked;
 /// <summary>
 /// Static entry points for the Networked API.
 /// </summary>
+/// <remarks>
+/// <b>Levels</b> A level is spawned like any other node, with
+/// <see cref="Netw.ConfigureScene"/> in its root. A player receives the level
+/// while one of their <see cref="NetwPlayer.Entities"/> is in it, so spawn
+/// players into it with <see cref="Netw.SpawnPlayer"/>, here and in the
+/// <see cref="Netw.ConfigureJoin"/> handler. <see cref="NetwScene"/> covers the
+/// rest.
+/// <code>
+/// # arena.gd
+/// func _init() -&gt; void:
+///     Netw.configure_scene(self)
+///
+/// # game.gd
+/// func _init() -&gt; void:
+///     Netw.configure_spawn(make_arena)
+///     Netw.configure_spawn(make_car)
+///
+/// func make_arena() -&gt; Node:
+///     return preload("res://arena.tscn").instantiate()
+///
+/// func make_car() -&gt; Node:
+///     return preload("res://car.tscn").instantiate()
+///
+/// func start_match(lobby: Node) -&gt; void:
+///     Netw.despawn(lobby)
+///     var arena: Node = Netw.spawn(make_arena)
+///     add_child(arena)
+///     for player: NetwPlayer in Netw.session(self).players:
+///         arena.add_child(Netw.spawn_player(player, make_car))
+/// </code>
+/// </remarks>
 public sealed class Netw : NetwRefCounted
 {
     public Netw(IntPtr native) : base(native)
@@ -915,6 +946,7 @@ public sealed class Netw : NetwRefCounted
     ///     {
     ///         Netw.ConfigureEntity(this);
     ///         Netw.ConfigureRpc(this, MethodName.PreloadLevel).Timeout(60.0);
+    ///         Netw.ConfigureSpawn(this, MethodName.MakeMatch);
     ///         Netw.ConfigureSpawn(this, MethodName.MakePlayer);
     ///     }
     ///
@@ -923,10 +955,13 @@ public sealed class Netw : NetwRefCounted
     ///         NetwGroupPromise loads = await Netw.RequestAll(this, MethodName.PreloadLevel, Match);
     ///         if (loads.IsFailed || loads.Results.Values.Any(loaded =&gt; !loaded.AsBool()))
     ///             return;
-    ///         NetwScene arena = await Netw.ChangeSceneToFile(this, Match).AsTask(NetwScene.From);
-    ///         foreach (NetwPlayer player in arena.Viewers)
-    ///             arena.Root.AddChild(Netw.SpawnPlayer(player, this, MethodName.MakePlayer));
+    ///         Node arena = Netw.Spawn(this, MethodName.MakeMatch);
+    ///         AddChild(arena);
+    ///         foreach (NetwPlayer player in Netw.Session(this).Players)
+    ///             arena.AddChild(Netw.SpawnPlayer(player, this, MethodName.MakePlayer));
     ///     }
+    ///
+    ///     public Node MakeMatch() =&gt; warm.Instantiate();
     ///
     ///     public Variant PreloadLevel(string path) =&gt; NetwPromise.FromTask(Preload(path));
     ///
@@ -1196,23 +1231,22 @@ public sealed class Netw : NetwRefCounted
 
     /// <summary>
     /// Calls <paramref name="fn"/> with the arguments after it on every peer,
-    /// and returns the node it created here. Add it to the tree yourself.
+    /// and returns the node it made here. Add the node before the next tick,
+    /// under a node every peer has.
     /// <code>
-    /// muzzle.add_child(Netw.spawn(_spawn_bullet, dir, 2))
+    /// muzzle.add_child(Netw.spawn(make_bullet, direction))
     /// </code>
     /// <para>
     /// Register <paramref name="fn"/> with <see cref="Netw.ConfigureSpawn"/>
-    /// first, and add the node to the tree before the next tick. The entity has
-    /// no <see cref="NetwEntity.Player"/>, so it stays when any player leaves.
+    /// first. A player who joins later calls <paramref name="fn"/> too, with
+    /// the same arguments. The node outlives every player.
     /// <see cref="Netw.SpawnPlayer"/> makes one that is despawned with its
     /// player. A client can call it when the node sets
     /// <see cref="NetwEntity.Lifecycle"/> to
     /// <see cref="NetwEntity.LifecycleEnum.Controller"/>. That client's player
     /// becomes its <see cref="NetwEntity.Controller"/>. The client sees it at
-    /// once and loses it if the server refuses. <paramref name="fn"/> must
-    /// return the node without waiting. Use <see cref="Netw.SpawnAsync"/> when
-    /// it awaits, and load first with <see cref="Netw.RequestAll"/> when every
-    /// peer should start together.
+    /// once and loses it if the server refuses. <paramref name="fn"/> returns
+    /// without waiting. Use <see cref="Netw.SpawnAsync"/> when it awaits.
     /// </para>
     /// </summary>
     public static Node Spawn(Callable fn, params Variant[] rest)
@@ -1325,11 +1359,10 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "spawn_async", 2325787334UL);
 
     /// <summary>
-    /// Calls <paramref name="fn"/> with the arguments after it on every peer,
-    /// as <see cref="Netw.Spawn"/> does, and lets <paramref name="fn"/> await.
-    /// The <see cref="NetwPromise"/> settles with the node once
-    /// <paramref name="fn"/> returns here. A client holds what the server sends
-    /// for the node until its own copy is built.
+    /// Like <see cref="Netw.Spawn"/>, and <paramref name="fn"/> may await. The
+    /// <see cref="NetwPromise"/> settles with the node once
+    /// <paramref name="fn"/> returns on this peer. Add the node before the next
+    /// tick.
     /// <code>
     /// public async void Start(string path)
     /// {
@@ -1341,15 +1374,21 @@ public sealed class Netw : NetwRefCounted
     ///
     /// async Task&lt;Node&gt; LoadLevel(string path)
     /// {
+    ///     loadingScreen.Show();
     ///     ResourceLoader.LoadThreadedRequest(path);
     ///     while (ResourceLoader.LoadThreadedGetStatus(path)
     ///             == ResourceLoader.ThreadLoadStatus.InProgress)
     ///         await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+    ///     loadingScreen.Hide();
     ///     return (ResourceLoader.LoadThreadedGet(path) as PackedScene).Instantiate();
     /// }
     /// </code>
     /// <para>
-    /// Add the node to the tree before the next tick. <b>Server Only.</b>
+    /// Every peer builds its own copy at its own pace. On a client, nodes
+    /// spawned into it and RPCs sent to it wait until that client's copy is
+    /// built. The promise says nothing about clients, and
+    /// <see cref="Netw.RequestAll"/> shows how to wait until every peer has
+    /// loaded a level before you spawn it. <b>Server Only.</b>
     /// </para>
     /// </summary>
     public static NetwPromise SpawnAsync(Callable fn, params Variant[] rest)
@@ -1405,10 +1444,12 @@ public sealed class Netw : NetwRefCounted
     /// Netw.despawn(bullet)
     /// </code>
     /// <para>
-    /// See <see cref="NetwDespawnOpts"/> for <paramref name="opts"/>. Returns
-    /// <c>@GlobalScope.ERR_DOES_NOT_EXIST</c> for a node that was not spawned,
-    /// and <c>@GlobalScope.ERR_UNAVAILABLE</c> outside a session. A client can
-    /// call it when its player is the <see cref="NetwEntity.Controller"/> and
+    /// Despawning the root of a <see cref="NetwScene"/> removes the scene at
+    /// once, with everything in it. See <see cref="NetwDespawnOpts"/> for
+    /// <paramref name="opts"/>. Returns <c>@GlobalScope.ERR_DOES_NOT_EXIST</c>
+    /// for a node that was not spawned, and <c>@GlobalScope.ERR_UNAVAILABLE</c>
+    /// outside a session. A client can call it when its player is the
+    /// <see cref="NetwEntity.Controller"/> and
     /// <see cref="NetwEntity.Lifecycle"/> is
     /// <see cref="NetwEntity.LifecycleEnum.Controller"/>. The node is removed
     /// on that client at once, and comes back if the server refuses.
@@ -1439,10 +1480,17 @@ public sealed class Netw : NetwRefCounted
     /// await Netw.reparent(avatar, level2.get_node(^"Players")).wait()
     /// </code>
     /// <para>
-    /// Unlike <see cref="Node.Reparent"/>, it does not fire
-    /// <see cref="Area3D"/> and <see cref="Area2D"/> enter and exit signals
-    /// during the move, which works around this issue. Otherwise
-    /// <see cref="Node.Reparent"/> works fine. The promise fails with
+    /// A level keeps its <see cref="NetwScene"/>, its viewers and every
+    /// <see cref="NetwPlayer.Scene"/> when it moves. For a level made with
+    /// <see cref="NetwSceneConfig.Isolated"/>, pass the node
+    /// <see cref="Netw.Spawn"/> returned or the level's root, and the node
+    /// <see cref="Netw.Spawn"/> returned moves. Unlike
+    /// <see cref="Node.Reparent"/>, it does not fire <see cref="Area3D"/> and
+    /// <see cref="Area2D"/> enter and exit signals during the move, which works
+    /// around this issue. An overlap that really changed during the move is
+    /// reported after it with the body and area enter and exit signals, and the
+    /// shape signals are not sent for it. Otherwise <see cref="Node.Reparent"/>
+    /// works fine. The promise fails with
     /// <c>@GlobalScope.ERR_DOES_NOT_EXIST</c> when <paramref name="node"/> has
     /// no entity, and <c>@GlobalScope.ERR_UNAVAILABLE</c> outside a session. A
     /// client can call it when its player is the
@@ -1578,97 +1626,6 @@ public sealed class Netw : NetwRefCounted
         Variant result = Variant.CreateCopyingBorrowed(answered);
         answered.Dispose();
         return result;
-    }
-
-    private static readonly IntPtr _bindChangeSceneToFile =
-        NetwApi.MethodBind("Netw", "change_scene_to_file", 3945386541UL);
-
-    /// <summary>
-    /// Opens <paramref name="path"/> and moves players to it.
-    /// <paramref name="scope"/> says who moves. Their nodes do not move, so
-    /// spawn them in the <see cref="NetwScene"/> the promise gives. The scene
-    /// loads in the background, and the promise settles when it is in place.
-    /// <code>
-    /// func start_match() -&gt; void:
-    ///     Netw.change_scene_to_file(self, "res://match.tscn").then(spawn_players)
-    ///
-    /// func spawn_players(arena: NetwScene) -&gt; void:
-    ///     for player: NetwPlayer in arena.viewers:
-    ///         arena.root.add_child(Netw.spawn_player(player, make_player))
-    /// </code>
-    /// <para>
-    /// <b>Server Only.</b>
-    /// </para>
-    /// </summary>
-    public static NetwPromise ChangeSceneToFile(Node node, string path, NetwScene.SceneChange scope =
-        (NetwScene.SceneChange)0)
-    {
-        godot_variant slot0 = VariantUtils.CreateFromGodotObject(node);
-        godot_variant slot1 = VariantUtils.CreateFromString(path);
-        godot_variant slot2 = VariantUtils.CreateFromInt((long)scope);
-        godot_variant answered = default;
-        NetwThunks.Call3(
-            _bindChangeSceneToFile,
-            IntPtr.Zero,
-            in slot0,
-            in slot1,
-            in slot2,
-            ref answered);
-        slot0.Dispose();
-        slot1.Dispose();
-        slot2.Dispose();
-        NetwPromise result =
-            NetwPromise.Adopt(
-                NetwApi.Retained(
-                    VariantUtils.ConvertToGodotObjectPtr(answered)));
-        answered.Dispose();
-        return result;
-    }
-
-    private static readonly IntPtr _bindChangeSceneToPacked =
-        NetwApi.MethodBind("Netw", "change_scene_to_packed", 211625269UL);
-
-    /// <summary>
-    /// Like <see cref="Netw.ChangeSceneToFile"/>. <paramref name="packed"/>
-    /// must be saved to a file. <b>Server Only.</b>
-    /// </summary>
-    public static NetwPromise ChangeSceneToPacked(Node node, PackedScene packed, NetwScene.SceneChange scope =
-        (NetwScene.SceneChange)0)
-    {
-        IntPtr slot0 = node?.NativeInstance ?? IntPtr.Zero;
-        IntPtr slot1 = packed?.NativeInstance ?? IntPtr.Zero;
-        long slot2 = (long)scope;
-        IntPtr answered = default;
-        NetwThunks.Ptrcall3_IntPtr_IntPtr_Long_IntPtr(
-            _bindChangeSceneToPacked,
-            IntPtr.Zero,
-            in slot0,
-            in slot1,
-            in slot2,
-            ref answered);
-        return NetwPromise.Adopt(answered);
-    }
-
-    private static readonly IntPtr _bindReloadCurrentScene =
-        NetwApi.MethodBind("Netw", "reload_current_scene", 3203172577UL);
-
-    /// <summary>
-    /// Reloads the scene the server displays, like
-    /// <see cref="SceneTree.ReloadCurrentScene"/>. <b>Server Only.</b>
-    /// </summary>
-    public static NetwPromise ReloadCurrentScene(Node node, NetwScene.SceneChange scope =
-        (NetwScene.SceneChange)0)
-    {
-        IntPtr slot0 = node?.NativeInstance ?? IntPtr.Zero;
-        long slot1 = (long)scope;
-        IntPtr answered = default;
-        NetwThunks.Ptrcall2_IntPtr_Long_IntPtr(
-            _bindReloadCurrentScene,
-            IntPtr.Zero,
-            in slot0,
-            in slot1,
-            ref answered);
-        return NetwPromise.Adopt(answered);
     }
 
     private static readonly IntPtr _bindConfigureScene =

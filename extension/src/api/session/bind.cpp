@@ -998,7 +998,6 @@ void NetwMultiplayer::_bind_methods() {
     BIND_ENUM_CONSTANT(PREDICT_OWNER_DIVERGENCE);
     BIND_ENUM_CONSTANT(LAGCOMP_ACTION_GATE_FALLBACK);
     BIND_ENUM_CONSTANT(SCENE_SPAWNED);
-    BIND_ENUM_CONSTANT(SCENE_ACTIVATED);
     BIND_ENUM_CONSTANT(SCENE_DESPAWNED);
     BIND_ENUM_CONSTANT(SCENE_ENTITY_MOVED);
     BIND_ENUM_CONSTANT(SCENE_STARTUP_SPAWNED);
@@ -1063,21 +1062,6 @@ void NetwMultiplayer::_bind_methods() {
         PropertyInfo(Variant::INT, "id"),
         PropertyInfo(Variant::PACKED_BYTE_ARRAY, "packet")
     ));
-    ClassDB::bind_method(
-        D_METHOD("scene_change_to_file", "requester", "path", "scope"),
-        &NetwMultiplayer::scene_change_to_file,
-        DEFVAL(SCENE_CHANGE_SESSION)
-    );
-    ClassDB::bind_method(
-        D_METHOD("scene_change_to_packed", "requester", "packed", "scope"),
-        &NetwMultiplayer::scene_change_to_packed,
-        DEFVAL(SCENE_CHANGE_SESSION)
-    );
-    ClassDB::bind_method(
-        D_METHOD("scene_reload_current", "requester", "scope"),
-        &NetwMultiplayer::scene_reload_current,
-        DEFVAL(SCENE_CHANGE_SESSION)
-    );
     ClassDB::bind_static_method(
         "NetwMultiplayer",
         D_METHOD("property_path", "source", "property", "base"),
@@ -1816,10 +1800,6 @@ void NetwMultiplayer::_bind_methods() {
         &NetwMultiplayer::scene_presented
     );
     ClassDB::bind_method(
-        D_METHOD("scene_destroy", "scene"),
-        &NetwMultiplayer::scene_destroy
-    );
-    ClassDB::bind_method(
         D_METHOD("scene_player_entities_all"),
         &NetwMultiplayer::scene_player_entities_all
     );
@@ -1832,16 +1812,6 @@ void NetwMultiplayer::_bind_methods() {
         ),
         "",
         "scene_player_entities_all"
-    );
-    ClassDB::bind_method(
-        D_METHOD("scene_create", "recipe", "isolation"),
-        &NetwMultiplayer::scene_create,
-        DEFVAL(SCENE_ISOLATION_NONE)
-    );
-    ClassDB::bind_static_method(
-        "NetwMultiplayer",
-        D_METHOD("scene_packed_stem", "packed"),
-        &NetwMultiplayer::scene_packed_stem
     );
     ClassDB::bind_method(
         D_METHOD("entity_add_property_set", "entity", "set", "comp"),

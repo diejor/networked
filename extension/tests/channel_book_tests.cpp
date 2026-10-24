@@ -239,6 +239,11 @@ TEST_CASE(
         "has no handler.",
         1
     );
+    expected_faults.expect_warning(
+        "[warn][session] Built-in channel 51 (SESSION_SPAWN_FAILED) "
+        "has no handler.",
+        1
+    );
 
     NetwChannelBook book;
     Ref<RefCounted> holder;

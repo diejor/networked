@@ -110,8 +110,6 @@ Methods
    +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Variant`                                      | :ref:`bucket_of<class_NetwSession_method_bucket_of>`\ (\ peer\: :godot:`int`, type\: :godot:`Variant`\ ) |const|                                                                      |
    +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :ref:`NetwScene<class_NetwScene>`                     | :ref:`create_scene<class_NetwSession_method_create_scene>`\ (\ scene\: :godot:`PackedScene`, isolation\: :ref:`SceneIsolation<enum_NetwScene_SceneIsolation>` = 0\ )                  |
-   +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwDatabase<class_NetwDatabase>`               | :ref:`database<class_NetwSession_method_database>`\ (\ name\: :godot:`StringName`\ ) |const|                                                                                          |
    +-------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwPlayer<class_NetwPlayer>`                   | :ref:`find_player<class_NetwSession_method_find_player>`\ (\ account\: :godot:`String`\ ) |const|                                                                                     |
@@ -744,20 +742,6 @@ The per-peer game data of ``type`` stored for ``peer``, created on first use. Se
 
 ----
 
-.. _class_NetwSession_method_create_scene:
-
-.. rst-class:: classref-method
-
-:ref:`NetwScene<class_NetwScene>` **create_scene**\ (\ scene\: :godot:`PackedScene`, isolation\: :ref:`SceneIsolation<enum_NetwScene_SceneIsolation>` = 0\ ) :ref:`🔗<class_NetwSession_method_create_scene>`
-
-Spawns ``scene`` as a new scene with no players in it. ``isolation`` decides whether it has its own physics and rendering world.
-
-\ **Server Only.**
-
-.. rst-class:: classref-item-separator
-
-----
-
 .. _class_NetwSession_method_database:
 
 .. rst-class:: classref-method
@@ -788,7 +772,7 @@ The :ref:`NetwPlayer<class_NetwPlayer>` with :ref:`NetwPlayer.account<class_Netw
 
 :ref:`NetwScene<class_NetwScene>` **find_scene**\ (\ label\: :godot:`StringName`\ ) :ref:`🔗<class_NetwSession_method_find_scene>`
 
-Returns the newest scene whose root node is named ``label``, or ``null``.
+Returns the scene whose :ref:`NetwScene.label<class_NetwScene_property_label>` is ``label``, or ``null``.
 
 .. rst-class:: classref-item-separator
 

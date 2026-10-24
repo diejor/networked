@@ -42,7 +42,7 @@ enum class PayloadContract : uint8_t {
     DELTA = 2,
 };
 
-inline constexpr uint16_t FORMAT_VERSION = 16;
+inline constexpr uint16_t FORMAT_VERSION = 17;
 
 struct ChannelDecl {
     uint8_t id = 0;

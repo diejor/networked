@@ -16,7 +16,9 @@ namespace Networked;
 ///     Netw.configure_scene(self).labeled(&amp;"Level1").isolated()
 /// </code>
 /// <para>
-/// Each <see cref="NetwEntity"/> below the root reaches it through
+/// A scene placed in the main scene must be in the tree before the server
+/// starts hosting, and must not be <see cref="NetwSceneConfig.Isolated"/>. Each
+/// <see cref="NetwEntity"/> below the root reaches it through
 /// <see cref="NetwEntity.Scene"/>.
 /// </para>
 /// </remarks>

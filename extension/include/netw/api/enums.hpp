@@ -25,15 +25,6 @@ struct NetwMultiplayer {
         SCENE_MOVE_CARRY = NetwSceneCore::MOVE_CARRY,
     };
 
-    enum SceneDestination {
-        SCENE_DESTINATION_NONE = NetwSceneCore::DESTINATION_NONE,
-        SCENE_DESTINATION_NAME = NetwSceneCore::DESTINATION_NAME,
-        SCENE_DESTINATION_NODE = NetwSceneCore::DESTINATION_NODE,
-        SCENE_DESTINATION_PACKED = NetwSceneCore::DESTINATION_PACKED,
-        SCENE_DESTINATION_PACKED_UNPATHED
-        = NetwSceneCore::DESTINATION_PACKED_UNPATHED,
-    };
-
     enum EntityState {
         ENTITY_STATE_UNKNOWN = NetwLivenessCore::STATE_UNKNOWN,
         ENTITY_STATE_LIVE = NetwLivenessCore::STATE_LIVE,
@@ -227,7 +218,6 @@ struct NetwMultiplayer {
         PREDICT_OWNER_DIVERGENCE,
         LAGCOMP_ACTION_GATE_FALLBACK,
         SCENE_SPAWNED,
-        SCENE_ACTIVATED,
         SCENE_DESPAWNED,
         SCENE_ENTITY_MOVED,
         SCENE_STARTUP_SPAWNED,
@@ -414,12 +404,6 @@ struct NetwScene {
         SCENE_EVENT_ENTITY = 2,
     };
 
-    enum SceneChange {
-        SCENE_CHANGE_SESSION = NetwSceneCore::SCOPE_SESSION,
-        SCENE_CHANGE_PLAYER = NetwSceneCore::SCOPE_PLAYER,
-        SCENE_CHANGE_SCENE = NetwSceneCore::SCOPE_SCENE,
-    };
-
     enum SceneIsolation {
         SCENE_ISOLATION_NONE = NetwSceneCore::ISOLATION_NONE,
         SCENE_ISOLATION_OWN_WORLD = NetwSceneCore::ISOLATION_OWN_WORLD,
@@ -446,7 +430,6 @@ struct LobbyDirectory {
 
 } // namespace netw::enums
 
-VARIANT_ENUM_CAST(netw::enums::NetwScene::SceneChange);
 VARIANT_ENUM_CAST(netw::enums::NetwScene::SceneIsolation);
 VARIANT_ENUM_CAST(netw::enums::NetwScene::SceneEvent);
 VARIANT_ENUM_CAST(netw::enums::NetwSession::State);
@@ -470,7 +453,6 @@ VARIANT_ENUM_CAST(netw::enums::NetwInterestLayer::PerceptionPolicy);
 VARIANT_ENUM_CAST(netw::enums::LobbyDirectory::Capability);
 VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::TableParam);
 VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::SceneMove);
-VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::SceneDestination);
 VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::EntityState);
 VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::ClockParam);
 VARIANT_ENUM_CAST(netw::enums::NetwMultiplayer::LayerParam);

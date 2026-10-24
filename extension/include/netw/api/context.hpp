@@ -43,8 +43,6 @@ namespace netw {
 class Netw : public godot::RefCounted {
     GDCLASS(Netw, godot::RefCounted)
 
-    using SceneChange = enums::NetwScene::SceneChange;
-
 protected:
     static void _bind_methods();
 
@@ -179,20 +177,6 @@ public:
         const godot::Callable &p_body
     );
 
-    static godot::Ref<NetwPromise> change_scene_to_file(
-        godot::Node *p_node,
-        const godot::String &p_path,
-        SceneChange p_scope
-    );
-    static godot::Ref<NetwPromise> change_scene_to_packed(
-        godot::Node *p_node,
-        const godot::Ref<godot::PackedScene> &p_packed,
-        SceneChange p_scope
-    );
-    static godot::Ref<NetwPromise> reload_current_scene(
-        godot::Node *p_node,
-        SceneChange p_scope
-    );
     static godot::Ref<NetwSceneConfig> configure_scene(godot::Node *p_node);
 };
 

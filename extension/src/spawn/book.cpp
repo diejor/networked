@@ -208,7 +208,8 @@ bool Book::parent_admits(int64_t route, int64_t peer) const {
         return true;
     }
     HashMap<int64_t, Record>::ConstIterator above = spawned.find(parent);
-    return above != spawned.end() && above->value.has_recipient(peer);
+    return above != spawned.end() && above->value.has_recipient(int(peer))
+        && !above->value.has_failed(int(peer));
 }
 
 bool Book::spawn_is_duplicate(int64_t route, int64_t state) const {

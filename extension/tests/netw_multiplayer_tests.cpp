@@ -3462,30 +3462,6 @@ TEST_CASE(
     memdelete(arena);
 }
 
-TEST_CASE(
-    "[Networked][Multiplayer][Hosted] P12 a packed scene answers the stem "
-    "its content root is named, which is the key the live book is entered "
-    "under, never the stem of the resource path, a FILE name that "
-    "disagrees with it by convention"
-) {
-    Node *root = memnew(Node);
-    root->set_name("Arena");
-    Ref<PackedScene> packed;
-    packed.instantiate();
-    packed->pack(root);
-
-    CHECK(NetwMultiplayer::scene_packed_stem(packed) == StringName("Arena"));
-
-    packed->set_path("res://scenes/arena_level.tscn");
-    CHECK(NetwMultiplayer::scene_packed_stem(packed) == StringName("Arena"));
-
-    CHECK(
-        NetwMultiplayer::scene_packed_stem(Ref<PackedScene>()) == StringName()
-    );
-
-    memdelete(root);
-}
-
 } // namespace TestNetwMultiplayerEntityTree
 
 namespace TestNetwClockWireCodec {

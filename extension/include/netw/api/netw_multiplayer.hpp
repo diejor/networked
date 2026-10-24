@@ -254,13 +254,6 @@ public:
         = enums::NetwScene::SCENE_EVENT_PLAYER_ENTITY;
     static constexpr SceneEvent SCENE_EVENT_ENTITY
         = enums::NetwScene::SCENE_EVENT_ENTITY;
-    using SceneChange = enums::NetwScene::SceneChange;
-    static constexpr SceneChange SCENE_CHANGE_SESSION
-        = enums::NetwScene::SCENE_CHANGE_SESSION;
-    static constexpr SceneChange SCENE_CHANGE_PLAYER
-        = enums::NetwScene::SCENE_CHANGE_PLAYER;
-    static constexpr SceneChange SCENE_CHANGE_SCENE
-        = enums::NetwScene::SCENE_CHANGE_SCENE;
     using SceneIsolation = enums::NetwScene::SceneIsolation;
     static constexpr SceneIsolation SCENE_ISOLATION_NONE
         = enums::NetwScene::SCENE_ISOLATION_NONE;
@@ -711,6 +704,7 @@ private:
     godot::HashMap<int64_t, godot::LocalVector<DetachedAhead>>
         lifecycle_detached_ahead;
     uint8_t scene_released_channel = 0;
+    uint8_t spawn_failed_channel = 0;
     uint8_t scene_viewers_channel = 0;
 
     struct ParkedViewers {
@@ -758,8 +752,9 @@ private:
     godot::ObjectID scene_player_display_id;
     bool scene_player_display_pending = false;
     godot::RID scene_presentation;
+    bool scene_presentation_split = false;
     bool scene_presentation_split_warned = false;
-    bool scene_constructor_registered = false;
+    godot::LocalVector<godot::RID> scene_despawned_roots;
     godot::HashMap<godot::StringName, godot::RID> table_by_name;
     godot::HashMap<int64_t, godot::RID> table_schema;
     godot::HashMap<int64_t, godot::Ref<NetwTable>> table_handles;
@@ -810,6 +805,8 @@ private:
         godot::ObjectID parent_id;
         godot::Ref<NetwPromise> promise;
         godot::LocalVector<DepartedResidency> residencies;
+        bool scene_pending = false;
+        godot::ObjectID scene_outer;
     };
     godot::HashMap<uint64_t, EntityDeparture> entity_departures;
     int64_t entity_generation = 1;
@@ -847,6 +844,7 @@ private:
         godot::ObjectID parent;
         godot::Ref<NetwPromise> promise;
         godot::RID guard;
+        int64_t hush = 0;
         bool moved = false;
         bool awaits_session = false;
     };
@@ -858,6 +856,7 @@ private:
         godot::ObjectID parent;
         godot::Callable adopt;
         godot::RID guard;
+        int64_t hush = 0;
         int64_t route = 0;
         uint64_t anchor = 0;
         uint64_t anchor_author = 0;
@@ -867,6 +866,20 @@ private:
     godot::HashMap<int64_t, SpawnCarry> spawn_carries;
     int64_t spawn_carry_next = 0;
     ReparentGuard reparent_guards;
+    struct AreaHush {
+        godot::LocalVector<godot::ObjectID> areas;
+        godot::ObjectID tree;
+        godot::Callable spent;
+        int frames = 0;
+    };
+    struct HushedArea {
+        godot::LocalVector<godot::ObjectID> bodies;
+        godot::LocalVector<godot::ObjectID> areas;
+        int holders = 0;
+    };
+    godot::HashMap<int64_t, AreaHush> area_hushes;
+    godot::HashMap<uint64_t, HushedArea> hushed_areas;
+    int64_t area_hush_next = 0;
     godot::Callable spawn_constructor;
     EmbedPhase embed_phase_value = EMBED_PHASE_DECLARING;
     bool embed_disposing = false;
@@ -1657,9 +1670,16 @@ public:
         int64_t p_route,
         const godot::PackedInt32Array &p_connected,
         int64_t p_channel,
-        const godot::Callable &p_undeclare
+        const godot::Callable &p_undeclare,
+        godot::Node *p_within = nullptr
     );
     void spawn_detach_before_despawn(NetwEntity *p_dying);
+    void spawn_report_failed(int64_t p_route, const godot::String &p_reason);
+    void spawn_receive_failed_frame(
+        const godot::PackedByteArray &p_payload,
+        int p_sender
+    );
+    bool spawn_failed_for(int64_t p_route, int64_t p_peer);
     godot::Ref<NetwEntity> spawn_arm_identity(
         spawn::Record *p_record,
         godot::Node *p_node,
@@ -2001,7 +2021,7 @@ public:
         bool p_present
     );
     void scene_open_admission(godot::Node *p_container);
-    void scene_close_admission(godot::Object *p_container);
+    void scene_close_admission(const godot::RID &p_scene);
     void scene_report_local_viewer(const godot::RID &p_scene, bool p_present);
     void scene_on_player_joined(const godot::Ref<NetwPlayer> &p_player);
     void scene_on_admission_visibility(
@@ -2981,12 +3001,7 @@ public:
     godot::RID scene_get_layer(const godot::RID &p_scene);
     godot::RID scene_presented() const;
     godot::RID scene_of_peer(int64_t p_peer);
-    bool scene_destroy(const godot::RID &p_scene);
     godot::TypedArray<NetwEntity> scene_player_entities_all();
-    godot::RID scene_create(
-        const godot::Variant &p_recipe,
-        SceneIsolation p_isolation
-    );
 
     godot::Error channel_send(
         int64_t p_peer,
@@ -4800,16 +4815,6 @@ public:
         const godot::PackedByteArray &p_payload,
         int p_sender
     );
-    static int scene_destination_kind(const godot::Variant &p_destination);
-    static godot::Ref<godot::PackedScene> scene_packed_at(
-        const godot::String &p_reference
-    );
-    static godot::Ref<godot::Script> scene_packed_root_script(
-        const godot::Ref<godot::PackedScene> &p_packed
-    );
-    static godot::Ref<godot::Script> scene_root_script_at(
-        const godot::String &p_reference
-    );
     static int scene_move_verdict(
         bool p_mover_live,
         bool p_target_live,
@@ -4823,20 +4828,6 @@ public:
     static godot::Node *scene_outer_of(godot::Node *p_root);
     static godot::Node *scene_inner_of(godot::Node *p_node);
     static void scene_retire_world(godot::Node *p_root);
-    static godot::StringName scene_packed_stem(
-        const godot::Ref<godot::PackedScene> &p_packed
-    );
-    godot::Node *scene_container(const godot::StringName &p_stem) const;
-    godot::Node *scene_existing_destination(
-        const godot::Variant &p_destination
-    );
-
-    godot::Node *scene_spawn_node(
-        const godot::Variant &p_data,
-        int p_isolation
-    );
-
-    static godot::StringName scene_constructor_id();
     bool scene_owns_its_world(const godot::RID &p_scene) const;
     godot::RID scene_shown_derive();
     void scene_player_display_invalidate();
@@ -4847,55 +4838,18 @@ public:
         bool &r_stands
     );
     godot::RID scene_presentation_derive();
+    void scene_presentation_warn_split();
     void scene_presentation_settle();
-    void scene_register_constructor();
     void scene_root_online(godot::Node *p_root);
     void scene_root_offline(godot::Object *p_root);
+    void scene_root_settle_exit(
+        const godot::RID &p_scene,
+        godot::ObjectID p_root,
+        godot::ObjectID p_outer,
+        bool p_moved
+    );
+    void scene_root_despawning(NetwEntity *p_entity, bool p_send_now);
     godot::Node *scene_containing(godot::Node *p_node);
-    godot::Node *scene_spawn(
-        const godot::Variant &p_data,
-        SceneIsolation p_isolation
-    );
-    godot::Node *scene_activate(const godot::Variant &p_destination);
-    godot::Node *announce_scene_activated(godot::Node *p_active);
-    godot::Node *scene_resolve_destination(const godot::Variant &p_destination);
-    godot::Ref<NetwScene> scene_handle_for(godot::Node *p_container);
-    godot::Ref<NetwPromise> scene_replace_sources(
-        const godot::Variant &p_destination,
-        const godot::Array &p_sources,
-        int p_scope
-    );
-    void scene_land_transition();
-    godot::PackedInt64Array scene_transition_every_member() const;
-    godot::Array scene_sources_for_scope(int p_scope, godot::Node *p_source);
-    godot::Ref<NetwPromise> scene_apply_change(
-        const godot::Ref<NetwPlayer> &p_player,
-        const godot::Variant &p_destination,
-        int p_scope,
-        godot::Node *p_source
-    );
-    godot::Ref<NetwPromise> scene_front_door_change(
-        godot::Node *p_requester,
-        const godot::String &p_path,
-        int p_scope
-    );
-    void scene_poll_loading_change();
-    void scene_drop_loading_change();
-    godot::Ref<NetwPromise> scene_change_to_file(
-        godot::Node *p_requester,
-        const godot::String &p_path,
-        SceneChange p_scope
-    );
-    godot::Ref<NetwPromise> scene_change_to_packed(
-        godot::Node *p_requester,
-        const godot::Ref<godot::PackedScene> &p_packed,
-        SceneChange p_scope
-    );
-    godot::Ref<NetwPromise> scene_reload_current(
-        godot::Node *p_requester,
-        SceneChange p_scope
-    );
-    void scene_pump_retired();
     bool scene_remember(godot::Node *p_root);
     void scene_arrive(
         const godot::Ref<NetwEntity> &p_entity,
@@ -4922,6 +4876,11 @@ public:
 
     static constexpr int GUARD_WINDOW_FRAMES = 2;
     godot::RID guard_hold(godot::Node *p_body);
+    int64_t guard_hush_areas(godot::Node *p_body);
+    void guard_hush_release(int64_t p_id);
+    void guard_hush_spend(int64_t p_id);
+    void guard_hush_end(int64_t p_id, bool p_replay = true);
+    void guard_hush_sweep();
     void guard_then(
         const godot::RID &p_guard,
         int p_frames,
@@ -4948,6 +4907,8 @@ public:
     void spawn_carry_sweep();
     void spawn_carry_finish(int64_t p_id);
     void scene_forget(godot::Object *p_container);
+    void scene_free_layer(const godot::RID &p_scene);
+    void scene_leave(const godot::RID &p_scene, godot::Object *p_container);
     void scene_on_session_reclaimed();
     void scene_install();
     void scene_dispose();
@@ -5023,7 +4984,6 @@ public:
     godot::Ref<NetwPlayer> player_find_account(
         const godot::String &p_account
     ) const;
-    godot::Ref<NetwPlayer> scene_caller_player(godot::Node *p_requester);
     void player_publish_joined(int64_t p_peer);
     void player_publish_left(
         const godot::Ref<NetwPlayer> &p_who,
@@ -5227,17 +5187,6 @@ public:
 
     godot::Ref<NetwPromise> scene_move_entity(
         const godot::RID &p_entity,
-        const godot::RID &p_destination
-    );
-
-    godot::TypedArray<NetwEntity> scene_player_entities_of(int64_t p_peer);
-    godot::TypedArray<NetwEntity> scene_player_entity_roots_of(int64_t p_peer);
-    godot::Ref<NetwPromise> player_travel(
-        const godot::Ref<NetwPlayer> &p_player,
-        const godot::Ref<NetwScene> &p_destination
-    );
-    void scene_leave_everything_but(
-        int64_t p_peer,
         const godot::RID &p_destination
     );
 

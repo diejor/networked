@@ -22,6 +22,40 @@ func before_test() -> void:
 	game.show_views()
 
 
+func test_host_input_moves_only_the_host_player() -> void:
+	var valeria := await game.add_host("valeria", true)
+	await game.add_client("jose", true)
+	await _wait_for_transitions()
+	await game.sync_ticks(16)
+
+	var bodies := valeria.tree.find_children("*", "CharacterBody2D", true, false)
+	var players: Array[NetwPlayer] = valeria.session.players
+	assert_int(bodies.size()) \
+			.override_failure_message(
+				"the host holds %d bodies for %d players"
+				% [bodies.size(), players.size()],
+			) \
+			.is_equal(players.size())
+
+	var mine := valeria.local_player as Node2D
+	var starts := { }
+	for body: Node2D in bodies:
+		starts[body] = body.position
+
+	valeria.simulate_action_press("move_left")
+	await game.sync_ticks(16)
+	valeria.simulate_action_release("move_left")
+
+	assert_that(mine.position.x).is_less(starts[mine].x)
+	for body: Node2D in bodies:
+		if body != mine:
+			assert_vector(body.position) \
+					.override_failure_message(
+						"%s followed the host's input" % body.get_path(),
+					) \
+					.is_equal(starts[body])
+
+
 func test_host_input_reaches_local_player_after_add_host() -> void:
 	var valeria := await game.add_host("valeria", true)
 	await _wait_for_transition(valeria)
@@ -43,7 +77,7 @@ func test_host_input_reaches_local_player_after_add_host() -> void:
 	assert_that(Input.is_action_pressed(&"move_right")).is_false()
 
 
-func test_a_host_named_after_the_preplaced_player_keeps_a_readable_name() -> void:
+func test_a_host_named_player_keeps_a_readable_name() -> void:
 	var host := await game.add_host("Player", true)
 	await _wait_for_transition(host)
 
@@ -165,12 +199,8 @@ func test_host_scene_change_keeps_camera_current() -> void:
 	assert_that(camera).is_not_null()
 	assert_that(player.get_viewport().get_camera_2d()).is_equal(camera)
 
-	var promise := await change_level_2(valeria)
-	var level_2 := await valeria.await_scene(&"Level2", 2.0)
-
-	assert_that(promise.is_settled).is_true()
-	assert_that(promise.code).is_equal(OK)
-	assert_that(level_2).is_not_null()
+	await change_level_2([valeria])
+	assert_that(await valeria.await_scene(&"Level2", 2.0)).is_not_null()
 
 	var arrived := await _wait_for_body_in(valeria, &"valeria", &"Level2")
 	assert_that(arrived).is_not_null()
@@ -193,8 +223,7 @@ func test_clients_still_see_each_other_after_scene_change() -> void:
 	await game.sync_ticks(8)
 	assert_that(maria_on_jose_start.position.x).is_greater(base_x)
 
-	var promise := await change_level_2(valeria)
-	assert_that(promise.code).is_equal(OK)
+	await change_level_2([maria, jose, valeria])
 	for runner in [valeria, jose, maria]:
 		assert_that(await runner.await_scene(&"Level2", 2.0)).is_not_null()
 
@@ -606,11 +635,12 @@ func _wait_for_promise(promise: NetwPromise) -> NetwPromise:
 	return promise
 
 
-func change_level_2(participant: NetwSceneRunner) -> NetwPromise:
-	var promise := Netw.change_scene_to_file(participant.tree, _LEVEL_2_PATH)
-	for _i in 180:
-		if promise.is_settled:
-			break
-		await game.sync_ticks(1)
-	assert_that(promise.is_settled).is_true()
-	return promise
+func change_level_2(participants: Array[NetwSceneRunner]) -> void:
+	for participant in participants:
+		var tp := await _wait_for_tp(participant)
+		assert_that(tp).is_not_null()
+		var promise := await _wait_for_promise(
+			tp.teleport(_LEVEL_2_PATH, _TP_MARKER),
+		)
+		assert_int(promise.code).is_equal(OK)
+	await _wait_for_transitions(participants)

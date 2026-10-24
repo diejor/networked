@@ -23,21 +23,6 @@ constexpr double SHORT_PARK_DEADLINE = 0.2;
 constexpr int PAST_THE_DEADLINE = 30;
 constexpr int SETTLE = 4;
 
-enum Recipe {
-    SCENE_ROOT,
-    FROM_SPAWNER,
-};
-
-const char *recipe_name(Recipe p_recipe) {
-    switch (p_recipe) {
-        case SCENE_ROOT:
-            return "a scene root";
-        case FROM_SPAWNER:
-            return "a MultiplayerSpawner scene";
-    }
-    return "";
-}
-
 struct ClientBuild {
     NetwMultiplayer *client = nullptr;
     int root_route = 0;
@@ -100,30 +85,16 @@ struct LoadStand {
     const Ref<PackedScene> level = a_level();
     LoopbackRig rig;
     StockWorld world;
-    Recipe recipe;
 
-    explicit LoadStand(Recipe p_recipe, bool p_migrates = false)
-        : rig(1, p_migrates), recipe(p_recipe) {
+    explicit LoadStand(bool p_migrates = false) : rig(1, p_migrates) {
         rig.mount();
         rig.spawn_plane(0)->set_park_timeout_seconds(SHORT_PARK_DEADLINE);
-        if (recipe == FROM_SPAWNER) {
-            PackedStringArray scenes;
-            scenes.push_back(level->get_path());
-            world = mount_stock_world(rig, scenes);
-        }
+        PackedStringArray scenes;
+        scenes.push_back(level->get_path());
+        world = mount_stock_world(rig, scenes);
     }
 
     Node *spawn_root(const char *p_name) {
-        NetwMultiplayer *server = rig.server();
-        if (recipe == SCENE_ROOT) {
-            Node *root = server->scene_spawn(
-                level->get_path(),
-                NetwMultiplayer::SCENE_ISOLATION_NONE
-            );
-            REQUIRE(root != nullptr);
-            server->scene_watch(server->entity_of(root), rig.peer_id(0));
-            return root;
-        }
         Node *root = level->instantiate();
         root->set_name(p_name);
         world.arena(-1)->add_child(root, true);
@@ -165,33 +136,30 @@ struct LoadStand {
 };
 
 TEST_CASE(
-    "[Networked][Spawn] LC1 LC2 LC3 a spawn whose scene is still loading "
-    "waits for it past every park deadline, and its children arrive under it "
-    "once it loads, built by a spawn function that finds it ready"
+    "[Networked][Spawn] LC1 LC2 LC3 a MultiplayerSpawner scene still loading "
+    "on a client waits for it past every park deadline, and its children "
+    "arrive under it once it loads, built by a spawn function that finds it "
+    "ready"
 ) {
-    const Recipe RECIPES[] = {SCENE_ROOT, FROM_SPAWNER};
-    for (const Recipe recipe : RECIPES) {
-        INFO(doctest::String(recipe_name(recipe)));
-        LoadStand stand(recipe);
-        const Loading loading = stand.spawn();
-        stand.rig.pump(PAST_THE_DEADLINE);
-        CHECK(stand.received(loading.root_route) == nullptr);
-        CHECK(stand.received(loading.child_route) == nullptr);
+    LoadStand stand;
+    const Loading loading = stand.spawn();
+    stand.rig.pump(PAST_THE_DEADLINE);
+    CHECK(stand.received(loading.root_route) == nullptr);
+    CHECK(stand.received(loading.child_route) == nullptr);
 
-        client_build = ClientBuild{stand.rig.client(0), loading.root_route};
-        stand.loads.finish();
-        stand.rig.pump(SETTLE);
-        const ClientBuild seen = client_build;
-        client_build = ClientBuild{};
+    client_build = ClientBuild{stand.rig.client(0), loading.root_route};
+    stand.loads.finish();
+    stand.rig.pump(SETTLE);
+    const ClientBuild seen = client_build;
+    client_build = ClientBuild{};
 
-        Node *root = stand.received(loading.root_route);
-        Node *child = stand.received(loading.child_route);
-        REQUIRE(root != nullptr);
-        REQUIRE(child != nullptr);
-        CHECK(child->get_parent() == root);
-        NETW_CHECK_EQ(seen.built, 1);
-        NETW_CHECK_EQ(seen.under_a_ready_root, 1);
-    }
+    Node *root = stand.received(loading.root_route);
+    Node *child = stand.received(loading.child_route);
+    REQUIRE(root != nullptr);
+    REQUIRE(child != nullptr);
+    CHECK(child->get_parent() == root);
+    NETW_CHECK_EQ(seen.built, 1);
+    NETW_CHECK_EQ(seen.under_a_ready_root, 1);
 }
 
 TEST_CASE(
@@ -202,7 +170,7 @@ TEST_CASE(
     for (const char *ending : ENDINGS) {
         INFO(doctest::String(ending));
         const bool lost = String(ending) == "server lost";
-        LoadStand stand(FROM_SPAWNER, lost);
+        LoadStand stand(lost);
         const Loading loading = stand.spawn();
         if (String(ending) == "despawned") {
             stand.despawn(loading.root);
@@ -227,10 +195,10 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Spawn] LC6 a scene that fails to load drops its spawn with "
-    "one warning, and its children with it"
+    "[Networked][Spawn] LC6 a MultiplayerSpawner scene that fails to load on "
+    "a client drops its spawn with one warning, and its children with it"
 ) {
-    LoadStand stand(FROM_SPAWNER);
+    LoadStand stand;
     const Loading loading = stand.spawn();
     const FaultWatch watch;
 
@@ -248,10 +216,26 @@ TEST_CASE(
 }
 
 TEST_CASE(
+    "[Networked][Spawn] LC11 a client's own poll settles a MultiplayerSpawner "
+    "scene that finished loading, with nothing else polling the loads"
+) {
+    LoadStand stand;
+    const Loading loading = stand.spawn();
+    REQUIRE(stand.received(loading.root_route) == nullptr);
+
+    stand.loads.finish_at_next_session_poll();
+    stand.rig.pump(SETTLE);
+
+    Node *root = stand.received(loading.root_route);
+    REQUIRE(root != nullptr);
+    CHECK(stand.received(loading.child_route) != nullptr);
+}
+
+TEST_CASE(
     "[Networked][Spawn] LC7 a scene stays loaded while an entity built from "
     "it lives, so a second spawn of it builds at once"
 ) {
-    LoadStand stand(FROM_SPAWNER);
+    LoadStand stand;
     const Loading first = stand.spawn(false);
     stand.loads.finish();
     stand.rig.pump(SETTLE);
