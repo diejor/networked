@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://dgq2oebtioivg" path="res://examples/playground/game/main.gd" id="1_main"]
 [ext_resource type="PackedScene" uid="uid://bb2nsfunxlw3a" path="res://addons/networked/gdscript/connect/ui/connect_browser.tscn" id="2_brws"]
-[ext_resource type="PackedScene" uid="uid://cdiscordpanel" path="res://examples/shared/discord_panel.tscn" id="3_discord"]
+[ext_resource type="Script" uid="uid://byb7vhn8o7eel" path="res://addons/networked_discord/discord_optional.gd" id="3_discord"]
 
 [node name="Main" type="Node" unique_id=632683677]
 script = ExtResource("1_main")
@@ -21,6 +21,8 @@ unique_name_in_owner = true
 [node name="TitleLabel" parent="UI/ConnectBrowser/VBox/PanelContainer/HeaderBar" parent_id_path=PackedInt32Array(1938257406, 522198391) index="1" unique_id=1146132509]
 text = "Cube Playground"
 
-[node name="DiscordPanel" parent="." instance=ExtResource("3_discord")]
+[node name="DiscordPanel" type="Node" parent="."]
+script = ExtResource("3_discord")
+scene_file = "uid://cdiscordpanel"
 
 [editable path="UI/ConnectBrowser"]

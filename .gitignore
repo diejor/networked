@@ -8,6 +8,10 @@
 
 /addons/networked/bin/
 
+/addons/discord_social_sdk/lib/discord.gdextension
+/addons/discord_social_sdk/lib/linux/libdiscord_partner_sdk.so
+/addons/discord_social_sdk/lib/windows/discord_partner_sdk.dll
+
 /.scons_cache/
 
 /ci/cache/

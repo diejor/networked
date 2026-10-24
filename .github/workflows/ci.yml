@@ -82,7 +82,6 @@ jobs:
     name: "Embedded Suite (${{ matrix.engine }})"
     needs: changes
     if: needs.changes.outputs.hosted == 'true'
-    # The project loads the Discord binding, which needs glibc 2.38.
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
@@ -159,7 +158,6 @@ jobs:
     name: "Doc Drift"
     needs: changes
     if: needs.changes.outputs.docs == 'true' || needs.changes.outputs.native == 'true'
-    # The project loads the Discord binding, which needs glibc 2.38.
     runs-on: ubuntu-24.04
     timeout-minutes: 30
 
@@ -218,7 +216,6 @@ jobs:
     name: "GdUnit4 res://tests"
     needs: changes
     if: needs.changes.outputs.gdscript == 'true'
-    # The project loads the Discord binding, which needs glibc 2.38.
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -275,7 +272,6 @@ jobs:
     name: "GdUnit4 res://examples"
     needs: changes
     if: needs.changes.outputs.examples == 'true'
-    # The project loads the Discord binding, which needs glibc 2.38.
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:

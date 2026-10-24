@@ -33,6 +33,9 @@ LOAD_FAILURES = (
     "Cannot find the entry symbol",
 )
 
+DISCORD_MANIFEST = ROOT / "addons" / "discord_social_sdk" / "lib" / "discord.gdextension"
+DISCORD_SUITES = "res://tests/discord"
+
 PARSE_SWEEP = """extends SceneTree
 
 const ROOTS: Array[String] = [%s]
@@ -41,7 +44,10 @@ const ROOTS: Array[String] = [%s]
 func _init() -> void:
 \tvar files: Array[String] = []
 \tfor root in ROOTS:
-\t\t_collect(root, files)
+\t\tif root.ends_with(".gd"):
+\t\t\tfiles.append(root)
+\t\telse:
+\t\t\t_collect(root, files)
 \tfiles.sort()
 \tfor path in files:
 \t\tResourceLoader.load(path, "Script", ResourceLoader.CACHE_MODE_IGNORE)
@@ -122,6 +128,34 @@ func _init() -> void:
 \t\t%% [wanted.size() - missing.size(), missing, made != null])
 \tquit(0 if missing.is_empty() and made != null else 1)
 """
+
+
+def _without(root: str, skipped: str) -> list[str]:
+    """Paths under `root` that together cover everything but `skipped`."""
+    root = root.rstrip("/")
+    if root == skipped or root.startswith(skipped + "/"):
+        return []
+    if not skipped.startswith(root + "/"):
+        return [root]
+    kept: list[str] = []
+    for child in sorted((ROOT / root.removeprefix("res://")).iterdir()):
+        if not child.name.startswith(".") and (child.is_dir() or child.suffix == ".gd"):
+            kept += _without("%s/%s" % (root, child.name), skipped)
+    return kept
+
+
+def leave_out_discord(roots: list[str]) -> list[str]:
+    """The suites that need Discord's library leave `roots` when it is not
+    installed, because a suite that does not parse never reports."""
+    if DISCORD_MANIFEST.is_file():
+        return roots
+    kept = [path for root in roots for path in _without(root, DISCORD_SUITES)]
+    if kept != [root.rstrip("/") for root in roots]:
+        print(
+            "::notice::%s did not run, because Discord's library is not installed. "
+            "Read %s/README.md to install it." % (DISCORD_SUITES, DISCORD_SUITES.removeprefix("res://"))
+        )
+    return kept
 
 
 def _write_script(name: str, text: str) -> Path:
@@ -278,7 +312,8 @@ def lane_csharp(godot: str, *, dump: Path, sharp_version: str | None, timeout: f
 
 def lane_parse(godot: str, roots: list[str], *, timeout: float) -> int:
     """Load every script under `roots` and report parse failures."""
-    quoted = ", ".join('"%s"' % (root if root.startswith("res://") else "res://" + root.lstrip("/")) for root in roots)
+    roots = leave_out_discord([root if root.startswith("res://") else "res://" + root.lstrip("/") for root in roots])
+    quoted = ", ".join('"%s"' % root for root in roots)
     script = _write_script("parse_check.gd", PARSE_SWEEP % quoted)
     log = TMP / "parse_check.log"
     _godot(
@@ -368,7 +403,7 @@ def lane_gdunit(
         "-rd",
         "res://" + str(report_dir.relative_to(ROOT)).replace(os.sep, "/"),
     ]
-    for path in paths:
+    for path in leave_out_discord(paths):
         argv += ["-a", path]
     _godot(
         godot,

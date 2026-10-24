@@ -8,7 +8,7 @@
 [ext_resource type="Texture2D" uid="uid://c5btj6x06q0lr" path="res://examples/bomber/game/icon.webp" id="13_icon"]
 [ext_resource type="PackedScene" uid="uid://bb2nsfunxlw3a" path="res://addons/networked/gdscript/connect/ui/connect_browser.tscn" id="14_brws"]
 [ext_resource type="PackedScene" uid="uid://d3oi0cvp3b3i0" path="res://examples/shared/in_lobby.tscn" id="15_inlb"]
-[ext_resource type="PackedScene" uid="uid://cdiscordpanel" path="res://examples/shared/discord_panel.tscn" id="16_discord"]
+[ext_resource type="Script" uid="uid://byb7vhn8o7eel" path="res://addons/networked_discord/discord_optional.gd" id="16_discord"]
 [ext_resource type="PackedScene" uid="uid://l523ox2awhi6" path="res://examples/bomber/game/world.tscn" id="17_world"]
 
 [node name="Main" type="Node" unique_id=68306203]
@@ -74,6 +74,8 @@ vertical_alignment = 1
 [node name="InLobby" parent="UI" unique_id=321425260 instance=ExtResource("15_inlb")]
 unique_name_in_owner = true
 
-[node name="DiscordPanel" parent="." instance=ExtResource("16_discord")]
+[node name="DiscordPanel" type="Node" parent="."]
+script = ExtResource("16_discord")
+scene_file = "uid://cdiscordpanel"
 
 [editable path="UI/ConnectBrowser"]

@@ -145,6 +145,34 @@ class ShippedManifest(unittest.TestCase):
             source.write_text(original)
 
 
+class DiscordPayload(unittest.TestCase):
+    BINDING = [
+        "addons/discord_social_sdk/LICENSE",
+        "addons/discord_social_sdk/lib/discord.gdextension.template",
+        "addons/discord_social_sdk/lib/linux/libdiscord_social_sdk.linux.template_debug.x86_64.so",
+    ]
+
+    def test_the_binding_and_its_template_ship(self):
+        package.refuse_discord_library(self.BINDING)
+
+    def test_the_tracked_payload_carries_the_binding(self):
+        payload = [path.as_posix() for path in package.tracked_payload()]
+        self.assertIn("addons/discord_social_sdk/lib/discord.gdextension.template", payload)
+
+    def test_what_only_a_game_may_ship_is_refused(self):
+        for path in [
+            "addons/discord_social_sdk/lib/linux/libdiscord_partner_sdk.so",
+            "addons/discord_social_sdk/lib/windows/discord_partner_sdk.dll",
+            "addons/discord_social_sdk/lib/discord.gdextension",
+        ]:
+            with self.assertRaises(CIError):
+                package.refuse_discord_library(self.BINDING + [path])
+
+    def test_a_payload_without_the_template_is_refused(self):
+        with self.assertRaises(CIError):
+            package.refuse_discord_library(self.BINDING[:1])
+
+
 class StagedCells(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())

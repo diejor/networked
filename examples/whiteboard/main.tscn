@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://f8olprtexsin" path="res://examples/whiteboard/main.gd" id="1_main"]
 [ext_resource type="PackedScene" uid="uid://bb2nsfunxlw3a" path="res://addons/networked/gdscript/connect/ui/connect_browser.tscn" id="2_qdtp1"]
-[ext_resource type="PackedScene" uid="uid://cdiscordpanel" path="res://examples/shared/discord_panel.tscn" id="3_discord"]
+[ext_resource type="Script" uid="uid://byb7vhn8o7eel" path="res://addons/networked_discord/discord_optional.gd" id="3_discord"]
 
 [node name="Main" type="Node" unique_id=1671022039]
 script = ExtResource("1_main")
@@ -15,4 +15,6 @@ script = ExtResource("1_main")
 
 [node name="ConnectBrowser" parent="." unique_id=802878944 instance=ExtResource("2_qdtp1")]
 
-[node name="DiscordPanel" parent="." instance=ExtResource("3_discord")]
+[node name="DiscordPanel" type="Node" parent="."]
+script = ExtResource("3_discord")
+scene_file = "uid://cdiscordpanel"

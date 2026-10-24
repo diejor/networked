@@ -32,6 +32,21 @@ import vendor_extensions
 ADDON = Path("addons") / "networked"
 BIN = ADDON / "bin"
 MANIFEST_NAME = "networked.gdextension"
+DISCORD = Path("addons") / "discord_social_sdk"
+DISCORD_TEMPLATE = DISCORD / "lib" / "discord.gdextension.template"
+DISCORD_MANIFEST = DISCORD / "lib" / "discord.gdextension"
+
+
+def refuse_discord_library(paths: list[str]) -> None:
+    """Discord's terms let only a game ship Discord's own library, and the
+    binding's live manifest fails to load without that library."""
+    for path in paths:
+        if "discord_partner_sdk" in Path(path).name:
+            raise fail("the package would ship Discord's library %s, which only a game may ship" % path)
+        if path == DISCORD_MANIFEST.as_posix():
+            raise fail("the package would ship %s, which fails to load without Discord's library" % path)
+    if DISCORD_TEMPLATE.as_posix() not in paths:
+        raise fail("the package is missing %s" % DISCORD_TEMPLATE.as_posix())
 
 
 def tracked_payload() -> list[Path]:
@@ -39,7 +54,7 @@ def tracked_payload() -> list[Path]:
     completed = run(
         [
             "git", "ls-files", "-z", "--", str(ADDON),
-            "addons/networked_steam", "addons/networked_discord",
+            "addons/networked_steam", "addons/networked_discord", str(DISCORD),
         ],
         capture=True,
         timeout=120,
@@ -47,6 +62,7 @@ def tracked_payload() -> list[Path]:
     paths = [Path(entry) for entry in completed.stdout.split("\0") if entry]
     if not paths:
         raise fail("git lists no files under %s" % ADDON)
+    refuse_discord_library([path.as_posix() for path in paths])
     return paths
 
 
@@ -344,8 +360,10 @@ def write_zip(stage_root: Path, archive: Path) -> None:
     archive.parent.mkdir(parents=True, exist_ok=True)
     if archive.exists():
         archive.unlink()
+    files = sorted(p for p in stage_root.rglob("*") if p.is_file())
+    refuse_discord_library([path.relative_to(stage_root).as_posix() for path in files])
     with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as bundle:
-        for path in sorted(p for p in stage_root.rglob("*") if p.is_file()):
+        for path in files:
             bundle.write(path, path.relative_to(stage_root).as_posix())
 
 

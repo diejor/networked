@@ -12,4 +12,5 @@ docs/tools/vendor/** linguist-vendored
 
 docs/tools/make_rst.py linguist-generated
 
-addons/discord_social_sdk/lib/** export-ignore
+addons/discord_social_sdk/lib/linux/libdiscord_partner_sdk.so export-ignore
+addons/discord_social_sdk/lib/windows/discord_partner_sdk.dll export-ignore

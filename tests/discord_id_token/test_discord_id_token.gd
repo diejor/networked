@@ -4,7 +4,7 @@ const APPLICATION_ID := 1561065725962092666
 const SUBJECT := "123456789012345678"
 const ACCEPTED := [OK, "discord:" + SUBJECT, ""]
 const REFUSED := [ERR_UNAUTHORIZED, "", ""]
-const TOKENS := "res://tests/discord/fixtures/tokens.json"
+const TOKENS := "res://tests/discord_id_token/fixtures/tokens.json"
 
 
 class Gate extends Node:

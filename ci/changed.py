@@ -38,6 +38,8 @@ LANES: dict[str, tuple[str, ...]] = {
     ),
     "gdscript": (
         "addons/networked/**",
+        "addons/networked_discord/**",
+        "addons/discord_social_sdk/**",
         "tests/**",
         "ci/**",
         "project.godot",
@@ -46,6 +48,8 @@ LANES: dict[str, tuple[str, ...]] = {
     "examples": (
         "examples/**",
         "addons/networked/**",
+        "addons/networked_discord/**",
+        "addons/discord_social_sdk/**",
         "ci/**",
         "project.godot",
         ".github/**",
