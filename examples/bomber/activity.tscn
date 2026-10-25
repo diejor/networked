@@ -1,0 +1,23 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" uid="uid://3a3852p4fypv" path="res://examples/bomber/main.tscn" id="1_main"]
+[ext_resource type="Script" path="res://examples/bomber/game/activity_session.gd" id="2_sess"]
+[ext_resource type="Script" uid="uid://certc8teajoaj" path="res://addons/networked_activity/discord_activity_service.gd" id="3_activity"]
+
+[node name="Main" instance=ExtResource("1_main")]
+script = ExtResource("2_sess")
+
+[node name="NakamaAccount" parent="." index="2"]
+host = "nakama.diesjor.com"
+port = 443
+use_ssl = true
+
+[node name="RoomBar" parent="UI/ConnectBrowser"]
+visible = false
+
+[node name="DiscordActivityService" type="NetwService" parent="."]
+script = ExtResource("3_activity")
+application_id = 1519144648411447338
+url_mappings = Dictionary[String, String]({
+"/nakama": "nakama.diesjor.com"
+})

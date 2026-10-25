@@ -69,7 +69,7 @@ Property Descriptions
 
 :godot:`String` **match_id** = ``""`` :ref:`🔗<class_NakamaLobbyDirectory_LobbyCard_property_match_id>`
 
-Relay match id this card describes. Carried as the storage key, not in the serialized body.
+Relay match id this card describes.
 
 .. rst-class:: classref-item-separator
 

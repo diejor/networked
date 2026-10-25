@@ -29,28 +29,28 @@ namespace Networked;
 /// <see cref="MultiplayerApi.MultiplayerPeer"/>.
 /// <see cref="NetwSession.Connection"/> finds servers and joins or hosts one,
 /// and <see cref="Netw.PrepareJoin"/> names the player who joins. <b>Moving the
-/// server</b> The session survives the server leaving when its
-/// <see cref="MultiplayerPeer"/> can hand the server role to another peer. Such
-/// a peer declares this signal, and <see cref="NetwSession.TransferServer"/>
-/// works when it also has the method.
+/// server</b> <see cref="NetwSession.TransferServer"/> makes another peer the
+/// server, and <see cref="NetwSession.ServerTransferred"/> reports it on every
+/// peer. The session also survives the server leaving when its
+/// <see cref="MultiplayerPeer"/> can promote a client by itself. ENet, WebRTC,
+/// Steam and <see cref="OfflineMultiplayerPeer"/> cannot, so losing the server
+/// ends them. On a peer that can, closing the server's window moves the server.
+/// <see cref="NetwSession.Leave"/> ends every client's session on any peer, so
+/// a server that wants the game to go on without it moves the server first.
 /// <code>
-/// signal server_relabelled(successor_was: int, former_now: int)
-///
-/// func transfer_server(peer_id: int) -&gt; Error:
-///     pass
+/// func hand_over(successor: NetwPlayer) -&gt; void:
+///     if session.transfer_server(successor.peer_id) == OK:
+///         await session.server_transferred
+///     await session.leave().wait()
 /// </code>
 /// </para>
 /// <para>
-/// The peer emits the signal from its own <see cref="MultiplayerPeer.Poll"/>,
-/// once it already answers the new ids. <c>NakamaWrapper</c> does this when
-/// <c>NakamaWrapper.migrate_on_host_loss</c> is on. ENet, WebRTC, Steam and
-/// <see cref="OfflineMultiplayerPeer"/> do not, so losing the server ends the
-/// session. <b>Pausing</b> <see cref="NetwSession.Pause"/> pauses every peer
-/// together. Properties stop syncing until <see cref="NetwSession.Unpause"/>,
-/// and RPCs still arrive. Setting <c>SceneTree.paused</c> yourself pauses only
-/// that peer's nodes, and the session keeps running. In an online game a pause
-/// menu usually leaves the tree running, because a paused peer stops predicting
-/// its physics bodies and is corrected on unpause.
+/// <b>Pausing</b> <see cref="NetwSession.Pause"/> pauses every peer together.
+/// Properties stop syncing until <see cref="NetwSession.Unpause"/>, and RPCs
+/// still arrive. Setting <c>SceneTree.paused</c> yourself pauses only that
+/// peer's nodes, and the session keeps running. In an online game a pause menu
+/// usually leaves the tree running, because a paused peer stops predicting its
+/// physics bodies and is corrected on unpause.
 /// <code>
 /// func _on_pause_pressed() -&gt; void:
 ///     session.pause("The host paused the game")
@@ -759,12 +759,33 @@ public sealed class NetwSession : NetwRefCounted
         NetwApi.MethodBind("NetwSession", "transfer_server", 844576869UL);
 
     /// <summary>
-    /// Asks the transport to make <paramref name="peerId"/> the server and this
-    /// peer a client under a new id.
-    /// <see cref="NetwSession.ServerTransferred"/> follows on every peer.
-    /// Whether a transport can is stated in the class description. When the
-    /// server moves, players who have left lose their return window, and their
-    /// kept entities despawn.
+    /// Asks the <see cref="MultiplayerPeer"/> to make <paramref name="peerId"/>
+    /// the server and this peer a client under a new id.
+    /// <see cref="NetwSession.ServerTransferred"/> follows on every peer. A
+    /// peer supports this when it declares a <c>server_relabelled</c> signal
+    /// and a <c>transfer_server</c> method. It emits the signal once
+    /// <see cref="MultiplayerPeer.GetUniqueId"/> already answers the new id. A
+    /// peer with only the signal can still promote a client when the server is
+    /// lost.
+    /// <code>
+    /// extends MultiplayerPeerExtension
+    ///
+    /// signal server_relabelled(successor_was: int, former_now: int)
+    ///
+    /// func transfer_server(peer_id: int) -&gt; Error:
+    ///     return relay.promote(peer_id)
+    ///
+    /// func _poll() -&gt; void:
+    ///     relay.poll()
+    ///     if relay.promoted:
+    ///         server_relabelled.emit(relay.successor_was, relay.former_now)
+    /// </code>
+    /// <para>
+    /// When the server moves, players who have left lose their return window,
+    /// and their kept entities despawn. The new server reads each
+    /// <see cref="NetwPlayer.Account"/> again from the
+    /// <see cref="LobbyDirectory"/> serving the session when it names one, and
+    /// the old server keeps only its own.
     /// <code>
     /// Error
     /// ┠╴ERR_UNAUTHORIZED        called on a client
@@ -772,6 +793,7 @@ public sealed class NetwSession : NetwRefCounted
     /// ┠╴ERR_INVALID_PARAMETER   peer_id is not a connected client
     /// ┖╴ERR_BUSY                a database still has writes to settle
     /// </code>
+    /// </para>
     /// <para>
     /// <b>Server Only.</b>
     /// </para>
@@ -795,8 +817,10 @@ public sealed class NetwSession : NetwRefCounted
     /// Leaves the session. The server saves its entity rows first, and stays
     /// online if the database refuses a row. The promise resolves with an
     /// <c>@GlobalScope.Error</c> once the peer is down or the save failed.
-    /// Closing the game window leaves the same way. A server that saves
-    /// entities loses unsaved changes when its window closes, so it sets
+    /// Closing the game window leaves the same way. On a server whose
+    /// <see cref="MultiplayerPeer"/> can move the server, closing the window
+    /// tells no client, so the peer promotes one when it can. A server that
+    /// saves entities loses unsaved changes when its window closes, so it sets
     /// <c>SceneTree.auto_accept_quit</c> to <c>false</c> and quits after
     /// <see cref="NetwSession.Leave"/> resolves.
     /// </summary>

@@ -12,7 +12,7 @@ NetwService
 
 **Inherits:** :godot:`Node`
 
-**Inherited By:** :ref:`LobbyDirectory<class_LobbyDirectory>`, :ref:`NakamaSessionService<class_NakamaSessionService>`
+**Inherited By:** :ref:`LobbyDirectory<class_LobbyDirectory>`, :ref:`NakamaAccount<class_NakamaAccount>`, :ref:`SteamSocial<class_SteamSocial>`
 
 A :godot:`Node` that registers itself as a service of its :godot:`Node.multiplayer <Node#class_Node_property_multiplayer>` while it is in the tree.
 
@@ -56,11 +56,7 @@ Methods
    +-----------------+---------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`bool`   | :ref:`_should_register<class_NetwService_private_method__should_register>`\ (\ ) |virtual|                                                  |
    +-----------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`   | :ref:`is_transport_restricted<class_NetwService_method_is_transport_restricted>`\ (\ ) |static|                                             |
-   +-----------------+---------------------------------------------------------------------------------------------------------------------------------------------+
    | |void|          | :ref:`register<class_NetwService_method_register>`\ (\ service\: :godot:`Node`, type\: :godot:`Script` = null\ ) |static|                   |
-   +-----------------+---------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|          | :ref:`set_transport_restricted_probe<class_NetwService_method_set_transport_restricted_probe>`\ (\ probe\: :godot:`Callable`\ ) |static|    |
    +-----------------+---------------------------------------------------------------------------------------------------------------------------------------------+
    | |void|          | :ref:`unregister<class_NetwService_method_unregister>`\ (\ service\: :godot:`Node`, type\: :godot:`Script` = null\ ) |static|               |
    +-----------------+---------------------------------------------------------------------------------------------------------------------------------------------+
@@ -122,18 +118,6 @@ Return ``false`` to not register, for example behind a feature flag. ``true`` by
 
 ----
 
-.. _class_NetwService_method_is_transport_restricted:
-
-.. rst-class:: classref-method
-
-:godot:`bool` **is_transport_restricted**\ (\ ) |static| :ref:`🔗<class_NetwService_method_is_transport_restricted>`
-
-Returns what the :godot:`Callable` from :ref:`set_transport_restricted_probe()<class_NetwService_method_set_transport_restricted_probe>` returns, or ``false`` when none is set.
-
-.. rst-class:: classref-item-separator
-
-----
-
 .. _class_NetwService_method_register:
 
 .. rst-class:: classref-method
@@ -146,18 +130,6 @@ Registers ``service`` with its :godot:`Node.multiplayer <Node#class_Node_propert
 
     func _enter_tree() -> void:
         NetwService.register(self)
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NetwService_method_set_transport_restricted_probe:
-
-.. rst-class:: classref-method
-
-|void| **set_transport_restricted_probe**\ (\ probe\: :godot:`Callable`\ ) |static| :ref:`🔗<class_NetwService_method_set_transport_restricted_probe>`
-
-Sets a :godot:`Callable` that returns ``true`` when only WebSocket or HTTP connections are allowed, such as inside a Discord activity. Services can check :ref:`is_transport_restricted()<class_NetwService_method_is_transport_restricted>` to stay inactive there.
 
 .. rst-class:: classref-item-separator
 

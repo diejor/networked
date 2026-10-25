@@ -1,0 +1,50 @@
+# A second Nakama for the join token and party suites, with networked.js loaded
+# and the test-only key in its runtime environment. Client API on 17350.
+#
+#   docker compose -p netwjointoken -f tests/nakama/join_token/docker-compose.yml up -d
+#   NAKAMA_JOIN_TOKEN_HOST=127.0.0.1 godot ... -a res://tests/nakama/test_nakama_join_token.gd
+#   docker compose -p netwjointoken -f tests/nakama/join_token/docker-compose.yml down -v
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=nakama
+      - POSTGRES_PASSWORD=localdb
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "nakama"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  nakama:
+    image: heroiclabs/nakama:3.22.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ../../../addons/networked_nakama/server:/nakama/data/modules
+      - ./test_only_join_key.pem:/nakama/data/join_key.pem:ro
+    entrypoint:
+      - "/bin/sh"
+      - "-ec"
+      - >
+        /nakama/nakama migrate up
+        --database.address postgres:localdb@postgres:5432/nakama &&
+        exec /nakama/nakama
+        --name netw-join-token
+        --database.address postgres:localdb@postgres:5432/nakama
+        --logger.level INFO
+        --session.token_expiry_sec 7200
+        --socket.server_key defaultkey
+        --matchmaker.interval_sec 1
+        --runtime.js_entrypoint networked.js
+        --runtime.env "NETWORKED_JOIN_KEY=$$(cat /nakama/data/join_key.pem)"
+        --runtime.env "NETWORKED_JOIN_AUDIENCE=netw-test"
+    ports:
+      - "17350:7350"
+    healthcheck:
+      test: ["CMD", "/nakama/nakama", "healthcheck"]
+      interval: 5s
+      timeout: 3s
+      retries: 10

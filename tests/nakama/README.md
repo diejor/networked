@@ -25,7 +25,7 @@ First boot pulls images and runs the DB migration, so give it ~20-30s until
 | Developer console      | `http://127.0.0.1:7351`  | login `admin` / `password`    |
 | gRPC                   | `127.0.0.1:7349`         | not used by the Godot client  |
 
-These match `NakamaLobbyDirectory` defaults (`server_key=defaultkey`,
+These match `NakamaAccount` defaults (`server_key=defaultkey`,
 `host=127.0.0.1`, `port=7350`, `use_ssl=false`) and `Nakama.gd` `DEFAULT_PORT`.
 
 ## Pointing the tests at it
@@ -62,9 +62,16 @@ godot --path . -s res://addons/gdUnit4/bin/GdUnitCmdTool.gd --headless \
   -a res://tests/nakama
 ```
 
+The join token suite needs its own server with the module loaded. Start it with
+`docker compose -p netwjointoken -f tests/nakama/join_token/docker-compose.yml up -d`,
+run `res://tests/nakama/test_nakama_join_token.gd` with
+`NAKAMA_JOIN_TOKEN_HOST=127.0.0.1`, then `down -v` the same project.
+
 ## Two-client / two-instance testing
 
-`authenticate_device_async` keys an account by device id. Two game instances on
-one machine that pass the *same* `device_id` share an account (still distinct
-socket presences, which is fine for the relay). For cleaner isolation set a
-distinct `NakamaLobbyDirectory.device_id` per instance.
+A `NakamaAccount` that nobody signed in takes the first free guest slot,
+`user://nakama_guest_<n>`, so each running instance is its own Nakama user. In
+one process every account shares a guest. The suites sign each tree in as its
+own user through
+`NakamaTestSupport.sign_in`, which hands a session to
+`NakamaAccount.use_session`.

@@ -19,7 +19,7 @@ A :godot:`MultiplayerPeer` that sends packets through a Nakama match.
 Description
 -----------
 
-:ref:`NakamaRelayBridge<class_NakamaRelayBridge>` creates it, adds peers and delivers received packets.
+:ref:`NakamaLobbyDirectory<class_NakamaLobbyDirectory>` creates it.
 
 .. rst-class:: classref-reftable-group
 

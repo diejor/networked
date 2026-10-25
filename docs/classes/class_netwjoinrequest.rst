@@ -19,7 +19,7 @@ A player's request to join a session.
 Description
 -----------
 
-The server passes this request to the handler declared with :ref:`Netw.configure_admission()<class_Netw_method_configure_admission>`. A requested :ref:`username<class_NetwJoinRequest_property_username>` does not verify an account.
+The server passes this request to the handler declared with :ref:`Netw.configure_admission()<class_Netw_method_configure_admission>`, after every :ref:`NetwAccountProvider<class_NetwAccountProvider>` has verified. A requested :ref:`username<class_NetwJoinRequest_property_username>` does not verify an account.
 
 
 .. tabs::
@@ -27,16 +27,14 @@ The server passes this request to the handler declared with :ref:`Netw.configure
  .. code-tab:: gdscript
 
     func admit(request: NetwJoinRequest) -> Error:
-        if request.identities.is_empty():
-            return ERR_UNAUTHORIZED
-        return OK
+        return OK if request.account else ERR_UNAUTHORIZED
 
  .. code-tab:: csharp
 
     private Error Admit(Variant value)
     {
         using var request = NetwJoinRequest.From(value);
-        return request.Identities.Length == 0
+        return string.IsNullOrEmpty(request.Account)
             ? Error.Unauthorized : Error.Ok;
     }
 
@@ -50,25 +48,39 @@ Properties
 .. table::
    :widths: auto
 
-   +----------------------------+------------------------------------------------------------------------+
-   | :godot:`int`               | :ref:`peer_id<class_NetwJoinRequest_property_peer_id>`                 |
-   +----------------------------+------------------------------------------------------------------------+
-   | :godot:`StringName`        | :ref:`username<class_NetwJoinRequest_property_username>`               |
-   +----------------------------+------------------------------------------------------------------------+
-   | :godot:`Array`             | :ref:`args<class_NetwJoinRequest_property_args>`                       |
-   +----------------------------+------------------------------------------------------------------------+
-   | :godot:`String`            | :ref:`challenge<class_NetwJoinRequest_property_challenge>`             |
-   +----------------------------+------------------------------------------------------------------------+
-   | :godot:`bool`              | :ref:`challenge_bound<class_NetwJoinRequest_property_challenge_bound>` |
-   +----------------------------+------------------------------------------------------------------------+
-   | :godot:`Variant`           | :ref:`proof<class_NetwJoinRequest_property_proof>`                     |
-   +----------------------------+------------------------------------------------------------------------+
-   | :godot:`PackedStringArray` | :ref:`identities<class_NetwJoinRequest_property_identities>`           |
-   +----------------------------+------------------------------------------------------------------------+
-   | :godot:`String`            | :ref:`account<class_NetwJoinRequest_property_account>`                 |
-   +----------------------------+------------------------------------------------------------------------+
-   | :godot:`String`            | :ref:`account_name<class_NetwJoinRequest_property_account_name>`       |
-   +----------------------------+------------------------------------------------------------------------+
+   +---------------------------------------+------------------------------------------------------------------+
+   | :godot:`String`                       | :ref:`account<class_NetwJoinRequest_property_account>`           |
+   +---------------------------------------+------------------------------------------------------------------+
+   | :godot:`String`                       | :ref:`account_name<class_NetwJoinRequest_property_account_name>` |
+   +---------------------------------------+------------------------------------------------------------------+
+   | :godot:`PackedStringArray`            | :ref:`accounts<class_NetwJoinRequest_property_accounts>`         |
+   +---------------------------------------+------------------------------------------------------------------+
+   | :godot:`Array`                        | :ref:`args<class_NetwJoinRequest_property_args>`                 |
+   +---------------------------------------+------------------------------------------------------------------+
+   | :godot:`String`                       | :ref:`challenge<class_NetwJoinRequest_property_challenge>`       |
+   +---------------------------------------+------------------------------------------------------------------+
+   | :godot:`int`                          | :ref:`peer_id<class_NetwJoinRequest_property_peer_id>`           |
+   +---------------------------------------+------------------------------------------------------------------+
+   | :ref:`NetwSession<class_NetwSession>` | :ref:`session<class_NetwJoinRequest_property_session>`           |
+   +---------------------------------------+------------------------------------------------------------------+
+   | :godot:`StringName`                   | :ref:`username<class_NetwJoinRequest_property_username>`         |
+   +---------------------------------------+------------------------------------------------------------------+
+
+.. rst-class:: classref-reftable-group
+
+Methods
+-------
+
+.. table::
+   :widths: auto
+
+   +-----------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|          | :ref:`add_account<class_NetwJoinRequest_method_add_account>`\ (\ account\: :godot:`String`, name\: :godot:`String`, answers_challenge\: :godot:`bool` = true\ ) |
+   +-----------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`bool`   | :ref:`is_bound<class_NetwJoinRequest_method_is_bound>`\ (\ account\: :godot:`String`\ ) |const|                                                                 |
+   +-----------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`String` | :ref:`name_of<class_NetwJoinRequest_method_name_of>`\ (\ account\: :godot:`String`\ ) |const|                                                                   |
+   +-----------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -79,33 +91,53 @@ Properties
 Property Descriptions
 ---------------------
 
-.. _class_NetwJoinRequest_property_peer_id:
+.. _class_NetwJoinRequest_property_account:
 
 .. rst-class:: classref-property
 
-:godot:`int` **peer_id** :ref:`🔗<class_NetwJoinRequest_property_peer_id>`
+:godot:`String` **account** :ref:`🔗<class_NetwJoinRequest_property_account>`
 
 .. rst-class:: classref-property-setget
 
-- :godot:`int` **get_peer_id**\ (\ )
+- |void| **set_account**\ (\ value\: :godot:`String`\ )
+- :godot:`String` **get_account**\ (\ )
 
-The joining peer's id.
+The account the new :ref:`NetwPlayer<class_NetwPlayer>` takes, such as ``"steam:76561198000000000"``. Starts as the first of :ref:`accounts<class_NetwJoinRequest_property_accounts>`. Empty for a guest.
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NetwJoinRequest_property_username:
+.. _class_NetwJoinRequest_property_account_name:
 
 .. rst-class:: classref-property
 
-:godot:`StringName` **username** :ref:`🔗<class_NetwJoinRequest_property_username>`
+:godot:`String` **account_name** :ref:`🔗<class_NetwJoinRequest_property_account_name>`
 
 .. rst-class:: classref-property-setget
 
-- :godot:`StringName` **get_username**\ (\ )
+- |void| **set_account_name**\ (\ value\: :godot:`String`\ )
+- :godot:`String` **get_account_name**\ (\ )
 
-The name requested through :ref:`Netw.prepare_join()<class_Netw_method_prepare_join>`.
+The display name for :ref:`account<class_NetwJoinRequest_property_account>`. Starts as the name of the first of :ref:`accounts<class_NetwJoinRequest_property_accounts>`.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwJoinRequest_property_accounts:
+
+.. rst-class:: classref-property
+
+:godot:`PackedStringArray` **accounts** :ref:`🔗<class_NetwJoinRequest_property_accounts>`
+
+.. rst-class:: classref-property-setget
+
+- :godot:`PackedStringArray` **get_accounts**\ (\ )
+
+Every account proven for this join. Each :ref:`NetwAccountProvider<class_NetwAccountProvider>`'s comes first, in the order they were accepted, then the account the serving :ref:`LobbyDirectory<class_LobbyDirectory>` reports.
+
+**Note:** The returned array is copied and any changes to it will not update the original property value. See :godot:`PackedStringArray` for more details.
 
 .. rst-class:: classref-item-separator
 
@@ -137,91 +169,96 @@ The arguments of :ref:`Netw.prepare_join()<class_Netw_method_prepare_join>`, dec
 
 - :godot:`String` **get_challenge**\ (\ )
 
-The challenge the joining peer's :ref:`NetwAdmissionConfig.proof()<class_NetwAdmissionConfig_method_proof>` handler answered, or ``""`` without a proof. Verify that :ref:`proof<class_NetwJoinRequest_property_proof>` answers this value. Over WebRTC it is bound to this server's certificate on the connection, and over Steam to this server's Steam ID, so a proof that another server relays does not answer it.
+The challenge every :ref:`NetwAccountProvider<class_NetwAccountProvider>` proved on the joining peer, or ``""`` when none is accepted.
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NetwJoinRequest_property_challenge_bound:
+.. _class_NetwJoinRequest_property_peer_id:
 
 .. rst-class:: classref-property
 
-:godot:`bool` **challenge_bound** :ref:`🔗<class_NetwJoinRequest_property_challenge_bound>`
+:godot:`int` **peer_id** :ref:`🔗<class_NetwJoinRequest_property_peer_id>`
 
 .. rst-class:: classref-property-setget
 
-- :godot:`bool` **get_challenge_bound**\ (\ )
+- :godot:`int` **get_peer_id**\ (\ )
 
-``true`` when :ref:`challenge<class_NetwJoinRequest_property_challenge>` is bound to this server, over WebRTC, over Steam and for the host's own join. ``false`` over ENet and other transports that do not identify the server, where another server of this game can pass the challenge to its own player and forward the answer. Refuse such a request when an account depends on :ref:`proof<class_NetwJoinRequest_property_proof>`.
+The joining peer's id.
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NetwJoinRequest_property_proof:
+.. _class_NetwJoinRequest_property_session:
 
 .. rst-class:: classref-property
 
-:godot:`Variant` **proof** :ref:`🔗<class_NetwJoinRequest_property_proof>`
+:ref:`NetwSession<class_NetwSession>` **session** :ref:`🔗<class_NetwJoinRequest_property_session>`
 
 .. rst-class:: classref-property-setget
 
-- :godot:`Variant` **get_proof**\ (\ )
+- :ref:`NetwSession<class_NetwSession>` **get_session**\ (\ )
 
-The value returned by the joining peer's :ref:`NetwAdmissionConfig.proof()<class_NetwAdmissionConfig_method_proof>` handler. ``null`` when no proof was requested.
+The server's session the peer is joining.
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NetwJoinRequest_property_identities:
+.. _class_NetwJoinRequest_property_username:
 
 .. rst-class:: classref-property
 
-:godot:`PackedStringArray` **identities** :ref:`🔗<class_NetwJoinRequest_property_identities>`
+:godot:`StringName` **username** :ref:`🔗<class_NetwJoinRequest_property_username>`
 
 .. rst-class:: classref-property-setget
 
-- :godot:`PackedStringArray` **get_identities**\ (\ )
+- :godot:`StringName` **get_username**\ (\ )
 
-Accounts verified by the active :ref:`LobbyDirectory<class_LobbyDirectory>` through :ref:`LobbyDirectory._account_of()<class_LobbyDirectory_private_method__account_of>`. The first initializes :ref:`account<class_NetwJoinRequest_property_account>`.
+The name requested through :ref:`Netw.prepare_join()<class_Netw_method_prepare_join>`.
 
-**Note:** The returned array is copied and any changes to it will not update the original property value. See :godot:`PackedStringArray` for more details.
+.. rst-class:: classref-section-separator
+
+----
+
+.. rst-class:: classref-descriptions-group
+
+Method Descriptions
+-------------------
+
+.. _class_NetwJoinRequest_method_add_account:
+
+.. rst-class:: classref-method
+
+|void| **add_account**\ (\ account\: :godot:`String`, name\: :godot:`String`, answers_challenge\: :godot:`bool` = true\ ) :ref:`🔗<class_NetwJoinRequest_method_add_account>`
+
+Adds ``account`` with the display ``name`` to :ref:`accounts<class_NetwJoinRequest_property_accounts>`, from :ref:`NetwAccountProvider._verify()<class_NetwAccountProvider_private_method__verify>`. Pass ``false`` for ``answers_challenge`` when the proof does not depend on :ref:`challenge<class_NetwJoinRequest_property_challenge>`. An account already listed keeps its place.
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NetwJoinRequest_property_account:
+.. _class_NetwJoinRequest_method_is_bound:
 
-.. rst-class:: classref-property
+.. rst-class:: classref-method
 
-:godot:`String` **account** :ref:`🔗<class_NetwJoinRequest_property_account>`
+:godot:`bool` **is_bound**\ (\ account\: :godot:`String`\ ) |const| :ref:`🔗<class_NetwJoinRequest_method_is_bound>`
 
-.. rst-class:: classref-property-setget
-
-- |void| **set_account**\ (\ value\: :godot:`String`\ )
-- :godot:`String` **get_account**\ (\ )
-
-The account to assign in the admission handler, such as ``"discord:80351110224678912"`` or ``"steam:76561198000000000"``. Empty for a guest.
+Returns ``true`` when another server of this game could not have passed on the proof of ``account``. That holds when the transport reports the account, or when its proof answered a :ref:`challenge<class_NetwJoinRequest_property_challenge>` bound to this server, as over WebRTC or through a :ref:`LobbyDirectory<class_LobbyDirectory>` that reports the server's account.
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NetwJoinRequest_property_account_name:
+.. _class_NetwJoinRequest_method_name_of:
 
-.. rst-class:: classref-property
+.. rst-class:: classref-method
 
-:godot:`String` **account_name** :ref:`🔗<class_NetwJoinRequest_property_account_name>`
+:godot:`String` **name_of**\ (\ account\: :godot:`String`\ ) |const| :ref:`🔗<class_NetwJoinRequest_method_name_of>`
 
-.. rst-class:: classref-property-setget
-
-- |void| **set_account_name**\ (\ value\: :godot:`String`\ )
-- :godot:`String` **get_account_name**\ (\ )
-
-The verified display name, initially supplied by the active :ref:`LobbyDirectory<class_LobbyDirectory>`. Empty for a guest.
+Returns the display name proven with ``account``, or ``""``.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

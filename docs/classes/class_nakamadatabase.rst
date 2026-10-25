@@ -12,30 +12,26 @@ NakamaDatabase
 
 **Inherits:** :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` **<** :godot:`Resource`
 
-A :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` that keeps records in Nakama storage.
+A :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` that keeps records in the Nakama storage of the session's :ref:`NakamaAccount<class_NakamaAccount>`.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-Every record is a Nakama storage object owned by the logged in user, so saves follow the account across devices. Each slot is one storage collection.
+Every record is a Nakama storage object owned by the signed in user, so saves follow the account across devices. Each slot is one storage collection.
 
 ::
 
-    var backend := NakamaDatabase.new()
-    backend.wrapper = wrapper
-    Netw.configure_database(self, &"saves").backend(backend)
-
-
+    Netw.configure_database(self, &"saves").backend(NakamaDatabase.new())
 
 \ Storage requests settle with one of these codes. An uncertain code means the request was sent but Nakama never confirmed whether it applied.
 
 .. code:: text
 
     OK                    Nakama applied the request
-    ERR_UNAUTHORIZED      no authenticated session, or Nakama answered 401 or 403
-    ERR_UNAVAILABLE       the Nakama addon is absent
+    ERR_UNCONFIGURED      the session has no NakamaAccount
+    ERR_UNAUTHORIZED      not signed in, or Nakama answered 401 or 403
     ERR_INVALID_DATA      Nakama answered another 4xx status
     ERR_TIMEOUT           canceled, or ended with no HTTP status. Uncertain
     ERR_CONNECTION_ERROR  Nakama answered nothing or a 5xx status. Uncertain
@@ -49,11 +45,9 @@ Properties
 .. table::
    :widths: auto
 
-   +------------------+-------------------------------------------------------+------------------+
-   | :godot:`String`  | :ref:`app<class_NakamaDatabase_property_app>`         | ``"netw_saves"`` |
-   +------------------+-------------------------------------------------------+------------------+
-   | :godot:`Variant` | :ref:`wrapper<class_NakamaDatabase_property_wrapper>` |                  |
-   +------------------+-------------------------------------------------------+------------------+
+   +-----------------+-----------------------------------------------+------------------+
+   | :godot:`String` | :ref:`app<class_NakamaDatabase_property_app>` | ``"netw_saves"`` |
+   +-----------------+-----------------------------------------------+------------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -116,18 +110,6 @@ Property Descriptions
 :godot:`String` **app** = ``"netw_saves"`` :ref:`🔗<class_NakamaDatabase_property_app>`
 
 The collection listing every slot, and the prefix of each slot's collection.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NakamaDatabase_property_wrapper:
-
-.. rst-class:: classref-property
-
-:godot:`Variant` **wrapper** :ref:`🔗<class_NakamaDatabase_property_wrapper>`
-
-The :ref:`NakamaWrapper<class_NakamaWrapper>` used for storage. Without one, every method rejects with :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@GlobalScope_constant_ERR_UNCONFIGURED>`.
 
 .. rst-class:: classref-section-separator
 

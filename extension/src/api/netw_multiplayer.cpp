@@ -2183,7 +2183,21 @@ PackedByteArray NetwMultiplayer::session_accept_payload(
     int64_t p_destination
 ) const {
     if (p_destination == p_row.peer_id) {
-        p_row.join_address = connect_core.join_address();
+        const String address = connect_core.join_address();
+        const int64_t length = wire::string_bytes(address);
+        if (length <= wire::STRING_CAP) {
+            p_row.join_address = address;
+        } else {
+            NETW_ERROR(
+                sys::TRANSPORT,
+                "NetwConnection.join_address is %d bytes long, and a join "
+                "packet carries at most %d, so peer %d joined without it. Use "
+                "a shorter address in the transport or lobby directory.",
+                int(length),
+                wire::STRING_CAP,
+                int(p_destination)
+            );
+        }
         p_row.max_players = uint64_t(connection_max_players());
     }
     return session::frame_write(session::accept_seen_by(p_row, p_destination));
@@ -2246,6 +2260,15 @@ Error NetwMultiplayer::connection_set_join_address(const String &p_address) {
         );
         return ERR_UNAVAILABLE;
     }
+    NETW_ERR_COND_V(
+        wire::string_bytes(p_address) > wire::STRING_CAP,
+        ERR_INVALID_PARAMETER,
+        sys::TRANSPORT,
+        "NetwConnection.join_address got an address %d bytes long, and a "
+        "join packet carries at most %d. Set a shorter address.",
+        int(wire::string_bytes(p_address)),
+        wire::STRING_CAP
+    );
     connect_core.advertise(p_address, 0);
     const int64_t mine = get_unique_id();
     for (const session::AcceptFrame &row : join_roster.accepted_joins()) {
@@ -5222,9 +5245,8 @@ void NetwMultiplayer::session_submit_request(const JoinRequest &p_request) {
     }
     const int64_t proven = is_host() ? mine : int64_t(SERVER_PEER);
     if (session_has_proof(proven)) {
-        sending.proof_bytes = gd::var_to_bytes(
-            link_handshakes[proven].proof.result->get_result()
-        );
+        sending.proof_bytes
+            = gd::var_to_bytes(link_handshakes[proven].proofs);
         if (sending.proof_bytes.size() > 16383) {
             session_report_join_failure(
                 ERR_INVALID_DATA, "The admission proof exceeds 16383 bytes."
@@ -5404,6 +5426,7 @@ Ref<NetwPromise> NetwMultiplayer::session_close_now() {
     if (effective_peer.is_valid()) {
         effective_peer->close();
     }
+    connect_core.on_session_left();
 
     Ref<NetwPromise> left;
     left.instantiate();
@@ -5508,6 +5531,9 @@ void NetwMultiplayer::session_settle_client_leave(
     if (p_link.is_valid()) {
         gd::disconnect_server_later(p_link);
         p_link->close();
+    }
+    if (effective_peer == p_link) {
+        connect_core.on_session_left();
     }
     session_settle_leave(p_left);
 }

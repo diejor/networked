@@ -178,7 +178,9 @@ text = "Address"
 
 [node name="DetailsAddressLabel" type="Label" parent="VBox/Details/DetailsMargin/DetailsVBox/DetailsFlow/AddressPair" unique_id=89234922]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(240, 0)
 layout_mode = 2
+text_overrun_behavior = 3
 theme = ExtResource("1_myxft")
 theme_type_variation = &"DetailValueLabel"
 

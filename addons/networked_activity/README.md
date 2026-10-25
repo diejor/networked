@@ -1,66 +1,28 @@
-# Networked Activity Addon
+# Networked Activity
 
-A Godot 4 addon for building, serving, and deploying Discord Activities.
+Runs a Networked web export as a Discord activity. Every player who launches
+the activity joins one room, and the first to arrive serves it.
 
-## Developer CLI (`cli.js`)
+## Install
 
-The `cli.js` tool at the root of the addon automates the build, compression, 
-local serving, and deployment pipelines.
+Copy `addons/networked_activity` with `addons/networked_discord`, and 
+`addons/networked_nakama`.  A game whose own WebSocket server serves the 
+room leaves out `networked_nakama` and sets `room_transport` and `room_address` 
+to reach that server.
 
-```bash
-# Local Testing (Builds and serves locally on port 8000)
-node addons/networked_activity/cli.js
+## Use
 
-# Local testing with a Cloudflare Tunnel (Exposes local port to the internet)
-node addons/networked_activity/cli.js --tunnel
+Beside the session add a `NakamaAccount` (the Nakama host, port 443,
+`use_ssl`), a `NakamaLobbyDirectory`, a `ConnectBrowser`, and a
+`DiscordActivityService` with the activity's `application_id` and its URL
+mappings. The host checks each player's Discord account with
+`DiscordIdToken.signed_by`.
 
-# Specific Scene Swap (Builds and serves a specific test scene)
-node addons/networked_activity/cli.js --main-scene "res://path/to/scene.tscn"
-
-# Direct Cloudflare Deploy (Builds, Brotli-compresses, and publishes)
-node addons/networked_activity/cli.js --project "your-pages-project"
+```sh
+python3 ci/export.py web --scene res://game/main.tscn --out build/web
+python3 -m http.server -d build/web 8000
 ```
 
----
-
-## Manual Execution (Without the script)
-
-If you prefer not to use `cli.js`, you can run the underlying tools manually.
-
-### Build and Brotli Compress
-Export the project using your configured "Web" preset and compress the WASM 
-binary to bypass Cloudflare's 25 MiB file limit:
-
-```bash
-# Export the project
-godot --headless --export-release "Web" build/web/index.html
-
-# Compress WASM using Brotli and remove the raw file
-brotli -f -q 5 build/web/index.wasm
-rm build/web/index.wasm
-
-# Write the redirects mapping rule
-echo "/index.wasm /index.wasm.br 200" > build/web/_redirects
-
-# Write the security and compression headers
-echo -e "/*\n  Cross-Origin-Opener-Policy: same-origin\n  Cross-Origin-Embedder-Policy: require-corp\n\n/index.wasm\n  Content-Encoding: br\n  Content-Type: application/wasm" > build/web/_headers
-```
-
-### Serve Locally
-Serve the build directory using Wrangler to correctly resolve the Brotli 
-redirections and COOP/COEP headers:
-```bash
-npx wrangler pages dev build/web --port 8000
-```
-
-### Expose Local Server (Tunnel)
-Expose your local port through a public tunnel to test inside the Discord client:
-```bash
-cloudflared tunnel --url http://localhost:8000
-```
-
-### Deploy to Cloudflare Pages
-Publish your build directory directly to your Cloudflare Pages project:
-```bash
-npx wrangler pages deploy build/web --project-name="your-pages-project"
-```
+In the Discord Developer Portal, map the activity's root to that server,
+`/nakama` to the Nakama host, and `/token` to a copy of
+`templates/token_worker`. `discord_smoke.tscn` logs each step of a launch.

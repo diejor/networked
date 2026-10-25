@@ -7,23 +7,22 @@ using namespace godot;
 
 namespace netw {
 
-Ref<NetwAdmissionConfig> NetwAdmissionConfig::proof(
-    const Callable &p_handler
+Ref<NetwAdmissionConfig> NetwAdmissionConfig::accept(
+    const Ref<NetwAccountProvider> &p_provider
 ) {
     NETW_ERR_COND_V(
-        !p_handler.is_valid(),
+        p_provider.is_null(),
         Ref<NetwAdmissionConfig>(this),
         sys::SESSION,
-        "The proof handler cannot be called. Pass a valid Callable to "
-        "NetwAdmissionConfig.proof."
+        "NetwAdmissionConfig.accept got null. Pass a NetwAccountProvider."
     );
-    proof_handler = p_handler;
+    providers.push_back(p_provider);
     return Ref<NetwAdmissionConfig>(this);
 }
 
 void NetwAdmissionConfig::_bind_methods() {
     ClassDB::bind_method(
-        D_METHOD("proof", "handler"), &NetwAdmissionConfig::proof
+        D_METHOD("accept", "provider"), &NetwAdmissionConfig::accept
     );
 }
 

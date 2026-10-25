@@ -52,7 +52,7 @@ namespace Networked;
 /// A directory whose peer class already has a transport only lists lobbies, and
 /// joining one goes through that transport.
 /// <see cref="WebTorrentLobbyDirectory"/> and <see cref="LANLobbyDirectory"/>
-/// work this way. Use <c>SteamLobbyDirectory</c> for Steam lobbies.
+/// work this way.
 /// </para>
 /// </remarks>
 public class LobbyDirectory : NetwService

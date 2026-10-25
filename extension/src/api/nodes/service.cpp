@@ -10,26 +10,12 @@ namespace netw {
 
 namespace {
 
-Callable &restricted_probe() {
-    static Callable probe;
-    return probe;
-}
-
 bool in_editor() {
     Engine *engine = Engine::get_singleton();
     return engine != nullptr && engine->is_editor_hint();
 }
 
 } // namespace
-
-void NetwService::set_transport_restricted_probe(const Callable &p_probe) {
-    restricted_probe() = p_probe;
-}
-
-bool NetwService::is_transport_restricted() {
-    const Callable &probe = restricted_probe();
-    return probe.is_valid() && bool(probe.call());
-}
 
 NetwMultiplayer *NetwService::resolve_api(Node *p_service) {
     if (p_service == nullptr) {
@@ -137,16 +123,6 @@ void NetwService::_notification(int p_what) {
 }
 
 void NetwService::_bind_methods() {
-    ClassDB::bind_static_method(
-        "NetwService",
-        D_METHOD("set_transport_restricted_probe", "probe"),
-        &NetwService::set_transport_restricted_probe
-    );
-    ClassDB::bind_static_method(
-        "NetwService",
-        D_METHOD("is_transport_restricted"),
-        &NetwService::is_transport_restricted
-    );
     ClassDB::bind_static_method(
         "NetwService",
         D_METHOD("register", "service", "type"),

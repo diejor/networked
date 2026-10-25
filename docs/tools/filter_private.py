@@ -143,7 +143,9 @@ def filter_private_elements(root: ET.Element) -> None:
                 parent.remove(elem)
 
 
-DEFAULT_ADDONS = ("networked", "networked_steam", "networked_test")
+DEFAULT_ADDONS = (
+    "networked", "networked_nakama", "networked_steam", "networked_test",
+)
 
 
 def main() -> None:

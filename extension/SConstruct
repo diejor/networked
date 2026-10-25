@@ -38,6 +38,21 @@ def leaf_masked_subsystems():
     return "{:#010x}U".format(mask)
 
 
+def regenerate_bindings_of_another_width(env, godot_cpp):
+    """Regenerate godot-cpp's bindings when gen/ holds another pointer width."""
+    header = godot_cpp / "gen" / "include" / "godot_cpp" / "variant" / "string.hpp"
+    if not header.exists():
+        return
+    generated = re.search(
+        r"STRING_SIZE = (\d+);",
+        header.read_text(encoding="utf-8"),
+    )
+    wanted = 4 if "32" in env["arch"] else 8
+    if generated is None or int(generated.group(1)) != wanted:
+        print("Regenerating godot-cpp bindings for {}.".format(env["arch"]))
+        env.AlwaysBuild(env.File(str(header)))
+
+
 def read_pins():
     pins = {}
     for raw_line in DEPS_FILE.read_text(encoding="utf-8").splitlines():
@@ -188,6 +203,7 @@ if requested_platform == "linux" or (not requested_platform and sys.platform.sta
 
 ARGUMENTS.setdefault("api_version", pins["GODOT_CPP_API_VERSION"])
 env = SConscript(str(godot_cpp / "SConstruct"))
+regenerate_bindings_of_another_width(env, godot_cpp)
 env = env.Clone()
 if use_ccache and shutil.which("ccache"):
     env["CC"] = "ccache " + str(env.get("CC", "gcc"))

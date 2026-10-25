@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://dxragul8r7ve2"]
 
 [ext_resource type="Script" uid="uid://4tfhe3fdtyp0" path="res://addons/networked_discord/ui/discord_panel.gd" id="1_panel"]
-[ext_resource type="Theme" path="res://addons/networked_discord/ui/discord_theme.tres" id="1_theme"]
+[ext_resource type="Theme" uid="uid://cgixq0kn1mjjf" path="res://addons/networked_discord/ui/discord_theme.tres" id="1_theme"]
 [ext_resource type="PackedScene" path="res://addons/networked_discord/ui/discord_party_card.tscn" id="2_party"]
 [ext_resource type="PackedScene" path="res://addons/networked_discord/ui/discord_invite_list.tscn" id="3_invites"]
 [ext_resource type="PackedScene" path="res://addons/networked_discord/ui/discord_friend_list.tscn" id="4_friends"]

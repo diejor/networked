@@ -19,23 +19,24 @@ A :ref:`LobbyDirectory<class_LobbyDirectory>` for Steam lobbies.
 Description
 -----------
 
-A member is a Steam user in the joined lobby, identified by their Steam ID. :ref:`NetwConnection<class_NetwConnection>` hosts and joins lobbies. :ref:`NetwConnection.invited<class_NetwConnection_signal_invited>` reports live invites and invites received at launch.
+A member is a Steam user in the joined lobby, identified by their Steam ID. 
+
+\ :ref:`NetwConnection<class_NetwConnection>` hosts and joins lobbies. :ref:`SteamSocial<class_SteamSocial>` invites friends and turns a Steam invite into :ref:`NetwConnection.invited<class_NetwConnection_signal_invited>`.
 
 ::
 
-    @onready var steam: SteamLobbyDirectory = $SteamLobbyDirectory
+    @onready var lobby: SteamLobbyDirectory = $SteamLobbyDirectory
+    @onready var steam: SteamSocial = session.service(SteamSocial)
 
     func _ready() -> void:
-        steam.member_joined.connect(_on_member_joined)
-        steam.member_left.connect(_on_member_left)
-        $Invite.pressed.connect(steam.open_invite_dialog)
+        lobby.member_joined.connect(_on_member_joined)
+        lobby.member_left.connect(_on_member_left)
 
     func _on_member_joined(steam_id: int) -> void:
         var row := Button.new()
         row.name = str(steam_id)
-        row.text = steam.name_of(steam_id)
+        row.text = steam.profile(steam_id).display_name
         $Members.add_child(row)
-        row.icon = await steam.avatar_of(steam_id)
 
     func _on_member_left(
         steam_id: int, _reason: SteamLobbyDirectory.LeaveReason,
@@ -80,27 +81,19 @@ Methods
 .. table::
    :widths: auto
 
-   +--------------------+--------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`    | :ref:`name_of<class_SteamLobbyDirectory_method_name_of>`\ (\ steam_id\: :godot:`int`\ )                                        |
-   +--------------------+--------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`Texture2D` | :ref:`avatar_of<class_SteamLobbyDirectory_method_avatar_of>`\ (\ steam_id\: :godot:`int`\ )                                    |
-   +--------------------+--------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`int`       | :ref:`peer_of<class_SteamLobbyDirectory_method_peer_of>`\ (\ steam_id\: :godot:`int`\ )                                        |
-   +--------------------+--------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`int`       | :ref:`member_of<class_SteamLobbyDirectory_method_member_of>`\ (\ peer_id\: :godot:`int`\ )                                     |
-   +--------------------+--------------------------------------------------------------------------------------------------------------------------------+
-   | |void|             | :ref:`open_invite_dialog<class_SteamLobbyDirectory_method_open_invite_dialog>`\ (\ )                                           |
-   +--------------------+--------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`      | :ref:`invite_friend<class_SteamLobbyDirectory_method_invite_friend>`\ (\ steam_id\: :godot:`int`\ )                            |
-   +--------------------+--------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`    | :ref:`data<class_SteamLobbyDirectory_method_data>`\ (\ key\: :godot:`String`\ )                                                |
-   +--------------------+--------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`      | :ref:`set_data<class_SteamLobbyDirectory_method_set_data>`\ (\ key\: :godot:`String`, value\: :godot:`String`\ )               |
-   +--------------------+--------------------------------------------------------------------------------------------------------------------------------+
-   | |void|             | :ref:`set_member_data<class_SteamLobbyDirectory_method_set_member_data>`\ (\ key\: :godot:`String`, value\: :godot:`String`\ ) |
-   +--------------------+--------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`String`    | :ref:`member_data<class_SteamLobbyDirectory_method_member_data>`\ (\ steam_id\: :godot:`int`, key\: :godot:`String`\ )         |
-   +--------------------+--------------------------------------------------------------------------------------------------------------------------------+
+   +-----------------+--------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`int`    | :ref:`peer_of<class_SteamLobbyDirectory_method_peer_of>`\ (\ steam_id\: :godot:`int`\ )                                        |
+   +-----------------+--------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`int`    | :ref:`member_of<class_SteamLobbyDirectory_method_member_of>`\ (\ peer_id\: :godot:`int`\ )                                     |
+   +-----------------+--------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`String` | :ref:`data<class_SteamLobbyDirectory_method_data>`\ (\ key\: :godot:`String`\ )                                                |
+   +-----------------+--------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`bool`   | :ref:`set_data<class_SteamLobbyDirectory_method_set_data>`\ (\ key\: :godot:`String`, value\: :godot:`String`\ )               |
+   +-----------------+--------------------------------------------------------------------------------------------------------------------------------+
+   | |void|          | :ref:`set_member_data<class_SteamLobbyDirectory_method_set_member_data>`\ (\ key\: :godot:`String`, value\: :godot:`String`\ ) |
+   +-----------------+--------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`String` | :ref:`member_data<class_SteamLobbyDirectory_method_member_data>`\ (\ steam_id\: :godot:`int`, key\: :godot:`String`\ )         |
+   +-----------------+--------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -345,30 +338,6 @@ The Steam IDs in the joined lobby.
 Method Descriptions
 -------------------
 
-.. _class_SteamLobbyDirectory_method_name_of:
-
-.. rst-class:: classref-method
-
-:godot:`String` **name_of**\ (\ steam_id\: :godot:`int`\ ) :ref:`🔗<class_SteamLobbyDirectory_method_name_of>`
-
-Returns the Steam display name of ``steam_id``.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_SteamLobbyDirectory_method_avatar_of:
-
-.. rst-class:: classref-method
-
-:godot:`Texture2D` **avatar_of**\ (\ steam_id\: :godot:`int`\ ) :ref:`🔗<class_SteamLobbyDirectory_method_avatar_of>`
-
-Returns the medium avatar of ``steam_id``, or ``null`` if none is available.
-
-.. rst-class:: classref-item-separator
-
-----
-
 .. _class_SteamLobbyDirectory_method_peer_of:
 
 .. rst-class:: classref-method
@@ -388,30 +357,6 @@ Returns the session peer id for ``steam_id``, or zero without a peer.
 :godot:`int` **member_of**\ (\ peer_id\: :godot:`int`\ ) :ref:`🔗<class_SteamLobbyDirectory_method_member_of>`
 
 Returns the Steam id for ``peer_id``, or zero without a peer.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_SteamLobbyDirectory_method_open_invite_dialog:
-
-.. rst-class:: classref-method
-
-|void| **open_invite_dialog**\ (\ ) :ref:`🔗<class_SteamLobbyDirectory_method_open_invite_dialog>`
-
-Opens Steam's invite dialog for the joined lobby.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_SteamLobbyDirectory_method_invite_friend:
-
-.. rst-class:: classref-method
-
-:godot:`bool` **invite_friend**\ (\ steam_id\: :godot:`int`\ ) :ref:`🔗<class_SteamLobbyDirectory_method_invite_friend>`
-
-Invites ``steam_id`` to the joined lobby.
 
 .. rst-class:: classref-item-separator
 

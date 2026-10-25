@@ -3,13 +3,15 @@
 [ext_resource type="Script" uid="uid://dkbxtbmxegbkx" path="res://examples/bomber/game/bomber_session.gd" id="1_sess"]
 [ext_resource type="Script" uid="uid://nfi8rw8sbvir" path="res://examples/bomber/game/gamestate.gd" id="5_gbknk"]
 [ext_resource type="Script" uid="uid://beasv4qgrdwtn" path="res://addons/networked_steam/steam_lobby_directory.gd" id="9_p4o8j"]
-[ext_resource type="Script" uid="uid://d0u2yowat1s3u" path="res://addons/networked/gdscript/nakama/nakama_lobby_directory.gd" id="10_ej8d4"]
+[ext_resource type="Script" uid="uid://d0u2yowat1s3u" path="res://addons/networked_nakama/nakama_lobby_directory.gd" id="10_ej8d4"]
 [ext_resource type="Script" uid="uid://d16jtw60ivwir" path="res://examples/bomber/game/lobby.gd" id="12_lobby"]
 [ext_resource type="Texture2D" uid="uid://c5btj6x06q0lr" path="res://examples/bomber/game/icon.webp" id="13_icon"]
 [ext_resource type="PackedScene" uid="uid://bb2nsfunxlw3a" path="res://addons/networked/gdscript/connect/ui/connect_browser.tscn" id="14_brws"]
 [ext_resource type="PackedScene" uid="uid://d3oi0cvp3b3i0" path="res://examples/shared/in_lobby.tscn" id="15_inlb"]
 [ext_resource type="Script" uid="uid://byb7vhn8o7eel" path="res://addons/networked_discord/discord_optional.gd" id="16_discord"]
 [ext_resource type="PackedScene" uid="uid://l523ox2awhi6" path="res://examples/bomber/game/world.tscn" id="17_world"]
+[ext_resource type="Script" uid="uid://bvk2dt80q4a6f" path="res://addons/networked_steam/steam_social.gd" id="18_steam"]
+[ext_resource type="Script" uid="uid://ge70acye7r1c" path="res://addons/networked_nakama/nakama_account.gd" id="19_nakama"]
 
 [node name="Main" type="Node" unique_id=68306203]
 script = ExtResource("1_sess")
@@ -18,6 +20,13 @@ script = ExtResource("1_sess")
 unique_name_in_owner = true
 script = ExtResource("5_gbknk")
 world_scene = ExtResource("17_world")
+
+[node name="SteamSocial" type="NetwService" parent="." unique_id=1501877310]
+script = ExtResource("18_steam")
+spacewar_when_unset = true
+
+[node name="NakamaAccount" type="NetwService" parent="." unique_id=1873421905]
+script = ExtResource("19_nakama")
 
 [node name="LobbyProviders" type="Node" parent="." unique_id=1033260268]
 
@@ -28,8 +37,6 @@ metadata/_custom_type_script = "uid://beasv4qgrdwtn"
 
 [node name="NakamaLobbyDirectory" type="LobbyDirectory" parent="LobbyProviders" unique_id=1119735850]
 script = ExtResource("10_ej8d4")
-device_id = "bomber-host-diego-001"
-local_member_name = "diegote"
 browser_filter_uid = "networked-bomber"
 metadata/_custom_type_script = "uid://d0u2yowat1s3u"
 

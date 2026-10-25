@@ -6,16 +6,8 @@ const ENET := &"ENetMultiplayerPeer"
 
 
 class Gate extends Node:
-	var social: DiscordSocial
-	var application_id: int
-
-
-	func prove(challenge: String) -> PackedByteArray:
-		return await social.prove(challenge)
-
-
 	func admit(request: NetwJoinRequest) -> Error:
-		return await DiscordIdToken.admit(request, application_id)
+		return OK if request.account else ERR_UNAUTHORIZED
 
 
 var role: String
@@ -88,13 +80,12 @@ func test_discord_live_round_trip(timeout := 1800000) -> void:
 	social.application_id = application_id
 	party = social.party
 	gate = Gate.new()
-	gate.social = social
-	gate.application_id = application_id
 	viewport.add_child(social)
 	viewport.add_child(gate)
 	add_child(viewport)
 	viewport.api.auth_timeout = WAIT_SECONDS
-	Netw.configure_admission(gate.admit).proof(gate.prove)
+	Netw.configure_admission(gate.admit) \
+			.accept(DiscordIdToken.new(application_id))
 	session = Netw.session(viewport)
 	party.invited.connect(watch("party.invited"))
 	party.join_requested.connect(watch("party.join_requested"))
@@ -238,13 +229,6 @@ func follow(leader: int) -> void:
 	if not await step("follow: the leader admits the player", admitted):
 		return
 	assert_str(session.local_player.account).is_equal(account_of(own))
-	var started := Time.get_ticks_msec()
-	var proof := await social.prove("second-prove")
-	print(
-		"NETW_DISCORD_LIVE second prove took %.2fs, under 1s is silent"
-		% ((Time.get_ticks_msec() - started) / 1000.0),
-	)
-	assert_bool(proof.is_empty()).is_false()
 
 	var ended := func() -> bool:
 		return session.state == NetwSession.STATE_OFFLINE

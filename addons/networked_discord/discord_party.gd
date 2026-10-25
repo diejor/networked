@@ -1,11 +1,16 @@
 ## The player's party of Discord friends with a voice call, which stays
 ## together across matches and servers.
 ##
-## A signed in player is always in one party, alone and leading it until a
-## friend joins. A Join click on the player's Discord profile, an invitation
-## and a join request all join that party. Each member follows the leader's
-## server through [signal NetwConnection.invited]. Each [DiscordSocial] has
-## one as [member DiscordSocial.party].
+## A signed in player is in a party of one, leading it, until a friend joins.
+## Each [DiscordSocial] has one as [member DiscordSocial.party].
+## [br][br]
+## A Join click on the player's Discord profile, an invitation and a join
+## request all join that party.
+## [br][br]
+## Only the leader can [method kick].
+## [br][br]
+## Each member follows the leader's server through
+## [signal NetwConnection.invited].
 ## [codeblock]
 ## func _ready() -> void:
 ##     discord.party.invited.connect(_on_party_invited)
@@ -66,18 +71,23 @@ var max_members := 8:
 	set(value):
 		max_members = value
 		changed.emit()
+
 ## Puts every member in the party's voice call.
 var voice_enabled := true
+
 ## The input action that opens the microphone while pressed. Empty sends the
 ## player's voice whenever they speak.
 var push_to_talk_action: StringName:
 	set(value):
 		push_to_talk_action = value
 		_watched = 0
+
 ## Sends the leader's server to [signal NetwConnection.invited] each time
 ## the leader hosts or joins one, with [member NetwEndpoint.invited_by] set
-## to the leader's display name.
+## to the leader's display name. Keep it on for one party at a time, or two
+## leaders pull the player between their servers.
 var follow_leader := true
+
 ## Mutes the player's microphone in the call. It stays set for the next call.
 var muted: bool:
 	get:
@@ -86,6 +96,7 @@ var muted: bool:
 		if _social.client != null:
 			_social.client.set_self_mute_all(value)
 			changed.emit()
+
 ## Silences the call for the player and mutes their microphone. It stays set
 ## for the next call.
 var deafened: bool:
@@ -116,6 +127,7 @@ var members: Array[int]:
 				ids.append(id)
 		ids.sort()
 		return ids
+
 ## The friend who started the party while their game is connected, and
 ## otherwise the member with the lowest user ID. [code]0[/code] while signed
 ## out.
@@ -133,6 +145,7 @@ var leader: int:
 		if not claims.is_empty():
 			return claims.min()
 		return present.min() if not present.is_empty() else 0
+
 ## The friends who invited the player to their party. An invitation leaves
 ## the list when the player joins that party, when Discord expires it, and
 ## when the player signs out.
@@ -141,6 +154,7 @@ var invitations: Array[int]:
 		var ids: Array[int] = []
 		ids.assign(_invitations.keys())
 		return ids
+
 ## The friends who asked to join the party. A request leaves the list when
 ## [method invite] answers it, when Discord expires it, and when the player
 ## signs out.
@@ -149,6 +163,7 @@ var join_requests: Array[int]:
 		var ids: Array[int] = []
 		ids.assign(_join_requests.keys())
 		return ids
+
 ## [code]true[/code] while the player is connected to the party's call.
 var in_call: bool:
 	get:
@@ -159,6 +174,7 @@ var in_call: bool:
 			if call.get_channel_id() == _lobby:
 				return call.get_status() == DiscordCallStatus.CONNECTED
 		return false
+
 ## The secret a friend's Join click on the player's Discord profile joins.
 ## Empty while signed out.
 var join_secret: String:
@@ -169,7 +185,6 @@ static var _owner: DiscordParty
 static var _serial: int
 static var _presence_at: int
 static var _presence_warned: bool
-
 var _social: DiscordSocial
 var _presented: Array
 var _shown_join: String
@@ -739,10 +754,7 @@ func invite(friend: int) -> void:
 
 ## Joins the party of the friend [param friend]. It accepts their invitation
 ## in [member invitations], or else sends them a join request that they
-## answer with [method invite]. When the game has used
-## [method DiscordSocial.prove], a proof about to expire is renewed as the
-## player enters the party, so Discord's page opens then and not while joining
-## a server.
+## answer with [method invite].
 func join(friend: int) -> void:
 	if _owner != self or _social.user_id == 0 or friend in members:
 		return

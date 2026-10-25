@@ -60,6 +60,10 @@ class LoopbackRig {
         client_state_sets;
     double tick_period_ms = 1000.0 / 30.0;
     bool joins_by_default = false;
+    void (*adopt)(
+        netw::NetwMultiplayer *,
+        const godot::Ref<netw::LocalMultiplayerPeer> &
+    ) = nullptr;
 
     godot::Ref<netw::NetwMultiplayer> make_api(
         const godot::Ref<netw::LocalMultiplayerPeer> &p_peer
@@ -70,7 +74,11 @@ class LoopbackRig {
         if (api.is_valid()) {
             api->session_default_join_held = !joins_by_default;
             api->session_get_inner()->set_root_path(godot::NodePath("/"));
-            api->set("multiplayer_peer", p_peer);
+            if (adopt != nullptr) {
+                adopt(api.ptr(), p_peer);
+            } else {
+                api->set("multiplayer_peer", p_peer);
+            }
         }
         return api;
     }
@@ -381,9 +389,13 @@ public:
     explicit LoopbackRig(
         int p_clients = 1,
         bool p_migrates = false,
-        bool p_joins_by_default = false
+        bool p_joins_by_default = false,
+        void (*p_adopt)(
+            netw::NetwMultiplayer *,
+            const godot::Ref<netw::LocalMultiplayerPeer> &
+        ) = nullptr
     )
-        : joins_by_default(p_joins_by_default) {
+        : joins_by_default(p_joins_by_default), adopt(p_adopt) {
         link.instantiate();
         if (p_migrates) {
             link->enable_server_transfer();

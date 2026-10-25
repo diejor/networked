@@ -15,8 +15,10 @@ const STATUS_HOLES: Dictionary[DiscordProfile.Status, Vector4] = {
 
 ## In pixels. Half the size or more draws a circle.
 @export var corner_radius := 1000.0
+
 ## Draws the user's status as a dot in the bottom right corner.
 @export var show_status := false
+
 ## Draws the game icon from Project Settings until a user is set.
 @export var show_project_icon := false
 

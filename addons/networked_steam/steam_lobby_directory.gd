@@ -1,22 +1,22 @@
 ## A [LobbyDirectory] for Steam lobbies.
 ##
 ## A member is a Steam user in the joined lobby, identified by their Steam ID.
-## [NetwConnection] hosts and joins lobbies. [signal NetwConnection.invited]
-## reports live invites and invites received at launch.
+## [br][br]
+## [NetwConnection] hosts and joins lobbies. [SteamSocial] invites friends
+## and turns a Steam invite into [signal NetwConnection.invited].
 ## [codeblock]
-## @onready var steam: SteamLobbyDirectory = $SteamLobbyDirectory
+## @onready var lobby: SteamLobbyDirectory = $SteamLobbyDirectory
+## @onready var steam: SteamSocial = session.service(SteamSocial)
 ##
 ## func _ready() -> void:
-##     steam.member_joined.connect(_on_member_joined)
-##     steam.member_left.connect(_on_member_left)
-##     $Invite.pressed.connect(steam.open_invite_dialog)
+##     lobby.member_joined.connect(_on_member_joined)
+##     lobby.member_left.connect(_on_member_left)
 ##
 ## func _on_member_joined(steam_id: int) -> void:
 ##     var row := Button.new()
 ##     row.name = str(steam_id)
-##     row.text = steam.name_of(steam_id)
+##     row.text = steam.profile(steam_id).display_name
 ##     $Members.add_child(row)
-##     row.icon = await steam.avatar_of(steam_id)
 ##
 ## func _on_member_left(
 ##     steam_id: int, _reason: SteamLobbyDirectory.LeaveReason,
@@ -56,6 +56,8 @@ enum LeaveReason {
 ## The bundled GodotSteam version.
 const GODOTSTEAM_VERSION: String = "4.18.1"
 
+const _SteamStart := preload("steam_start.gd")
+
 ## The player limit when hosting supplies none.
 @export_range(1, 250) var max_players: int = 8
 
@@ -77,6 +79,7 @@ const GODOTSTEAM_VERSION: String = "4.18.1"
 ## The joined lobby id, or zero while outside a lobby. Its address is this
 ## id as a [String].
 var lobby_id: int = 0
+
 ## The lobby's peer, or [code]null[/code] while disconnected.
 var peer: SteamMultiplayerPeer
 
@@ -88,10 +91,7 @@ var members: Array[int]:
 			result.append(Steam.getLobbyMemberByIndex(lobby_id, index))
 		return result
 
-static var _initialized: bool = false
-static var _callback_owner: WeakRef
 static var _creator: WeakRef
-
 var _operation: int = 0
 var _awaiting_lobby: bool = false
 var _session: NetwSession
@@ -109,16 +109,12 @@ func _init() -> void:
 			| LobbyDirectory.CAPABILITY_FRIEND_NAMES
 	)
 
-	set_process(false)
-
 
 func _should_register() -> bool:
-	return not NetwService.is_transport_restricted() and Steam.isSteamRunning()
+	return Steam.isSteamRunning()
 
 
 func _service_entered(session: NetwSession) -> void:
-	_session = session
-
 	var app_id := int(
 		ProjectSettings.get_setting("steam/initialization/app_id", 0),
 	)
@@ -131,13 +127,16 @@ func _service_entered(session: NetwSession) -> void:
 		session.unregister_service(self)
 		return
 
-	if not _initialized:
-		var result: Dictionary = Steam.steamInitEx(app_id)
-		if result.status != Steam.STEAM_API_INIT_RESULT_OK:
-			provider_unavailable.emit("Steam did not start. " + String(result.verbal))
-			session.unregister_service(self)
-			return
-		_initialized = true
+	var started := _SteamStart.start(app_id)
+	if started.status != Steam.STEAM_API_INIT_RESULT_OK:
+		provider_unavailable.emit(
+			"Steam did not start. " + String(started.verbal),
+		)
+		session.unregister_service(self)
+		return
+
+	_session = session
+	if not Steam.lobby_created.is_connected(_on_lobby_created):
 		Steam.lobby_created.connect(_on_lobby_created)
 
 	var version: String = Steam.get_godotsteam_version()
@@ -150,38 +149,20 @@ func _service_entered(session: NetwSession) -> void:
 		)
 
 	Steam.lobby_match_list.connect(_on_lobby_match_list)
-	Steam.join_requested.connect(_on_join_requested)
 	Steam.lobby_chat_update.connect(_on_lobby_chat_update)
 	Steam.lobby_data_update.connect(_on_lobby_data_update)
 
-	var launched: String = Steam.getLaunchCommandLine()
-	var target := launched.get_slice("+connect_lobby ", 1).get_slice(" ", 0)
-	if target.is_valid_int():
-		invite.call_deferred(target, "")
-
-	set_process(true)
-
 
 func _service_exiting(_departing: NetwSession) -> void:
-	if not is_processing():
+	if _session == null:
 		return
 
-	set_process(false)
-	_callback_owner = null
-
+	_session = null
 	Steam.lobby_match_list.disconnect(_on_lobby_match_list)
-	Steam.join_requested.disconnect(_on_join_requested)
 	Steam.lobby_chat_update.disconnect(_on_lobby_chat_update)
 	Steam.lobby_data_update.disconnect(_on_lobby_data_update)
 
 	_leave_lobby()
-
-
-func _process(_delta: float) -> void:
-	if _callback_owner == null or _callback_owner.get_ref() == null:
-		_callback_owner = weakref(self)
-	if _callback_owner.get_ref() == self:
-		Steam.run_callbacks()
 
 
 func _peer_class() -> StringName:
@@ -234,9 +215,10 @@ func _host_lobby(settings: Dictionary) -> void:
 	_operation += 1
 	var operation := _operation
 	var limit := int(settings.get("max_players", 0))
-	Steam.createLobby(types[visibility], limit if limit > 0 else max_players)
-
-	var created: Array = await Steam.lobby_created
+	var created: Array = await _SteamStart.create_lobby(
+		types[visibility],
+		limit if limit > 0 else max_players,
+	)
 	_awaiting_lobby = false
 	if operation != _operation:
 		if created[0] == Steam.RESULT_OK:
@@ -371,10 +353,6 @@ func _on_lobby_match_list(lobbies: Array) -> void:
 	publish_lobbies(addresses, names, infos)
 
 
-func _on_join_requested(id: int, friend_id: int) -> void:
-	invite(str(id), Steam.getFriendPersonaName(friend_id))
-
-
 static func _on_lobby_created(result: int, id: int) -> void:
 	if (
 			_creator != null
@@ -385,38 +363,6 @@ static func _on_lobby_created(result: int, id: int) -> void:
 	_creator = null
 
 
-## Returns the Steam display name of [param steam_id].
-func name_of(steam_id: int) -> String:
-	return Steam.getFriendPersonaName(steam_id)
-
-
-## Returns the medium avatar of [param steam_id], or [code]null[/code]
-## if none is available.
-func avatar_of(steam_id: int) -> Texture2D:
-	if Steam.requestUserInformation(steam_id, false):
-		var changed: Array = await Steam.persona_state_change
-		while changed[0] != steam_id:
-			changed = await Steam.persona_state_change
-
-	if Steam.getMediumFriendAvatar(steam_id) <= 0:
-		return null
-
-	Steam.getPlayerAvatar(Steam.AVATAR_MEDIUM, steam_id)
-	var avatar: Array = await Steam.avatar_loaded
-	while avatar[0] != steam_id or avatar[1] != 64:
-		avatar = await Steam.avatar_loaded
-
-	return ImageTexture.create_from_image(
-		Image.create_from_data(
-			64,
-			64,
-			false,
-			Image.FORMAT_RGBA8,
-			avatar[2],
-		),
-	)
-
-
 ## Returns the session peer id for [param steam_id], or zero without a peer.
 func peer_of(steam_id: int) -> int:
 	return peer.get_peer_id_for_steam_id(steam_id) if peer != null else 0
@@ -425,16 +371,6 @@ func peer_of(steam_id: int) -> int:
 ## Returns the Steam id for [param peer_id], or zero without a peer.
 func member_of(peer_id: int) -> int:
 	return peer.get_steam_id_for_peer_id(peer_id) if peer != null else 0
-
-
-## Opens Steam's invite dialog for the joined lobby.
-func open_invite_dialog() -> void:
-	Steam.activateGameOverlayInviteDialog(lobby_id)
-
-
-## Invites [param steam_id] to the joined lobby.
-func invite_friend(steam_id: int) -> bool:
-	return Steam.inviteUserToLobby(lobby_id, steam_id)
 
 
 ## Returns the joined lobby's value at [param key].

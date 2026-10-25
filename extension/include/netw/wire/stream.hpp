@@ -124,6 +124,10 @@ public:
 
 constexpr int STRING_CAP = 1023;
 
+inline int64_t string_bytes(const godot::String &p_value) {
+    return p_value.utf8().length();
+}
+
 template <class Stream>
 inline bool string_field(Stream &p_stream, godot::String &r_value) {
     godot::PackedByteArray staged;

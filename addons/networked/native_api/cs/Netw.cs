@@ -38,6 +38,21 @@ namespace Networked;
 ///     for player: NetwPlayer in Netw.session(self).players:
 ///         arena.add_child(Netw.spawn_player(player, make_car))
 /// </code>
+/// <para>
+/// <b>Accounts</b> <see cref="Netw.ConfigureAdmission"/> decides who joins.
+/// Each <see cref="NetwAccountProvider"/> added with
+/// <see cref="NetwAdmissionConfig.Accept"/> proves an account before the
+/// handler runs, and the player keeps it as <see cref="NetwPlayer.Account"/>.
+/// <see cref="NetwIdToken"/> proves one with a token signed by a backend the
+/// server trusts. The Steam, Nakama and Discord addons each ship a provider.
+/// <code>
+/// func _init() -&gt; void:
+///     Netw.configure_admission(admit).accept(id_token)
+///
+/// func admit(request: NetwJoinRequest) -&gt; Error:
+///     return OK if request.account else ERR_UNAUTHORIZED
+/// </code>
+/// </para>
 /// </remarks>
 public sealed class Netw : NetwRefCounted
 {
@@ -261,9 +276,12 @@ public sealed class Netw : NetwRefCounted
     /// <summary>
     /// Declares the session's admission handler and returns its
     /// <see cref="NetwAdmissionConfig"/>. The server calls
-    /// <paramref name="handler"/> with each <see cref="NetwJoinRequest"/> and
-    /// admits the peer when it returns <c>@GlobalScope.OK</c>. The handler may
-    /// <c>await</c> for up to <see cref="NetwMultiplayer.AuthTimeout"/>.
+    /// <paramref name="handler"/> with each <see cref="NetwJoinRequest"/> once
+    /// every <see cref="NetwAccountProvider"/> accepted with
+    /// <see cref="NetwAdmissionConfig.Accept"/> has verified, and admits the
+    /// peer when it returns <c>@GlobalScope.OK</c>. Verifying and the handler
+    /// together may <c>await</c> for up to
+    /// <see cref="NetwMultiplayer.AuthTimeout"/>.
     /// </summary>
     public static NetwAdmissionConfig ConfigureAdmission(Callable handler)
     {

@@ -55,7 +55,7 @@ def tracked_payload() -> list[Path]:
         [
             "git", "ls-files", "-z", "--", str(ADDON),
             "addons/networked_steam", "addons/networked_discord", str(DISCORD),
-        ],
+            "addons/networked_nakama", "addons/com.heroiclabs.nakama",        ],
         capture=True,
         timeout=120,
     )

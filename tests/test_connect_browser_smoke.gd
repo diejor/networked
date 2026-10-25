@@ -182,6 +182,17 @@ func test_a_failure_reaches_the_banner_and_the_popup() -> void:
 	assert_bool(browser.banner.visible).is_false()
 
 
+func test_a_host_refused_its_own_join_reaches_the_banner() -> void:
+	browser.host(&"LocalMultiplayerPeer", { }, NetwServerInfo.new(), [])
+	assert_int(await EnetTestSupport.await_online(tree)).is_equal(OK)
+
+	session.join_failed.emit(ERR_TIMEOUT, "The join ran out of time.")
+	await get_tree().process_frame
+
+	assert_bool(browser.banner.visible).is_true()
+	assert_str(browser.banner_label.text).is_equal("The join ran out of time.")
+
+
 func test_the_room_bar_shows_the_code_while_hosting() -> void:
 	var room_bar := browser.get_node(^"RoomBar")
 	assert_bool(room_bar.panel.visible).is_false()

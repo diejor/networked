@@ -140,6 +140,7 @@ void NetwPromise::resolve(const Variant &value) {
     if (completed || failed) {
         return;
     }
+    const Ref<NetwPromise> settling(this);
     completed = true;
     result = value;
     emit_signal(StringName(SIG_SETTLED));
@@ -156,6 +157,7 @@ void NetwPromise::reject(Error error_code, const String &error_detail) {
     if (completed || failed) {
         return;
     }
+    const Ref<NetwPromise> settling(this);
     failed = true;
     code = error_code;
     detail = error_detail;

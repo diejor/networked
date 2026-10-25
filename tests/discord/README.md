@@ -2,8 +2,7 @@
 
 These suites name Discord's own classes, so they run only where Discord's
 library is installed. Without it `ci/test.py` leaves this folder out and says
-so, and the examples play without their Discord panel. The token checks in
-`tests/discord_id_token` need no library and always run.
+so, and the examples play without their Discord panel.
 
 ## Turn Discord on
 

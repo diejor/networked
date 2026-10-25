@@ -56,16 +56,62 @@ void split_host_port(
     r_port = port_str.to_int();
 }
 
-String lan_address() {
-    const PackedStringArray addresses = gd::local_addresses();
-    for (int64_t at = 0; at < addresses.size(); at++) {
-        const String address = addresses[at];
-        if (address.begins_with("127.") || address.contains(":")) {
-            continue;
+namespace {
+
+bool is_virtual_interface(const String &p_name) {
+    const String name = p_name.to_lower();
+    const char *const virtual_names[] = {
+        "docker", "br-",       "veth",       "virbr",  "vboxnet", "vmnet",
+        "podman", "vethernet", "virtualbox", "vmware", "hyper-v",
+    };
+    for (const char *virtual_name : virtual_names) {
+        if (name.contains(virtual_name)) {
+            return true;
         }
-        return address;
     }
-    return "127.0.0.1";
+    return false;
+}
+
+bool is_private_ipv4(const String &p_address) {
+    if (p_address.begins_with("10.") || p_address.begins_with("192.168.")) {
+        return true;
+    }
+    if (!p_address.begins_with("172.")) {
+        return false;
+    }
+    const int64_t second = p_address.get_slicec('.', 1).to_int();
+    return second >= 16 && second <= 31;
+}
+
+int lan_rank(const gd::LocalAddress &p_found) {
+    const String &address = p_found.address;
+    if (address.is_empty() || address.contains(":")
+        || address.begins_with("127.")) {
+        return 0;
+    }
+    if (is_virtual_interface(p_found.interface_name)) {
+        return 1;
+    }
+    return is_private_ipv4(address) ? 3 : 2;
+}
+
+} // namespace
+
+String pick_lan_address(const LocalVector<gd::LocalAddress> &p_found) {
+    String best = "127.0.0.1";
+    int best_rank = 0;
+    for (const gd::LocalAddress &found : p_found) {
+        const int rank = lan_rank(found);
+        if (rank > best_rank) {
+            best = found.address;
+            best_rank = rank;
+        }
+    }
+    return best;
+}
+
+String lan_address() {
+    return pick_lan_address(gd::local_interface_addresses());
 }
 
 StringName ENetTransport::peer_class() const {

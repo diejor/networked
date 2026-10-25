@@ -12,16 +12,23 @@ NakamaLobbyDirectory
 
 **Inherits:** :ref:`LobbyDirectory<class_LobbyDirectory>` **<** :ref:`NetwService<class_NetwService>` **<** :godot:`Node`
 
-A :ref:`LobbyDirectory<class_LobbyDirectory>` that hosts and joins Nakama relay matches.
+A :ref:`LobbyDirectory<class_LobbyDirectory>` that hosts and joins Nakama relay matches as the session's :ref:`NakamaAccount<class_NakamaAccount>`.
 
 .. rst-class:: classref-introduction-group
 
 Description
 -----------
 
-The host needs no open port, so web exports can host. A lobby's address is its match id, which players can share to join directly. Lobby names and settings are stored in Nakama storage so they can be listed. 
+The host needs no open port, so a web export can host. A lobby's address is its match ID, which players can share to join directly. 
 
-Needs the Nakama Godot SDK :ref:`NakamaWrapper.NAKAMA_SDK_VERSION<class_NakamaWrapper_constant_NAKAMA_SDK_VERSION>`.
+Every player arrives with :ref:`NetwPlayer.account<class_NetwPlayer_property_account>` ``"nakama:<user id>"`` and their Nakama display name. Nakama shows every match participant every other user ID. 
+
+An address starting ``room:`` names a room that every player joins. The first player to arrive serves it. When its server is lost, a player still in it serves with :ref:`migrate_on_host_loss<class_NakamaLobbyDirectory_property_migrate_on_host_loss>` on. Otherwise, and after the server calls :ref:`NetwSession.leave()<class_NetwSession_method_leave>`, the next player to arrive does. A room is never listed.
+
+::
+
+    var room := session.connection.add(&"NakamaRelayPeer", "room:" + party_id)
+    await session.connection.join(room).settled
 
 .. rst-class:: classref-reftable-group
 
@@ -31,27 +38,15 @@ Properties
 .. table::
    :widths: auto
 
-   +-----------------+---------------------------------------------------------------------------------------------+------------------+
-   | :godot:`String` | :ref:`server_key<class_NakamaLobbyDirectory_property_server_key>`                           | ``"defaultkey"`` |
-   +-----------------+---------------------------------------------------------------------------------------------+------------------+
-   | :godot:`String` | :ref:`host<class_NakamaLobbyDirectory_property_host>`                                       | ``"127.0.0.1"``  |
-   +-----------------+---------------------------------------------------------------------------------------------+------------------+
-   | :godot:`int`    | :ref:`port<class_NakamaLobbyDirectory_property_port>`                                       | ``7350``         |
-   +-----------------+---------------------------------------------------------------------------------------------+------------------+
-   | :godot:`bool`   | :ref:`use_ssl<class_NakamaLobbyDirectory_property_use_ssl>`                                 | ``false``        |
-   +-----------------+---------------------------------------------------------------------------------------------+------------------+
-   | :godot:`String` | :ref:`device_id<class_NakamaLobbyDirectory_property_device_id>`                             | ``""``           |
-   +-----------------+---------------------------------------------------------------------------------------------+------------------+
-   | :godot:`String` | :ref:`local_member_name<class_NakamaLobbyDirectory_property_local_member_name>`             | ``""``           |
-   +-----------------+---------------------------------------------------------------------------------------------+------------------+
-   | :godot:`bool`   | :ref:`uniquify_debug_identity<class_NakamaLobbyDirectory_property_uniquify_debug_identity>` | ``true``         |
-   +-----------------+---------------------------------------------------------------------------------------------+------------------+
-   | :godot:`float`  | :ref:`connect_timeout<class_NakamaLobbyDirectory_property_connect_timeout>`                 | ``10.0``         |
-   +-----------------+---------------------------------------------------------------------------------------------+------------------+
-   | :godot:`int`    | :ref:`max_clients<class_NakamaLobbyDirectory_property_max_clients>`                         | ``8``            |
-   +-----------------+---------------------------------------------------------------------------------------------+------------------+
-   | :godot:`String` | :ref:`browser_filter_uid<class_NakamaLobbyDirectory_property_browser_filter_uid>`           | ``"networked"``  |
-   +-----------------+---------------------------------------------------------------------------------------------+------------------+
+   +-----------------+---------------------------------------------------------------------------------------+-----------------+
+   | :godot:`float`  | :ref:`connect_timeout<class_NakamaLobbyDirectory_property_connect_timeout>`           | ``10.0``        |
+   +-----------------+---------------------------------------------------------------------------------------+-----------------+
+   | :godot:`int`    | :ref:`max_clients<class_NakamaLobbyDirectory_property_max_clients>`                   | ``8``           |
+   +-----------------+---------------------------------------------------------------------------------------+-----------------+
+   | :godot:`String` | :ref:`browser_filter_uid<class_NakamaLobbyDirectory_property_browser_filter_uid>`     | ``"networked"`` |
+   +-----------------+---------------------------------------------------------------------------------------+-----------------+
+   | :godot:`bool`   | :ref:`migrate_on_host_loss<class_NakamaLobbyDirectory_property_migrate_on_host_loss>` | ``false``       |
+   +-----------------+---------------------------------------------------------------------------------------+-----------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -61,32 +56,9 @@ Methods
 .. table::
    :widths: auto
 
-   +-------------------------------------------+-----------------------------------------------------------------------------------------------------------------+
-   | |void|                                    | :ref:`_host_lobby<class_NakamaLobbyDirectory_private_method__host_lobby>`\ (\ settings\: :godot:`Dictionary`\ ) |
-   +-------------------------------------------+-----------------------------------------------------------------------------------------------------------------+
-   | :ref:`NakamaWrapper<class_NakamaWrapper>` | :ref:`wrapper<class_NakamaLobbyDirectory_method_wrapper>`\ (\ )                                                 |
-   +-------------------------------------------+-----------------------------------------------------------------------------------------------------------------+
-
-.. rst-class:: classref-section-separator
-
-----
-
-.. rst-class:: classref-descriptions-group
-
-Constants
----------
-
-.. _class_NakamaLobbyDirectory_constant_Async:
-
-.. rst-class:: classref-constant
-
-**Async** = ``<Object>`` :ref:`🔗<class_NakamaLobbyDirectory_constant_Async>`
-
-.. container:: contribute
-
-	There is currently no description for this constant. Please help us by `contributing one <https://contributing.godotengine.org/en/latest/documentation/class_reference.html>`__!
-
-
+   +--------+-----------------------------------------------------------------------------------------------------------------+
+   | |void| | :ref:`_host_lobby<class_NakamaLobbyDirectory_private_method__host_lobby>`\ (\ settings\: :godot:`Dictionary`\ ) |
+   +--------+-----------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -96,90 +68,6 @@ Constants
 
 Property Descriptions
 ---------------------
-
-.. _class_NakamaLobbyDirectory_property_server_key:
-
-.. rst-class:: classref-property
-
-:godot:`String` **server_key** = ``"defaultkey"`` :ref:`🔗<class_NakamaLobbyDirectory_property_server_key>`
-
-Nakama server key, matching the server's ``socket.server_key``.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NakamaLobbyDirectory_property_host:
-
-.. rst-class:: classref-property
-
-:godot:`String` **host** = ``"127.0.0.1"`` :ref:`🔗<class_NakamaLobbyDirectory_property_host>`
-
-Relay host name or address, without scheme.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NakamaLobbyDirectory_property_port:
-
-.. rst-class:: classref-property
-
-:godot:`int` **port** = ``7350`` :ref:`🔗<class_NakamaLobbyDirectory_property_port>`
-
-Relay port. Use ``443`` behind a TLS terminating tunnel.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NakamaLobbyDirectory_property_use_ssl:
-
-.. rst-class:: classref-property
-
-:godot:`bool` **use_ssl** = ``false`` :ref:`🔗<class_NakamaLobbyDirectory_property_use_ssl>`
-
-When ``true``, connects over ``https`` and ``wss``.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NakamaLobbyDirectory_property_device_id:
-
-.. rst-class:: classref-property
-
-:godot:`String` **device_id** = ``""`` :ref:`🔗<class_NakamaLobbyDirectory_property_device_id>`
-
-Device id used for authentication. Empty uses :godot:`OS.get_unique_id() <OS#class_OS_method_get_unique_id>`.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NakamaLobbyDirectory_property_local_member_name:
-
-.. rst-class:: classref-property
-
-:godot:`String` **local_member_name** = ``""`` :ref:`🔗<class_NakamaLobbyDirectory_property_local_member_name>`
-
-The Nakama username. Empty uses :ref:`LobbyDirectory._local_member_name()<class_LobbyDirectory_private_method__local_member_name>`.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NakamaLobbyDirectory_property_uniquify_debug_identity:
-
-.. rst-class:: classref-property
-
-:godot:`bool` **uniquify_debug_identity** = ``true`` :ref:`🔗<class_NakamaLobbyDirectory_property_uniquify_debug_identity>`
-
-In debug desktop builds, adds a suffix to :ref:`device_id<class_NakamaLobbyDirectory_property_device_id>` and :ref:`local_member_name<class_NakamaLobbyDirectory_property_local_member_name>` so several instances on one machine log in as different users. Set the suffix with ``--nakama-instance=name``, ``--netw-instance=name``, ``--instance=name`` or ``NAKAMA_INSTANCE_SUFFIX``.
-
-.. rst-class:: classref-item-separator
-
-----
 
 .. _class_NakamaLobbyDirectory_property_connect_timeout:
 
@@ -213,6 +101,22 @@ The player limit shown in the lobby list, when the host sets none.
 
 Only lobbies with the same tag are listed, so games sharing a Nakama server do not see each other's lobbies.
 
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NakamaLobbyDirectory_property_migrate_on_host_loss:
+
+.. rst-class:: classref-property
+
+:godot:`bool` **migrate_on_host_loss** = ``false`` :ref:`🔗<class_NakamaLobbyDirectory_property_migrate_on_host_loss>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **@migrate_on_host_loss_setter**\ (\ value\: :godot:`bool`\ )
+
+When the host is lost or closes its window, the players left choose a new server among themselves and keep the match. :ref:`NetwSession.leave()<class_NetwSession_method_leave>` still ends every player's session, so a host that wants the match to go on calls :ref:`NetwSession.transfer_server()<class_NetwSession_method_transfer_server>` first.
+
 .. rst-class:: classref-section-separator
 
 ----
@@ -229,18 +133,6 @@ Method Descriptions
 |void| **_host_lobby**\ (\ settings\: :godot:`Dictionary`\ ) :ref:`🔗<class_NakamaLobbyDirectory_private_method__host_lobby>`
 
 A :ref:`NetwServerInfo.VISIBILITY_PRIVATE<class_NetwServerInfo_constant_VISIBILITY_PRIVATE>` lobby is not listed, and can only be joined by its match id.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_NakamaLobbyDirectory_method_wrapper:
-
-.. rst-class:: classref-method
-
-:ref:`NakamaWrapper<class_NakamaWrapper>` **wrapper**\ (\ ) :ref:`🔗<class_NakamaLobbyDirectory_method_wrapper>`
-
-Returns the :ref:`NakamaWrapper<class_NakamaWrapper>` in use.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

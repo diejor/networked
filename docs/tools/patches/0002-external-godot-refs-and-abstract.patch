@@ -72,7 +72,7 @@
      )
  
  
-@@ -1728,6 +1789,119 @@
+@@ -1728,6 +1789,121 @@
      return f"`{url} <{url}>`__"
  
  
@@ -119,6 +119,7 @@
 +        ],
 +    ),
 +    ("Scene Node Path (editor)", ["addons/networked/addons/scene_node_path"]),
++    ("Nakama", ["addons/networked_nakama"]),
 +    ("Steam", ["addons/networked_steam"]),
 +    ("Testing", ["addons/networked_test"]),
 +]
@@ -139,7 +140,8 @@
 +    mapping: dict[str, str] = {}
 +    decl = re.compile(r"^\s*class_name\s+([A-Za-z_][A-Za-z0-9_]*)", re.MULTILINE)
 +    for addon in (
-+        "addons/networked", "addons/networked_steam", "addons/networked_test"
++        "addons/networked", "addons/networked_nakama", "addons/networked_steam",
++        "addons/networked_test",
 +    ):
 +        base = os.path.join(repo_root, addon)
 +        if not os.path.isdir(base):
@@ -192,7 +194,7 @@
  def make_rst_index(grouped_classes: dict[str, list[str]], dry_run: bool, output_dir: str) -> None:
      with open(
          os.devnull if dry_run else os.path.join(output_dir, "index.rst"), "w", encoding="utf-8", newline="\n"
-@@ -1750,27 +1924,45 @@
+@@ -1750,27 +1926,45 @@
  
          f.write(make_heading("All classes", "="))
  
@@ -257,7 +259,7 @@
  
  
  # Formatting helpers.
-@@ -1836,7 +2028,15 @@
+@@ -1836,7 +2030,15 @@
  
  
  def parse_link_target(link_target: str, state: State, context_name: str) -> list[str]:

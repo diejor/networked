@@ -159,6 +159,12 @@ class DiscordPayload(unittest.TestCase):
         payload = [path.as_posix() for path in package.tracked_payload()]
         self.assertIn("addons/discord_social_sdk/lib/discord.gdextension.template", payload)
 
+    def test_the_tracked_payload_carries_nakama_with_its_sdk(self):
+        payload = [path.as_posix() for path in package.tracked_payload()]
+        self.assertIn("addons/networked_nakama/nakama_account.gd", payload)
+        self.assertIn("addons/com.heroiclabs.nakama/Nakama.gd", payload)
+        self.assertFalse([path for path in payload if path.startswith("addons/networked/gdscript/nakama/")])
+
     def test_what_only_a_game_may_ship_is_refused(self):
         for path in [
             "addons/discord_social_sdk/lib/linux/libdiscord_partner_sdk.so",

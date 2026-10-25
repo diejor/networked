@@ -33,9 +33,6 @@ public:
     virtual void service_entered(NetwMultiplayer *p_api);
     virtual void service_exiting(NetwMultiplayer *p_api);
 
-    static void set_transport_restricted_probe(const godot::Callable &p_probe);
-    static bool is_transport_restricted();
-
     static void register_on_session(
         godot::Node *p_service,
         const godot::Ref<godot::Script> &p_type

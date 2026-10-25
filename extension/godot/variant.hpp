@@ -115,6 +115,12 @@ using ::vformat;
 #include <godot_cpp/variant/vector2.hpp>
 #include <godot_cpp/variant/vector2i.hpp>
 #include <godot_cpp/variant/vector3.hpp>
+
+static_assert(
+    sizeof(godot::String) == sizeof(void *),
+    "The godot-cpp bindings were generated for another pointer width. "
+    "Rebuild with generate_bindings=yes."
+);
 #else
 #error "Define NETW_MODULE or NETW_GDEXTENSION."
 #endif

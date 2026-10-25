@@ -19,12 +19,15 @@ Settings for a session's admission handler.
 Description
 -----------
 
-The server receives a :ref:`NetwJoinRequest<class_NetwJoinRequest>` and waits for the handler to return :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` before admitting its :ref:`NetwPlayer<class_NetwPlayer>`. The handler may ``await``.
+The server receives a :ref:`NetwJoinRequest<class_NetwJoinRequest>` and waits for the handler to return :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` before admitting its :ref:`NetwPlayer<class_NetwPlayer>`. The handler may ``await``. Each :ref:`NetwAccountProvider<class_NetwAccountProvider>` accepted here proves one kind of account first.
 
 ::
 
     func _init() -> void:
-        Netw.configure_admission(admit).proof(prove)
+        Netw.configure_admission(admit).accept(PasscodeAccount.new())
+
+    func admit(request: NetwJoinRequest) -> Error:
+        return OK if request.account else ERR_UNAUTHORIZED
 
 .. rst-class:: classref-reftable-group
 
@@ -34,9 +37,9 @@ Methods
 .. table::
    :widths: auto
 
-   +-------------------------------------------------------+-----------------------------------------------------------------------------------------+
-   | :ref:`NetwAdmissionConfig<class_NetwAdmissionConfig>` | :ref:`proof<class_NetwAdmissionConfig_method_proof>`\ (\ handler\: :godot:`Callable`\ ) |
-   +-------------------------------------------------------+-----------------------------------------------------------------------------------------+
+   +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwAdmissionConfig<class_NetwAdmissionConfig>` | :ref:`accept<class_NetwAdmissionConfig_method_accept>`\ (\ provider\: :ref:`NetwAccountProvider<class_NetwAccountProvider>`\ ) |
+   +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -47,18 +50,13 @@ Methods
 Method Descriptions
 -------------------
 
-.. _class_NetwAdmissionConfig_method_proof:
+.. _class_NetwAdmissionConfig_method_accept:
 
 .. rst-class:: classref-method
 
-:ref:`NetwAdmissionConfig<class_NetwAdmissionConfig>` **proof**\ (\ handler\: :godot:`Callable`\ ) :ref:`🔗<class_NetwAdmissionConfig_method_proof>`
+:ref:`NetwAdmissionConfig<class_NetwAdmissionConfig>` **accept**\ (\ provider\: :ref:`NetwAccountProvider<class_NetwAccountProvider>`\ ) :ref:`🔗<class_NetwAdmissionConfig_method_accept>`
 
-Set this on both peers. Calls ``handler`` on the joining peer with the challenge the server reads as :ref:`NetwJoinRequest.challenge<class_NetwJoinRequest_property_challenge>`. Over WebRTC and Steam both peers bind it to the server the peer is connected to, as :ref:`NetwJoinRequest.challenge_bound<class_NetwJoinRequest_property_challenge_bound>` reports. Its result becomes :ref:`NetwJoinRequest.proof<class_NetwJoinRequest_property_proof>`. The handler may ``await`` or return a :ref:`NetwPromise<class_NetwPromise>`. Return a :godot:`Variant` that can be sent with :godot:`@GlobalScope.var_to_bytes() <@GlobalScope#class_@GlobalScope_method_var_to_bytes>`.
-
-::
-
-    func prove(challenge: String) -> Variant:
-        return await identity.prove(challenge)
+Adds ``provider`` to the accounts a joining player proves, in preference order. Accept the same providers in the same order on every peer. A config with no provider sends no challenge.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

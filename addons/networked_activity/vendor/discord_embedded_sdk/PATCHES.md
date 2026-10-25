@@ -12,3 +12,8 @@ file `plugins/DiscordEmbeddedSDK/DiscordSDK.gd`, under the MIT license in
   upstream name hides the Discord Social SDK's global `DiscordActivity`.
 - The inner `class DiscordParty` is renamed `DiscordPartyInfo`. The upstream
   name hides the global `DiscordParty` in `addons/networked_discord`.
+- `_handle_message` drops a message whose origin is not in `ALLOWED_ORIGINS`
+  or the page's own origin. The list is the one in Discord's
+  `@discord/embedded-app-sdk`, `src/Discord.ts`.
+- `sendMessage` posts to `source_origin`, the referrer or `'*'` without one,
+  as Discord's SDK does. Upstream always posts to `'*'`.

@@ -49,12 +49,6 @@
 				Return [code]false[/code] to not register, for example behind a feature flag. [code]true[/code] by default.
 			</description>
 		</method>
-		<method name="is_transport_restricted" qualifiers="static">
-			<return type="bool" />
-			<description>
-				Returns what the [Callable] from [method set_transport_restricted_probe] returns, or [code]false[/code] when none is set.
-			</description>
-		</method>
 		<method name="register" qualifiers="static">
 			<return type="void" />
 			<param index="0" name="service" type="Node" />
@@ -65,13 +59,6 @@
 				func _enter_tree() -&gt; void:
 				    NetwService.register(self)
 				[/codeblock]
-			</description>
-		</method>
-		<method name="set_transport_restricted_probe" qualifiers="static">
-			<return type="void" />
-			<param index="0" name="probe" type="Callable" />
-			<description>
-				Sets a [Callable] that returns [code]true[/code] when only WebSocket or HTTP connections are allowed, such as inside a Discord activity. Services can check [method is_transport_restricted] to stay inactive there.
 			</description>
 		</method>
 		<method name="unregister" qualifiers="static">

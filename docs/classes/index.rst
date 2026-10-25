@@ -10,6 +10,24 @@
 All classes
 ===========
 
+Nakama
+======
+
+.. toctree::
+    :maxdepth: 1
+    :name: toc-class-ref-nakama
+
+    class_addons--networked_nakama--nakama_relay_bridge.gd
+    class_nakamaaccount
+    class_nakamadatabase
+    class_nakamadatabase.connection
+    class_nakamaidtoken
+    class_nakamalobbydirectory
+    class_nakamalobbydirectory.lobbycard
+    class_nakamaparty
+    class_nakamarelaypeer
+    class_nakamarelaypeer.packet
+
 Steam
 =====
 
@@ -17,7 +35,12 @@ Steam
     :maxdepth: 1
     :name: toc-class-ref-steam
 
+    class_addons--networked_steam--steam_start.gd
     class_steamlobbydirectory
+    class_steamparty
+    class_steamprofile
+    class_steamsocial
+    class_steamticket
 
 Testing
 =======
@@ -74,16 +97,6 @@ Gdscript
     class_hostpopup
     class_joindirectpopup
     class_joinpopup
-    class_nakamadatabase
-    class_nakamadatabase.connection
-    class_nakamalobbydirectory
-    class_nakamalobbydirectory.lobbycard
-    class_nakamarelaybridge
-    class_nakamarelaybridge.user
-    class_nakamarelaypeer
-    class_nakamarelaypeer.packet
-    class_nakamasessionservice
-    class_nakamawrapper
     class_statusdot
 
 Other classes
@@ -102,6 +115,7 @@ Other classes
     class_memorydatabase
     class_multiplayerviewport
     class_netw
+    class_netwaccountprovider
     class_netwaction
     class_netwactioncontext
     class_netwadmissionconfig
@@ -122,6 +136,7 @@ Other classes
     class_netwendpoint
     class_netwentity
     class_netwgrouppromise
+    class_netwidtoken
     class_netwinterest
     class_netwinterestlayer
     class_netwinterpolate

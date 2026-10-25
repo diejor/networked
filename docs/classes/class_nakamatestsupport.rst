@@ -19,7 +19,7 @@ Static helpers for live Nakama integration tests.
 Description
 -----------
 
-**NakamaTestSupport** mirrors :ref:`WebRTCTestSupport<class_WebRTCTestSupport>` for real relay sessions. It wires :ref:`MultiplayerViewport<class_MultiplayerViewport>`, :ref:`NakamaLobbyDirectory<class_NakamaLobbyDirectory>`, and :godot:`NakamaBackend` directly so tests own raw trees and frame polling. Every tree here comes online through :ref:`NetwOrdinarySetup<class_NetwOrdinarySetup>`, so the relay peer is built by the provider and then assigned like any other, which is what makes delivery and adoption ordering observable.
+**NakamaTestSupport** mirrors :ref:`WebRTCTestSupport<class_WebRTCTestSupport>` for real relay sessions. It wires :ref:`MultiplayerViewport<class_MultiplayerViewport>`, :ref:`NakamaAccount<class_NakamaAccount>` and :ref:`NakamaLobbyDirectory<class_NakamaLobbyDirectory>` directly so tests own raw trees and frame polling. Every tree here comes online through :ref:`NetwOrdinarySetup<class_NetwOrdinarySetup>`, so the relay peer is built by the provider and then assigned like any other, which is what makes delivery and adoption ordering observable. Each tree signs in as its own Nakama user, through :ref:`NakamaAccount.use_session()<class_NakamaAccount_method_use_session>`.
 
 ::
 
@@ -45,6 +45,8 @@ Methods
    +---------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :godot:`Error <@GlobalScope#enum_@globalscope_Error>`   | :ref:`join_client<class_NakamaTestSupport_method_join_client>`\ (\ client\: :ref:`MultiplayerViewport<class_MultiplayerViewport>`, room\: :godot:`String`, username\: :godot:`String`, join_args\: :godot:`Array` = []\ ) |static| |
    +---------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>`   | :ref:`sign_in<class_NakamaTestSupport_method_sign_in>`\ (\ tree\: :ref:`MultiplayerViewport<class_MultiplayerViewport>`, username\: :godot:`String`\ ) |static|                                                                    |
+   +---------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`MultiplayerViewport<class_MultiplayerViewport>`   | :ref:`make_client_tree<class_NakamaTestSupport_method_make_client_tree>`\ (\ parent\: :godot:`Node`, username\: :godot:`String`\ ) |static|                                                                                        |
    +---------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | |void|                                                  | :ref:`stop_tree<class_NakamaTestSupport_method_stop_tree>`\ (\ tree\: :ref:`MultiplayerViewport<class_MultiplayerViewport>`\ ) |static|                                                                                            |
@@ -52,6 +54,8 @@ Methods
    | :godot:`Dictionary`                                     | :ref:`host_scene<class_NakamaTestSupport_method_host_scene>`\ (\ parent\: :godot:`Node`, packed\: :godot:`PackedScene`, username\: :godot:`String` = "host"\ ) |static|                                                            |
    +---------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`MultiplayerViewport<class_MultiplayerViewport>`   | :ref:`join_scene<class_NakamaTestSupport_method_join_scene>`\ (\ parent\: :godot:`Node`, packed\: :godot:`PackedScene`, room\: :godot:`String`, username\: :godot:`String`\ ) |static|                                             |
+   +---------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NakamaAccount<class_NakamaAccount>`               | :ref:`account<class_NakamaTestSupport_method_account>`\ (\ tree\: :ref:`MultiplayerViewport<class_MultiplayerViewport>`\ ) |static|                                                                                                |
    +---------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NakamaLobbyDirectory<class_NakamaLobbyDirectory>` | :ref:`directory<class_NakamaTestSupport_method_directory>`\ (\ tree\: :ref:`MultiplayerViewport<class_MultiplayerViewport>`\ ) |static|                                                                                            |
    +---------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -119,7 +123,7 @@ Returns why ``packed`` cannot be driven, or an empty :godot:`String` when it can
 
 :godot:`Dictionary` **start_host**\ (\ parent\: :godot:`Node`, username\: :godot:`String` = "host"\ ) |static| :ref:`🔗<class_NakamaTestSupport_method_start_host>`
 
-Builds and hosts a :ref:`MultiplayerViewport<class_MultiplayerViewport>` backed by :godot:`NakamaBackend`.  Returns a dictionary with ``tree`` (the :ref:`MultiplayerViewport<class_MultiplayerViewport>`) and ``room`` (the Nakama relay match id).
+Builds and hosts a :ref:`MultiplayerViewport<class_MultiplayerViewport>` signed in as ``username``.  Returns a dictionary with ``tree`` (the :ref:`MultiplayerViewport<class_MultiplayerViewport>`) and ``room`` (the Nakama relay match id).
 
 .. rst-class:: classref-item-separator
 
@@ -132,6 +136,18 @@ Builds and hosts a :ref:`MultiplayerViewport<class_MultiplayerViewport>` backed 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **join_client**\ (\ client\: :ref:`MultiplayerViewport<class_MultiplayerViewport>`, room\: :godot:`String`, username\: :godot:`String`, join_args\: :godot:`Array` = []\ ) |static| :ref:`🔗<class_NakamaTestSupport_method_join_client>`
 
 Joins ``client`` to ``room`` as ``username``.  Returns :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` once the relay peer is built and assigned, and the provider's own error otherwise.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NakamaTestSupport_method_sign_in:
+
+.. rst-class:: classref-method
+
+:godot:`Error <@GlobalScope#enum_@globalscope_Error>` **sign_in**\ (\ tree\: :ref:`MultiplayerViewport<class_MultiplayerViewport>`, username\: :godot:`String`\ ) |static| :ref:`🔗<class_NakamaTestSupport_method_sign_in>`
+
+Signs the :ref:`NakamaAccount<class_NakamaAccount>` of ``tree`` in as the Nakama user ``username`` of this test run, unless it is already signed in.
 
 .. rst-class:: classref-item-separator
 
@@ -180,6 +196,18 @@ Instantiates ``packed``, wires its single :ref:`MultiplayerViewport<class_Multip
 :ref:`MultiplayerViewport<class_MultiplayerViewport>` **join_scene**\ (\ parent\: :godot:`Node`, packed\: :godot:`PackedScene`, room\: :godot:`String`, username\: :godot:`String`\ ) |static| :ref:`🔗<class_NakamaTestSupport_method_join_scene>`
 
 Instantiates ``packed``, wires its :ref:`MultiplayerViewport<class_MultiplayerViewport>`, and joins.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NakamaTestSupport_method_account:
+
+.. rst-class:: classref-method
+
+:ref:`NakamaAccount<class_NakamaAccount>` **account**\ (\ tree\: :ref:`MultiplayerViewport<class_MultiplayerViewport>`\ ) |static| :ref:`🔗<class_NakamaTestSupport_method_account>`
+
+Returns the :ref:`NakamaAccount<class_NakamaAccount>` attached to ``tree``.
 
 .. rst-class:: classref-item-separator
 

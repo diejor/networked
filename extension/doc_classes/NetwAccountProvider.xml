@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwAccountProvider" inherits="RefCounted" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Proves one kind of player account to the server when the player joins.
+	</brief_description>
+	<description>
+		Accept the same providers in the same order on every peer with [method NetwAdmissionConfig.accept]. The joining peer runs [method _prove] for each one, then the server runs [method _verify] for each one, before the admission handler sees the [NetwJoinRequest].
+		[codeblock]
+		class_name PasscodeAccount
+		extends NetwAccountProvider
+
+		func _prove(challenge: String, _session: NetwSession) -&gt; Variant:
+		    return (PASSCODE + challenge).sha256_text()
+
+		func _verify(request: NetwJoinRequest, proof: Variant) -&gt; Variant:
+		    if proof is String and proof == (PASSCODE + request.challenge).sha256_text():
+		        request.add_account("club:" + request.username, request.username)
+		    return OK
+		[/codeblock]
+		Proving and verifying count against [member NetwMultiplayer.auth_timeout]. [NetwIdToken] is a ready provider for signed tokens.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="_prove" qualifiers="virtual">
+			<return type="Variant" />
+			<param index="0" name="challenge" type="String" />
+			<param index="1" name="session" type="NetwSession" />
+			<description>
+				Runs on the joining peer. Return a proof of the account that answers [param challenge], or [code]null[/code] when this player has none. It may [code]await[/code] or return a [NetwPromise].
+				[param session] is the session this peer is joining.
+			</description>
+		</method>
+		<method name="_verify" qualifiers="virtual">
+			<return type="Variant" />
+			<param index="0" name="request" type="NetwJoinRequest" />
+			<param index="1" name="proof" type="Variant" />
+			<description>
+				Runs on the server with what [method _prove] returned. Call [method NetwJoinRequest.add_account] for the account [param proof] proves and return [constant @GlobalScope.OK]. Any other [enum @GlobalScope.Error] refuses the join. It may [code]await[/code] or return a [NetwPromise].
+			</description>
+		</method>
+	</methods>
+</class>

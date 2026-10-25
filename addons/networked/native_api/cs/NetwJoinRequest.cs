@@ -10,13 +10,14 @@ namespace Networked;
 /// </summary>
 /// <remarks>
 /// The server passes this request to the handler declared with
-/// <see cref="Netw.ConfigureAdmission"/>. A requested
+/// <see cref="Netw.ConfigureAdmission"/>, after every
+/// <see cref="NetwAccountProvider"/> has verified. A requested
 /// <see cref="NetwJoinRequest.UserName"/> does not verify an account.
 /// <code>
 /// private Error Admit(Variant value)
 /// {
 ///     using var request = NetwJoinRequest.From(value);
-///     return request.Identities.Length == 0
+///     return string.IsNullOrEmpty(request.Account)
 ///         ? Error.Unauthorized : Error.Ok;
 /// }
 /// </code>
@@ -71,6 +72,22 @@ public sealed class NetwJoinRequest : NetwRefCounted
         }
     }
 
+    private static readonly IntPtr _bindGetSession =
+        NetwApi.MethodBind("NetwJoinRequest", "get_session", 3160388065UL);
+
+    /// <summary>
+    /// The server's session the peer is joining.
+    /// </summary>
+    public NetwSession Session
+    {
+        get
+        {
+            IntPtr answered = default;
+            NetwThunks.Ptrcall0_IntPtr(_bindGetSession, Checked, ref answered);
+            return NetwSession.Adopt(answered);
+        }
+    }
+
     private static readonly IntPtr _bindGetArgs =
         NetwApi.MethodBind("NetwJoinRequest", "get_args", 3995934104UL);
 
@@ -95,12 +112,8 @@ public sealed class NetwJoinRequest : NetwRefCounted
         NetwApi.MethodBind("NetwJoinRequest", "get_challenge", 201670096UL);
 
     /// <summary>
-    /// The challenge the joining peer's <see cref="NetwAdmissionConfig.Proof"/>
-    /// handler answered, or <c>""</c> without a proof. Verify that
-    /// <see cref="NetwJoinRequest.Proof"/> answers this value. Over WebRTC it
-    /// is bound to this server's certificate on the connection, and over Steam
-    /// to this server's Steam ID, so a proof that another server relays does
-    /// not answer it.
+    /// The challenge every <see cref="NetwAccountProvider"/> proved on the
+    /// joining peer, or <c>""</c> when none is accepted.
     /// </summary>
     public string Challenge
     {
@@ -114,67 +127,21 @@ public sealed class NetwJoinRequest : NetwRefCounted
         }
     }
 
-    private static readonly IntPtr _bindGetChallengeBound =
-        NetwApi.MethodBind(
-            "NetwJoinRequest",
-            "get_challenge_bound",
-            36873697UL);
+    private static readonly IntPtr _bindGetAccounts =
+        NetwApi.MethodBind("NetwJoinRequest", "get_accounts", 1139954409UL);
 
     /// <summary>
-    /// <c>true</c> when <see cref="NetwJoinRequest.Challenge"/> is bound to
-    /// this server, over WebRTC, over Steam and for the host's own join.
-    /// <c>false</c> over ENet and other transports that do not identify the
-    /// server, where another server of this game can pass the challenge to its
-    /// own player and forward the answer. Refuse such a request when an account
-    /// depends on <see cref="NetwJoinRequest.Proof"/>.
+    /// Every account proven for this join. Each
+    /// <see cref="NetwAccountProvider"/>'s comes first, in the order they were
+    /// accepted, then the account the serving <see cref="LobbyDirectory"/>
+    /// reports.
     /// </summary>
-    public bool ChallengeBound
-    {
-        get
-        {
-            byte answered = default;
-            NetwThunks.Ptrcall0_Byte(
-                _bindGetChallengeBound,
-                Checked,
-                ref answered);
-            return answered != 0;
-        }
-    }
-
-    private static readonly IntPtr _bindGetProof =
-        NetwApi.MethodBind("NetwJoinRequest", "get_proof", 1214101251UL);
-
-    /// <summary>
-    /// The value returned by the joining peer's
-    /// <see cref="NetwAdmissionConfig.Proof"/> handler. <c>null</c> when no
-    /// proof was requested.
-    /// </summary>
-    public Variant Proof
+    public string[] Accounts
     {
         get
         {
             godot_variant answered = default;
-            NetwThunks.Call0(_bindGetProof, Checked, ref answered);
-            Variant result = Variant.CreateCopyingBorrowed(answered);
-            answered.Dispose();
-            return result;
-        }
-    }
-
-    private static readonly IntPtr _bindGetIdentities =
-        NetwApi.MethodBind("NetwJoinRequest", "get_identities", 1139954409UL);
-
-    /// <summary>
-    /// Accounts verified by the active <see cref="LobbyDirectory"/> through
-    /// <c>LobbyDirectory._account_of</c>. The first initializes
-    /// <see cref="NetwJoinRequest.Account"/>.
-    /// </summary>
-    public string[] Identities
-    {
-        get
-        {
-            godot_variant answered = default;
-            NetwThunks.Call0(_bindGetIdentities, Checked, ref answered);
+            NetwThunks.Call0(_bindGetAccounts, Checked, ref answered);
             string[] result =
                 VariantUtils.ConvertAsPackedStringArrayToSystemArray(answered);
             answered.Dispose();
@@ -189,9 +156,9 @@ public sealed class NetwJoinRequest : NetwRefCounted
         NetwApi.MethodBind("NetwJoinRequest", "set_account", 83702148UL);
 
     /// <summary>
-    /// The account to assign in the admission handler, such as
-    /// <c>"discord:80351110224678912"</c> or <c>"steam:76561198000000000"</c>.
-    /// Empty for a guest.
+    /// The account the new <see cref="NetwPlayer"/> takes, such as
+    /// <c>"steam:76561198000000000"</c>. Starts as the first of
+    /// <see cref="NetwJoinRequest.Accounts"/>. Empty for a guest.
     /// </summary>
     public string Account
     {
@@ -220,8 +187,8 @@ public sealed class NetwJoinRequest : NetwRefCounted
         NetwApi.MethodBind("NetwJoinRequest", "set_account_name", 83702148UL);
 
     /// <summary>
-    /// The verified display name, initially supplied by the active
-    /// <see cref="LobbyDirectory"/>. Empty for a guest.
+    /// The display name for <see cref="NetwJoinRequest.Account"/>. Starts as
+    /// the name of the first of <see cref="NetwJoinRequest.Accounts"/>.
     /// </summary>
     public string AccountName
     {
@@ -245,5 +212,78 @@ public sealed class NetwJoinRequest : NetwRefCounted
             slot0.Dispose();
             answered.Dispose();
         }
+    }
+
+    private static readonly IntPtr _bindAddAccount =
+        NetwApi.MethodBind("NetwJoinRequest", "add_account", 2023547614UL);
+
+    /// <summary>
+    /// Adds <paramref name="account"/> with the display <paramref name="name"/>
+    /// to <see cref="NetwJoinRequest.Accounts"/>, from
+    /// <c>NetwAccountProvider._verify</c>. Pass <c>false</c> for
+    /// <paramref name="answersChallenge"/> when the proof does not depend on
+    /// <see cref="NetwJoinRequest.Challenge"/>. An account already listed keeps
+    /// its place.
+    /// </summary>
+    public void AddAccount(
+        string account,
+        string name,
+        bool answersChallenge = true)
+    {
+        godot_variant slot0 = VariantUtils.CreateFromString(account);
+        godot_variant slot1 = VariantUtils.CreateFromString(name);
+        godot_variant slot2 = VariantUtils.CreateFromBool(answersChallenge);
+        godot_variant answered = default;
+        NetwThunks.Call3(
+            _bindAddAccount,
+            Checked,
+            in slot0,
+            in slot1,
+            in slot2,
+            ref answered);
+        slot0.Dispose();
+        slot1.Dispose();
+        slot2.Dispose();
+        answered.Dispose();
+    }
+
+    private static readonly IntPtr _bindNameOf =
+        NetwApi.MethodBind("NetwJoinRequest", "name_of", 3135753539UL);
+
+    /// <summary>
+    /// Returns the display name proven with <paramref name="account"/>, or
+    /// <c>""</c>.
+    /// </summary>
+    public string NameOf(string account)
+    {
+        godot_variant slot0 = VariantUtils.CreateFromString(account);
+        godot_variant answered = default;
+        NetwThunks.Call1(_bindNameOf, Checked, in slot0, ref answered);
+        slot0.Dispose();
+        string result = VariantUtils.ConvertToString(answered);
+        answered.Dispose();
+        return result;
+    }
+
+    private static readonly IntPtr _bindIsBound =
+        NetwApi.MethodBind("NetwJoinRequest", "is_bound", 3927539163UL);
+
+    /// <summary>
+    /// Returns <c>true</c> when another server of this game could not have
+    /// passed on the proof of <paramref name="account"/>. That holds when the
+    /// transport reports the account, or when its proof answered a
+    /// <see cref="NetwJoinRequest.Challenge"/> bound to this server, as over
+    /// WebRTC or through a <see cref="LobbyDirectory"/> that reports the
+    /// server's account.
+    /// </summary>
+    public bool IsBound(string account)
+    {
+        godot_variant slot0 = VariantUtils.CreateFromString(account);
+        godot_variant answered = default;
+        NetwThunks.Call1(_bindIsBound, Checked, in slot0, ref answered);
+        slot0.Dispose();
+        bool result = VariantUtils.ConvertToBool(answered);
+        answered.Dispose();
+        return result;
     }
 }

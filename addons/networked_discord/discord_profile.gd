@@ -37,17 +37,20 @@ enum Status {
 var id: int:
 	get:
 		return _id
+
 ## The Discord display name, empty while signed out or while Discord does
 ## not know the user.
 var display_name: String:
 	get:
 		var user := _user
 		return user.display_name() if user != null else ""
+
 ## The Discord avatar, [code]null[/code] while signed out, until it has
 ## downloaded, and in a headless run.
 var avatar: Texture2D:
 	get:
 		return _avatar if _social.user_id != 0 else null
+
 ## The online status Discord shows.
 var status: Status:
 	get:
@@ -62,6 +65,7 @@ var status: Status:
 			DiscordStatusType.DND:
 				return Status.DO_NOT_DISTURB
 		return Status.OFFLINE
+
 ## [code]true[/code] while the user plays this game. For the signed in
 ## player it is [code]true[/code] while Discord shows them in a session.
 var is_playing: bool:
@@ -69,18 +73,21 @@ var is_playing: bool:
 		if _id != 0 and _id == _social.user_id:
 			return _playing_since > 0.0
 		return _activity != null
+
 ## How many people are in the user's party in this game, or [code]0[/code].
 var party_size: int:
 	get:
 		var activity := _activity
 		var party := activity.party() if activity != null else null
 		return party.current_size() if party != null else 0
+
 ## The most people the user's party in this game takes, or [code]0[/code].
 var party_max: int:
 	get:
 		var activity := _activity
 		var party := activity.party() if activity != null else null
 		return party.max_size() if party != null else 0
+
 ## When the user started playing this game, in Unix seconds, or
 ## [code]0[/code]. For the signed in player it is when their session
 ## started.

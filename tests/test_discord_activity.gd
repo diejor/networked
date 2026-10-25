@@ -1,210 +1,212 @@
 class_name TestDiscordActivity
 extends NetwTestSuite
 
-const _ERROR_SCRUBBER := preload(
-	"res://addons/networked_test/gdunit4/gdunit_error_scrubber.gd"
-)
-const HOST_PORT := 30199
+const APP := 42
+const INSTANCE := "i-1520000000000000000-gc-1-2"
+const PLAYER := "205519959982473217"
+const WORKER_KEY := "res://tests/discord_activity/test_only_worker_key.pem"
+const WORKER_PUB := "res://tests/discord_activity/test_only_worker_key.pub"
+const WAIT_SECONDS := 15.0
 
 
-class ScriptedRendezvous:
-	extends DiscordRendezvous
-
-	var found: NetwEndpoint
-	var winner: NetwEndpoint
-	var transport: StringName = &""
-	var claims := 0
+class Gate extends Node:
+	var requests: Array[NetwJoinRequest] = []
 
 
-	func find(_instance_id: String, _connection: NetwConnection) -> NetwEndpoint:
-		return found
+	func admit(request: NetwJoinRequest) -> Error:
+		if request.peer_id == 1:
+			request.account = ""
+			return OK
+		requests.append(request)
+		return OK
 
 
-	func host_transport() -> StringName:
-		return transport
+class SlowWorker extends NetwTestDiscordService:
+	func _grant(nonce: String) -> NetwPromise:
+		var granting := NetwPromise.new()
+		get_tree().create_timer(3.5).timeout.connect(
+			func() -> void: granting.resolve({ "id_token": fake_worker.call(nonce) })
+		)
+		return granting
 
 
-	func host_settings() -> Dictionary:
-		return { port = HOST_PORT }
+var trees: Array[MultiplayerViewport] = []
 
 
-	func claim(_instance_id: String, _connection: NetwConnection) -> NetwEndpoint:
-		claims += 1
-		return winner
+func after_test() -> void:
+	for tree in trees:
+		await EnetTestSupport.stop_tree(tree)
+	trees.clear()
 
 
-func test_discord_instance_state_flow() -> void:
-	var injected := NetwTestDiscordService.new()
-	auto_free(injected)
-	injected.fake_instance_id = "room1"
-	injected.fake_device_id = "alice"
-	assert_bool(injected.in_discord()).is_true()
-	assert_bool(injected._should_register()).is_true()
-	assert_str(injected.instance_id()).is_equal("room1")
-	assert_str(injected.device_id()).is_equal("alice")
+func test_entering_an_activity_invites_its_room() -> void:
+	var tree := session_tree()
+	var invites := watch_invites(tree)
+	var discord := NetwTestDiscordService.new()
+	discord.application_id = APP
+	discord.fake_instance_id = INSTANCE
+	discord.room_transport = &"ENetMultiplayerPeer"
+	tree.add_child(discord)
+	await NetwTestSuite.drain_frames(get_tree(), 2)
 
-	var dormant := DiscordActivityService.new()
-	auto_free(dormant)
-	assert_bool(dormant.in_discord()).is_false()
-	assert_bool(dormant._should_register()).is_false()
-	assert_str(dormant.instance_id()).is_equal("")
-
-
-func test_connect_activity_needs_a_rendezvous() -> void:
-	var service := build_service(null)
-	var err: Error = await service.connect_activity(&"valeria")
-	assert_int(err).is_equal(ERR_UNCONFIGURED)
-	assert_int(
-		await _ERROR_SCRUBBER.erase_matching(
-			["Set DiscordActivityService.rendezvous to"],
-		),
-	).is_equal(1)
+	assert_object(Netw.session(tree).service(NetwTestDiscordService)) \
+			.is_same(discord)
+	assert_array(invites).is_equal(["room:discord:42:%s" % INSTANCE])
+	var room := Netw.session(tree).connection.endpoints[0]
+	assert_bool(room.is_invited).is_true()
 
 
-func test_a_rendezvous_that_finds_nothing_and_never_hosts_fails() -> void:
-	var service := build_service(ScriptedRendezvous.new())
-	var failures: Array[String] = []
-	service.activity_failed.connect(failures.append)
-	var err: Error = await service.connect_activity(&"valeria")
-	assert_int(err).is_equal(ERR_UNAVAILABLE)
-	assert_array(failures).has_size(1)
+func test_nothing_registers_outside_an_activity() -> void:
+	var tree := session_tree()
+	var invites := watch_invites(tree)
+	var discord := DiscordActivityService.new()
+	discord.room_transport = &"ENetMultiplayerPeer"
+	tree.add_child(discord)
+	await NetwTestSuite.drain_frames(get_tree(), 2)
+
+	assert_str(discord.instance_id).is_empty()
+	assert_object(Netw.session(tree).service(DiscordActivityService)).is_null()
+	assert_array(invites).is_empty()
+	var signing_in := discord.sign_in()
+	assert_int(signing_in.code).is_equal(ERR_UNAVAILABLE)
 
 
-func test_connect_activity_joins_what_the_rendezvous_finds() -> void:
-	var host := await EnetTestSupport.start_host(self)
-	var rendezvous := ScriptedRendezvous.new()
-	var service := build_service(rendezvous)
-	var session: NetwSession = Netw.session(service)
-	rendezvous.found = session.connection.add(
-		&"ENetMultiplayerPeer",
-		"127.0.0.1:%d" % host.port,
-	)
+func test_a_player_in_the_activity_joins_as_their_discord_account(
+		timeout := 30000,
+) -> void:
+	var discord := NetwTestDiscordService.new()
+	discord.fake_instance_id = INSTANCE
 
-	var err: Error = await service.connect_activity(&"valeria")
+	var request := await join_with(discord)
 
-	assert_int(err).is_equal(OK)
-	assert_int(session.state).is_equal(NetwSession.STATE_ONLINE)
-	assert_int(rendezvous.claims).is_equal(0)
-	await EnetTestSupport.stop_tree(host.tree)
+	var account := "discord:" + PLAYER
+	assert_array(request.accounts).contains_exactly([account])
+	assert_str(request.name_of(account)).is_equal("Ana")
 
 
-func test_connect_activity_hosts_when_nothing_is_found() -> void:
-	var rendezvous := ScriptedRendezvous.new()
-	rendezvous.transport = &"ENetMultiplayerPeer"
-	var service := build_service(rendezvous)
-	var session: NetwSession = Netw.session(service)
+func test_a_player_who_takes_long_to_authorize_still_joins(
+		timeout := 30000,
+) -> void:
+	var host_gate := Gate.new()
+	var host := await EnetTestSupport.start_host(self, host_gate)
+	var client := EnetTestSupport.make_client_tree(self, host.port)
+	trees.append_array([host.tree, client])
+	var client_gate := Gate.new()
+	client.add_child(client_gate)
+	for tree: MultiplayerViewport in [host.tree, client]:
+		var discord := SlowWorker.new()
+		discord.application_id = APP
+		discord.fake_instance_id = INSTANCE
+		discord.room_transport = &""
+		discord.fake_worker = worker_token
+		tree.add_child(discord)
+	Netw.configure_admission(host_gate.admit) \
+			.accept(DiscordIdToken.signed_by(APP, WORKER_PUB))
+	Netw.configure_admission(client_gate.admit) \
+			.accept(DiscordIdToken.signed_by(APP, WORKER_PUB))
 
-	var err: Error = await service.connect_activity(&"valeria")
-
-	assert_int(err).is_equal(OK)
-	assert_int(session.state).is_equal(NetwSession.STATE_ONLINE)
-	assert_int(session.role).is_not_equal(NetwSession.ROLE_CLIENT)
-	assert_int(rendezvous.claims).is_equal(1)
-
-
-func test_connect_activity_joins_the_winner_of_a_claim() -> void:
-	var host := await EnetTestSupport.start_host(self)
-	var rendezvous := ScriptedRendezvous.new()
-	rendezvous.transport = &"ENetMultiplayerPeer"
-	var service := build_service(rendezvous)
-	var session: NetwSession = Netw.session(service)
-	rendezvous.winner = session.connection.add(
-		&"ENetMultiplayerPeer",
-		"127.0.0.1:%d" % host.port,
-	)
-
-	var err: Error = await service.connect_activity(&"valeria")
-
-	assert_int(err).is_equal(OK)
-	assert_int(session.state).is_equal(NetwSession.STATE_ONLINE)
-	assert_int(session.role).is_equal(NetwSession.ROLE_CLIENT)
-	await EnetTestSupport.stop_tree(host.tree)
+	assert_int(await EnetTestSupport.join_client(client, host.port, &"ana")) \
+			.is_equal(OK)
+	assert_array(host_gate.requests.back().accounts) \
+			.contains_exactly(["discord:" + PLAYER])
 
 
-func test_nakama_discord_rendezvous_config_flow() -> void:
-	var rdv := NakamaDiscordRendezvous.new()
-	rdv.device_id = ""
-	assert_str(rdv.nakama_device_id()).is_equal("")
+func test_outside_an_activity_no_discord_account_is_offered(
+		timeout := 30000,
+) -> void:
+	var request := await join_with(NetwTestDiscordService.new())
 
-	rdv.device_id = "alice"
-	assert_str(rdv.nakama_device_id()).is_equal("netw-discord-alice")
-
-	rdv.device_id = "123456789012345678"
-	assert_str(rdv.nakama_device_id()).is_equal("123456789012345678")
-
-	rdv.device_id = "x".repeat(200)
-	assert_int(rdv.nakama_device_id().length()).is_equal(128)
-
-	assert_str(rdv.resolve_proxy_base(null, "987654321.discordsays.com")) \
-			.is_equal("987654321.discordsays.com/.proxy/nakama")
-
-	rdv.proxy_prefix = "relay"
-	assert_str(rdv.resolve_proxy_base(null, "987654321.discordsays.com")) \
-			.is_equal("987654321.discordsays.com/.proxy/relay")
-	assert_str(rdv.resolve_proxy_base(null, "127.0.0.1")).is_equal("")
-
-	assert_str(rdv.host_transport()).is_equal("NakamaRelayPeer")
-	assert_int(rdv.host_settings().visibility) \
-			.is_equal(NetwServerInfo.VISIBILITY_PRIVATE)
-
-	var service := DiscordActivityService.new()
-	auto_free(service)
-	assert_str(service.token_endpoint).is_equal("token")
-	assert_array(service.scopes).contains_exactly(
-		["identify", "rpc.activities.write"],
-	)
-	assert_str(service._absolute_token_url()).is_equal("/.proxy/token")
-
-	service.token_endpoint = "https://example.com/token"
-	assert_str(service._absolute_token_url()).is_equal("https://example.com/token")
-
-	service.token_endpoint = ""
-	assert_str(service._absolute_token_url()).is_equal("")
+	assert_array(request.accounts).is_empty()
 
 
-func test_dedicated_rendezvous_finds_its_room() -> void:
-	var rdv := DedicatedDiscordRendezvous.new()
-	rdv.public_host = "game.example.com"
-	var service := build_service(rdv)
-	var connection: NetwConnection = Netw.session(service).connection
-
-	var endpoint := await rdv.find("room1", connection)
-
-	assert_str(endpoint.peer_class).is_equal("WebSocketMultiplayerPeer")
-	assert_str(endpoint.address).is_equal("wss://game.example.com/?instance=room1")
-	assert_str(rdv.host_transport()).is_equal("")
-
-	rdv.public_host = ""
-	assert_object(await rdv.find("room1", connection)).is_null()
-	assert_int(
-		await _ERROR_SCRUBBER.erase_matching(
-			["Set DedicatedDiscordRendezvous.public_host to the host"],
-		),
-	).is_equal(1)
-
-
-func test_nakama_session_configure_flow() -> void:
-	var nakama_session := NakamaSessionService.new()
-	auto_free(nakama_session)
-	nakama_session.configure(
-		{
-			"auth_mode": "custom",
-			"custom_id": "123456789012345678",
-			"auth_vars": { "discord_token": "token" },
-		},
-	)
-	assert_str(nakama_session.auth_mode).is_equal("custom")
-	assert_str(nakama_session.custom_id).is_equal("123456789012345678")
-	assert_str(String(nakama_session.auth_vars.get("discord_token", ""))) \
-			.is_equal("token")
+func test_url_mappings_reach_a_host_through_the_proxy() -> void:
+	var discord: DiscordActivityService = auto_free(DiscordActivityService.new())
+	discord.application_id = APP
+	discord.url_mappings = {
+		"/nakama": "nakama.example.com",
+		"/api/": "example.com/v1/",
+	}
+	var proxy := "42.discordsays.com/.proxy"
+	for row: Array in [
+		["https://nakama.example.com", "https://%s/nakama" % proxy],
+		[
+			"https://nakama.example.com:443/v2/account?unwrap",
+			"https://%s/nakama/v2/account?unwrap" % proxy,
+		],
+		["wss://nakama.example.com/ws", "wss://%s/nakama/ws" % proxy],
+		["https://example.com/v1/users", "https://%s/api/users" % proxy],
+		["/token", "https://%s/token" % proxy],
+		["https://nakama.example.com.net/", "https://nakama.example.com.net/"],
+		["https://example.com/v2", "https://example.com/v2"],
+		["http://nakama.example.com/", "http://nakama.example.com/"],
+	]:
+		assert_str(discord.proxied_url(row[0])).is_equal(row[1])
 
 
-func build_service(rendezvous: DiscordRendezvous) -> NetwTestDiscordService:
-	var tree := MultiplayerViewport.new()
-	var service := NetwTestDiscordService.new()
-	service.fake_instance_id = "room1"
-	service.rendezvous = rendezvous
-	tree.add_child(service)
-	auto_free(tree)
+func session_tree() -> MultiplayerViewport:
+	var tree: MultiplayerViewport = auto_free(MultiplayerViewport.new())
 	add_child(tree)
-	return service
+	return tree
+
+
+func watch_invites(tree: MultiplayerViewport) -> Array[String]:
+	var invites: Array[String] = []
+	Netw.session(tree).connection.invited.connect(
+		func(endpoint: NetwEndpoint) -> void: invites.append(endpoint.address),
+	)
+	return invites
+
+
+func join_with(discord: NetwTestDiscordService) -> NetwJoinRequest:
+	var host_gate := Gate.new()
+	var host := await EnetTestSupport.start_host(self, host_gate, WAIT_SECONDS)
+	var client := EnetTestSupport.make_client_tree(self, host.port)
+	trees.append_array([host.tree, client])
+	client.api.inner.auth_timeout = WAIT_SECONDS
+	var client_gate := Gate.new()
+	client.add_child(client_gate)
+	discord.application_id = APP
+	discord.room_transport = &""
+	discord.fake_worker = worker_token
+	client.add_child(discord)
+	Netw.configure_admission(host_gate.admit) \
+			.accept(DiscordIdToken.signed_by(APP, WORKER_PUB))
+	Netw.configure_admission(client_gate.admit) \
+			.accept(DiscordIdToken.signed_by(APP, WORKER_PUB))
+
+	assert_int(await EnetTestSupport.join_client(client, host.port, &"ana")) \
+			.is_equal(OK)
+	assert_int(host_gate.requests.size()).is_equal(1)
+	return host_gate.requests.back()
+
+
+func worker_token(nonce: String) -> String:
+	var key := CryptoKey.new()
+	key.load(WORKER_KEY)
+	var now := int(Time.get_unix_time_from_system())
+	var header := { "alg": "RS256", "typ": "JWT" }
+	var claims := {
+		"iss": "https://%d.discordsays.com" % APP,
+		"aud": str(APP),
+		"sub": PLAYER,
+		"name": "Ana",
+		"nonce": nonce,
+		"instance": INSTANCE,
+		"iat": now,
+		"exp": now + 3600,
+	}
+	var body := "%s.%s" % [
+		base64url(JSON.stringify(header).to_utf8_buffer()),
+		base64url(JSON.stringify(claims).to_utf8_buffer()),
+	]
+	var signature := Crypto.new().sign(
+		HashingContext.HASH_SHA256,
+		body.sha256_buffer(),
+		key,
+	)
+	return body + "." + base64url(signature)
+
+
+func base64url(bytes: PackedByteArray) -> String:
+	return Marshalls.raw_to_base64(bytes) \
+			.replace("+", "-").replace("/", "_").rstrip("=")

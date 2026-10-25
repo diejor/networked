@@ -51,52 +51,6 @@ public class NetwService : NetwNode
         return Adopt(NetwApi.ObjectOf(value));
     }
 
-    private static readonly IntPtr _bindSetTransportRestrictedProbe =
-        NetwApi.MethodBind(
-            "NetwService",
-            "set_transport_restricted_probe",
-            1611583062UL);
-
-    /// <summary>
-    /// Sets a <see cref="Callable"/> that returns <c>true</c> when only
-    /// WebSocket or HTTP connections are allowed, such as inside a Discord
-    /// activity. Services can check
-    /// <see cref="NetwService.IsTransportRestricted"/> to stay inactive there.
-    /// </summary>
-    public static void SetTransportRestrictedProbe(Callable probe)
-    {
-        godot_variant slot0 = VariantUtils.CreateFromCallable(probe);
-        godot_variant answered = default;
-        NetwThunks.Call1(
-            _bindSetTransportRestrictedProbe,
-            IntPtr.Zero,
-            in slot0,
-            ref answered);
-        slot0.Dispose();
-        answered.Dispose();
-    }
-
-    private static readonly IntPtr _bindIsTransportRestricted =
-        NetwApi.MethodBind(
-            "NetwService",
-            "is_transport_restricted",
-            2240911060UL);
-
-    /// <summary>
-    /// Returns what the <see cref="Callable"/> from
-    /// <see cref="NetwService.SetTransportRestrictedProbe"/> returns, or
-    /// <c>false</c> when none is set.
-    /// </summary>
-    public static bool IsTransportRestricted()
-    {
-        byte answered = default;
-        NetwThunks.Ptrcall0_Byte(
-            _bindIsTransportRestricted,
-            IntPtr.Zero,
-            ref answered);
-        return answered != 0;
-    }
-
     private static readonly IntPtr _bindRegister =
         NetwApi.MethodBind("NetwService", "register", 386500125UL);
 

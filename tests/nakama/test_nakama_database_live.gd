@@ -1,7 +1,12 @@
 class_name TestNakamaDatabaseLive
 extends NetwTestSuite
 
-var _service: NakamaSessionService
+const _ERROR_SCRUBBER := preload(
+	"res://addons/networked_test/gdunit4/gdunit_error_scrubber.gd"
+)
+
+var _tree: MultiplayerViewport
+var _api: MultiplayerAPI
 var _app := ""
 
 
@@ -15,46 +20,30 @@ func before(
 
 func before_test() -> void:
 	_app = "netwlive%d%d" % [Time.get_ticks_usec(), randi() % 1000]
-	_service = auto_free(NakamaSessionService.new())
-	add_child(_service)
-	_service.configure(
-		{
-			"host": NakamaTestServer.host(),
-			"port": NakamaTestServer.DEFAULT_PORT,
-			"use_ssl": false,
-			"server_key": "defaultkey",
-			"device_id": "netw-db-%d-%d" % [Time.get_ticks_usec(), randi()],
-			"username": "netwdb%d%d" % [Time.get_ticks_usec(), randi()],
-		},
+	_tree = auto_free(NakamaTestSupport.make_client_tree(self, "db"))
+	_api = _tree.api
+	var signed_in := await NakamaTestSupport.sign_in(
+		_tree,
+		"db-%d-%d" % [Time.get_ticks_usec(), randi()],
 	)
-	var auth: Dictionary = await _service.connect_async()
-	assert_bool(bool(auth["ok"])) \
-			.override_failure_message(
-				"Nakama authentication failed: %s" % auth["error"],
-			).is_true()
+	assert_int(signed_in) \
+			.override_failure_message("Nakama sign in failed.").is_equal(OK)
 
 
 func after_test() -> void:
-	if _service != null and _service.is_authenticated():
+	if NakamaTestSupport.account(_tree).session != null:
 		var backend := _backend()
-		var listing := backend._list_slots(null)
+		var listing := backend._list_slots(_api)
 		await listing.wait()
 		if listing.get_is_completed():
 			for slot in listing.get_result() as PackedStringArray:
-				await backend._delete_slot(null, StringName(slot)).wait()
+				await backend._delete_slot(_api, StringName(slot)).wait()
 	await super.after_test()
-
-
-func _wrapper() -> NakamaWrapper:
-	var made := NakamaWrapper.new()
-	made.use_session(_service)
-	return made
 
 
 func _backend() -> NakamaDatabase:
 	var made := NakamaDatabase.new()
 	made.app = _app
-	made.wrapper = _wrapper()
 	return made
 
 
@@ -73,7 +62,7 @@ func _address(kind: int, key: String) -> Dictionary:
 
 
 func _open(backend: NakamaDatabase, slot: String) -> NetwDatabaseConnection:
-	var promise := backend._open(null, StringName(slot))
+	var promise := backend._open(_api, StringName(slot))
 	await promise.wait()
 	assert_bool(promise.get_is_completed()) \
 			.override_failure_message(
@@ -119,11 +108,143 @@ func test_a_record_survives_the_connection_that_wrote_it() -> void:
 	assert_bool(bool(missing.get_result()["found"])).is_false()
 
 
+func test_a_record_and_a_snapshot_of_one_key_are_two_objects() -> void:
+	var connection := await _open(_backend(), "slot1")
+	var wrote := connection._write_batch(
+		[
+			{
+				"kind": "replace",
+				"address": _address(0, "hero"),
+				"envelope": _envelope(1),
+			},
+			{
+				"kind": "replace",
+				"address": _address(1, "hero"),
+				"envelope": _envelope(2),
+			},
+			{ "kind": "erase", "address": _address(0, "hero") },
+		],
+	)
+	await wrote.wait()
+	assert_array(Array(wrote.get_result()["errors"])).is_equal([OK, OK, OK])
+
+	var record := connection._read(_address(0, "hero"))
+	await record.wait()
+	assert_bool(bool(record.get_result()["found"])).is_false()
+	var snapshot := connection._read(_address(1, "hero"))
+	await snapshot.wait()
+	assert_bool(bool(snapshot.get_result()["found"])) \
+			.override_failure_message(
+				"Erasing a record erased the snapshot with the same key.",
+			).is_true()
+
+
+func test_a_foreign_value_is_found_and_unrecognized() -> void:
+	var backend := _backend()
+	var connection := await _open(backend, "slot1")
+	var account := NakamaTestSupport.account(_tree)
+	var legacy := JSON.stringify({ "gold": 4, "name": "hero" })
+	await account.client.write_storage_objects_async(
+		account.session,
+		[
+			NakamaWriteStorageObject.new(
+				backend.collection_for("slot1"),
+				NakamaDatabase.address_key(_address(0, "hero")),
+				1,
+				1,
+				legacy,
+				"",
+			),
+		],
+	)
+
+	var read := connection._read(_address(0, "hero"))
+	await read.wait()
+	var reply: Dictionary = read.get_result()
+	assert_int(int(reply["error"])).is_equal(OK)
+	assert_bool(bool(reply["found"])) \
+			.override_failure_message(
+				"A stored value was read as an empty save.",
+			).is_true()
+	assert_dict(reply["envelope"]).is_empty()
+
+
+func test_a_refused_session_fails_without_reading_as_absence() -> void:
+	var backend := _backend()
+	var signed_in := await _open(backend, "slot1")
+	var wrote := signed_in._write_batch(
+		[
+			{
+				"kind": "replace",
+				"address": _address(0, "hero"),
+				"envelope": _envelope(1),
+			},
+		],
+	)
+	await wrote.wait()
+
+	var forged_tree: MultiplayerViewport = auto_free(
+		NakamaTestSupport.make_client_tree(self, "forged"),
+	)
+	var forged := NakamaTestSupport.account(forged_tree)
+	var claims := Marshalls.utf8_to_base64(
+		JSON.stringify(
+			{
+				"exp": int(Time.get_unix_time_from_system()) + 3600,
+				"uid": NakamaTestSupport.account(_tree).user_id,
+				"usn": "forged",
+			},
+		),
+	)
+	forged.use_session(NakamaSession.new("e30.%s.c2ln" % claims))
+	await forged.sign_in().wait()
+	await _ERROR_SCRUBBER.erase_matching(["Invalid status code"])
+	await _ERROR_SCRUBBER.erase_matching(["Invalid response headers"])
+	var refused := NakamaDatabase.Connection.new(
+		forged,
+		backend.collection_for("slot1"),
+	)
+
+	var read := refused._read(_address(0, "hero"))
+	await read.wait()
+	var reply: Dictionary = read.get_result()
+	assert_int(int(reply["error"])) \
+			.override_failure_message(
+				"A read Nakama refused did not carry its error.",
+			).is_equal(ERR_UNAUTHORIZED)
+	assert_bool(bool(reply["found"])).is_false()
+
+	var batch := refused._write_batch(
+		[
+			{
+				"kind": "replace",
+				"address": _address(0, "hero"),
+				"envelope": _envelope(2),
+			},
+			{ "kind": "ponder", "address": _address(0, "two") },
+		],
+	)
+	await batch.wait()
+	var answer: Dictionary = batch.get_result()
+	assert_int(int(answer["error"])).is_equal(OK)
+	assert_array(Array(answer["errors"])) \
+			.is_equal([ERR_UNAUTHORIZED, ERR_INVALID_DATA])
+	assert_array(Array(answer["uncertain"])).is_equal([0, 0])
+
+
 func test_a_scan_pages_real_storage_and_its_cursor_continues() -> void:
 	var backend := _backend()
 	var connection := await _open(backend, "slot1")
 
 	var operations: Array = []
+	for at in 2:
+		operations.append(
+			{
+				"kind": "replace",
+				"address": { "kind": 0, "schema_name": "others", "key": "o%d" % at },
+				"envelope": _envelope(at),
+			},
+		)
 	for at in 5:
 		operations.append(
 			{
@@ -195,17 +316,17 @@ func test_a_slot_is_listed_then_deleted_with_every_schema_under_it() -> void:
 	)
 	await wrote.wait()
 
-	var listing := backend._list_slots(null)
+	var listing := backend._list_slots(_api)
 	await listing.wait()
 	var names: PackedStringArray = listing.get_result()
 	assert_bool(names.has("slot1")).is_true()
 	assert_bool(names.has("slot2")).is_true()
 
-	var removed := backend._delete_slot(null, &"slot1")
+	var removed := backend._delete_slot(_api, &"slot1")
 	await removed.wait()
 	assert_int(int(removed.get_result())).is_equal(OK)
 
-	var after := backend._list_slots(null)
+	var after := backend._list_slots(_api)
 	await after.wait()
 	var left: PackedStringArray = after.get_result()
 	assert_bool(left.has("slot1")) \

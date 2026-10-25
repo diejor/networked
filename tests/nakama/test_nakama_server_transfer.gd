@@ -21,14 +21,14 @@ class RelayEndpoint:
 
 	signal server_relabelled(successor_was: int, former_now: int)
 
-	var wrapper: NakamaWrapper
+	var bridge: RefCounted
 	var relay: NakamaRelayPeer
 	var target := 0
 
 
-	func _init(p_wrapper: NakamaWrapper) -> void:
-		wrapper = p_wrapper
-		relay = wrapper.peer()
+	func _init(p_bridge: RefCounted) -> void:
+		bridge = p_bridge
+		relay = bridge.multiplayer_peer
 		relay.peer_connected.connect(peer_connected.emit)
 		relay.peer_disconnected.connect(peer_disconnected.emit)
 		relay.server_relabelled.connect(server_relabelled.emit)
@@ -36,7 +36,7 @@ class RelayEndpoint:
 
 	func pump() -> void:
 		OS.delay_msec(PUMP_MS)
-		wrapper._socket._adapter._process(0.0)
+		bridge.nakama_socket._adapter._process(0.0)
 
 
 	func transfer_server(peer_id: int) -> Error:
@@ -137,42 +137,53 @@ class RelayDriver:
 	const SEATS := 4
 	const CLOSE_PUMPS := 100
 
+	const Bridge := preload("res://addons/networked_nakama/nakama_relay_bridge.gd")
+
 	var prepared: Array = []
-	var seated: Array[NakamaWrapper] = []
-	var made: Array[NakamaWrapper] = []
+	var seated: Array = []
+	var made: Array[MultiplayerViewport] = []
 
 
 	func prepare(host: Node, label: String) -> bool:
-		var wrappers: Array[NakamaWrapper] = []
+		var bridges: Array = []
 		for seat in SEATS:
-			var wrapper := NakamaWrapper.new()
-			made.append(wrapper)
-			var config := {
-				"host": NakamaTestServer.host(),
-				"device_id": "%s-%d" % [label, seat],
-				"username": "%s-%d" % [label, seat],
-			}
-			var result: Dictionary = await wrapper.connect_async(host, config)
-			if not result.ok:
+			var tree := MultiplayerViewport.new()
+			host.add_child(tree)
+			made.append(tree)
+			var account := NakamaAccount.new()
+			account.host = NakamaTestServer.host()
+			tree.add_child(account)
+			var session := await account.client.authenticate_device_async(
+				"%s-%d" % [label, seat],
+				null,
+				true,
+			)
+			if session.is_exception():
 				return false
-			wrapper.migrate_on_host_loss = true
-			wrappers.append(wrapper)
-		wrappers[0].create_match()
-		await wrappers[0].match_joined
+			account.use_session(session)
+			var signing_in := account.sign_in()
+			await signing_in.wait()
+			if signing_in.is_failed:
+				return false
+			var bridge := Bridge.new(account.socket)
+			bridge.migrate_on_host_loss = true
+			bridges.append(bridge)
+		bridges[0].create_match()
+		await bridges[0].match_joined
 		for seat in range(1, SEATS):
-			wrappers[seat].join_match(wrappers[0].match_id())
-			await wrappers[seat].match_joined
+			bridges[seat].join_match(bridges[0].match_id)
+			await bridges[seat].match_joined
 		var deadline := Time.get_ticks_msec() + 5000
-		while not wrappers.all(meshed):
+		while not bridges.all(meshed):
 			if Time.get_ticks_msec() > deadline:
 				return false
 			await host.get_tree().process_frame
-		prepared.append(wrappers)
+		prepared.append(bridges)
 		return true
 
 
-	func meshed(wrapper: NakamaWrapper) -> bool:
-		return wrapper.peer()._get_peers().size() == SEATS - 1
+	func meshed(bridge: RefCounted) -> bool:
+		return bridge.multiplayer_peer._get_peers().size() == SEATS - 1
 
 
 	func make_endpoints(count: int) -> Array[MultiplayerPeer]:
@@ -186,7 +197,7 @@ class RelayDriver:
 
 
 	func lose_server() -> void:
-		var socket = seated[0]._socket
+		var socket = seated[0].nakama_socket
 		socket.close()
 		for pump in CLOSE_PUMPS:
 			OS.delay_msec(RelayEndpoint.PUMP_MS)
@@ -196,14 +207,15 @@ class RelayDriver:
 
 
 	func close() -> void:
-		for wrapper in seated:
-			wrapper.leave()
+		for bridge in seated:
+			bridge.leave()
+			bridge.nakama_socket.close()
 		seated.clear()
 
 
 	func leave_all() -> void:
-		for wrapper in made:
-			wrapper.leave()
+		for tree in made:
+			tree.queue_free()
 		made.clear()
 		prepared.clear()
 
@@ -450,6 +462,19 @@ func judge_hand_off(mode: int) -> void:
 	assert_int(ana.multiplayer.get_unique_id()).is_equal(1)
 	assert_int(host.multiplayer.get_unique_id()).is_equal(former_now)
 	assert_bool(host.multiplayer.is_server()).is_false()
+	for player: NetwPlayer in Netw.session(ana).players:
+		assert_str(player.account) \
+				.override_failure_message(
+					"The successor holds no Nakama account for peer %d."
+					% player.peer_id,
+				).starts_with("nakama:")
+	for player: NetwPlayer in Netw.session(host).players:
+		if player.peer_id != former_now:
+			assert_str(player.account) \
+					.override_failure_message(
+						"The demoted server kept the account of peer %d."
+						% player.peer_id,
+					).is_empty()
 	await judge_state_flows(ana, host, MOVED_AFTER)
 	await judge_deadline_holds(everyone)
 
@@ -491,6 +516,7 @@ func open_world(username: String, mode: int) -> MultiplayerViewport:
 	tree.add_child(TransferWorld.new(mode))
 	trees.append(tree)
 	await get_tree().process_frame
+	assert_int(await NakamaTestSupport.sign_in(tree, username)).is_equal(OK)
 	var settled := await NetwOrdinarySetup.connect_through(
 		tree,
 		NakamaTestSupport.PEER_CLASS,
@@ -516,7 +542,7 @@ func join_world(room: String, username: String, mode: int) -> MultiplayerViewpor
 
 
 func migrate(tree: MultiplayerViewport) -> void:
-	NakamaTestSupport.directory(tree).wrapper().migrate_on_host_loss = true
+	NakamaTestSupport.directory(tree).migrate_on_host_loss = true
 
 
 func world_whole(group: Array) -> bool:

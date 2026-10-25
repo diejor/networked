@@ -793,6 +793,10 @@ void ConnectCore::on_server_answered() {
     attempt.answered = true;
 }
 
+void ConnectCore::on_session_left() {
+    drop_live();
+}
+
 void ConnectCore::on_session_online() {
     const Ref<NetwPromise> outcome = attempt.promise;
     attempt.ticket = RID();
@@ -1048,10 +1052,19 @@ String ConnectCore::endpoint_address() const {
 }
 
 String ConnectCore::join_address() const {
-    if (!live_online() || advertised_address.is_empty()) {
-        return endpoint_address();
+    if (!live_online()) {
+        return String();
     }
-    return advertised_address;
+    if (!advertised_address.is_empty()) {
+        return advertised_address;
+    }
+    if (session->has_server_role()) {
+        const String served = live->join_address();
+        if (!served.is_empty()) {
+            return served;
+        }
+    }
+    return endpoint_address();
 }
 
 void ConnectCore::advertise(const String &p_address, int64_t p_max_players) {
@@ -1387,6 +1400,14 @@ RID ConnectCore::invite(
     const RID target = rows.invite(
         named, source, p_transport, p_address, minted
     );
+    const bool already_there = live_online() && live->peer_class() == named
+        && (p_address == endpoint_address() || p_address == join_address());
+    if (already_there) {
+        if (minted) {
+            session->endpoint_emit_added(target);
+        }
+        return target;
+    }
     TargetRow *held = rows.row(target);
     if (held != nullptr) {
         held->invite_pending = true;

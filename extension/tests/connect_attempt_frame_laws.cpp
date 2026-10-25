@@ -47,6 +47,9 @@ struct SideEvidence {
     bool invite_pending = false;
     String invited_by;
     bool other_pending = false;
+    int invited_here = 0;
+    int invited_elsewhere = 0;
+    bool here_answers_joined_endpoint = false;
 };
 
 struct AttemptEvidence {
@@ -70,6 +73,15 @@ void record_failed(int64_t p_error, String, int64_t p_side) {
     SideEvidence &side = attempt_evidence().sides[p_side];
     side.failed += 1;
     side.failed_error = p_error;
+}
+
+void count_invited(Ref<netw::NetwEndpoint>, bool p_here) {
+    SideEvidence &side = attempt_evidence().sides[SIDE_INVITED];
+    if (p_here) {
+        side.invited_here += 1;
+    } else {
+        side.invited_elsewhere += 1;
+    }
 }
 
 void record_settled_address(Variant, uint64_t p_session) {
@@ -171,6 +183,24 @@ class ConnectAttemptScenario final : public netw_test::FrameScenario {
         }
     }
 
+    void reinvite(SideEvidence &r_side) {
+        const Ref<netw::NetwConnection> connection = client->get_connection();
+        const StringName enet("ENetMultiplayerPeer");
+        const Callable here = callable_mp_static(&count_invited).bind(true);
+        connection->connect(StringName("invited"), here);
+        const Ref<netw::NetwEndpoint> joined
+            = connection->invite(enet, invited->get_address(), String("Ada"));
+        connection->invite(enet, client->peer_join_address(), String("Ada"));
+        connection->disconnect(StringName("invited"), here);
+        r_side.here_answers_joined_endpoint = joined == invited;
+
+        const Callable elsewhere
+            = callable_mp_static(&count_invited).bind(false);
+        connection->connect(StringName("invited"), elsewhere);
+        connection->invite(enet, other->get_address(), String("Bo"));
+        connection->disconnect(StringName("invited"), elsewhere);
+    }
+
     void finish_client(Side p_side) {
         SideEvidence &side = attempt_evidence().sides[p_side];
         side.end_session_state = int(client->session_get_state());
@@ -179,6 +209,7 @@ class ConnectAttemptScenario final : public netw_test::FrameScenario {
             side.invite_pending = invited->get_is_invited();
             side.invited_by = invited->get_invited_by();
             side.other_pending = other->get_is_invited();
+            reinvite(side);
             invited.unref();
             other.unref();
         }
@@ -412,6 +443,18 @@ TEST_CASE(
     CHECK_FALSE(side.invite_pending);
     CHECK(side.invited_by.is_empty());
     CHECK(side.other_pending);
+}
+
+TEST_CASE(
+    "[Networked][Connect][Frame] an invitation to the server the session is "
+    "on answers its endpoint and emits nothing"
+) {
+    const AttemptEvidence &evidence = attempt_evidence();
+    REQUIRE(evidence.driven);
+    const SideEvidence &side = evidence.sides[SIDE_INVITED];
+    CHECK(side.here_answers_joined_endpoint);
+    NETW_CHECK_EQ(side.invited_here, 0);
+    NETW_CHECK_EQ(side.invited_elsewhere, 1);
 }
 
 } // namespace NetwTests

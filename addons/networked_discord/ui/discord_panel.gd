@@ -15,6 +15,7 @@ const LIST_MAX_HEIGHT := 360.0
 		var key := value.get_as_text() if value != null else ""
 		hint_label.text = key.replace("QuoteLeft", "`") + " to hide"
 		hint_label.visible = value != null
+
 ## Shows only the header, the party's slots and new invitations.
 @export var minimized := false:
 	set(value):

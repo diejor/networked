@@ -4,22 +4,21 @@
 		Settings for a session's admission handler.
 	</brief_description>
 	<description>
-		The server receives a [NetwJoinRequest] and waits for the handler to return [constant @GlobalScope.OK] before admitting its [NetwPlayer]. The handler may [code]await[/code].
+		The server receives a [NetwJoinRequest] and waits for the handler to return [constant @GlobalScope.OK] before admitting its [NetwPlayer]. The handler may [code]await[/code]. Each [NetwAccountProvider] accepted here proves one kind of account first.
 		[codeblock]
 		func _init() -&gt; void:
-		    Netw.configure_admission(admit).proof(prove)
+		    Netw.configure_admission(admit).accept(PasscodeAccount.new())
+
+		func admit(request: NetwJoinRequest) -&gt; Error:
+		    return OK if request.account else ERR_UNAUTHORIZED
 		[/codeblock]
 	</description>
 	<methods>
-		<method name="proof">
+		<method name="accept">
 			<return type="NetwAdmissionConfig" />
-			<param index="0" name="handler" type="Callable" />
+			<param index="0" name="provider" type="NetwAccountProvider" />
 			<description>
-				Set this on both peers. Calls [param handler] on the joining peer with the challenge the server reads as [member NetwJoinRequest.challenge]. Over WebRTC and Steam both peers bind it to the server the peer is connected to, as [member NetwJoinRequest.challenge_bound] reports. Its result becomes [member NetwJoinRequest.proof]. The handler may [code]await[/code] or return a [NetwPromise]. Return a [Variant] that can be sent with [method @GlobalScope.var_to_bytes].
-				[codeblock]
-				func prove(challenge: String) -&gt; Variant:
-				    return await identity.prove(challenge)
-				[/codeblock]
+				Adds [param provider] to the accounts a joining player proves, in preference order. Accept the same providers in the same order on every peer. A config with no provider sends no challenge.
 			</description>
 		</method>
 	</methods>

@@ -1,16 +1,11 @@
 {
   "name": "networked-activity-token-worker",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "Discord Activity OAuth token proxy Worker for networked_activity.",
+  "type": "module",
+  "description": "Swaps a Discord activity's authorization code and signs the player's token.",
   "scripts": {
-    "dev": "wrangler dev",
+    "test": "node --test",
     "deploy": "wrangler deploy"
-  },
-  "dependencies": {
-    "hono": "^4.6.0"
-  },
-  "devDependencies": {
-    "wrangler": "^3.78.0"
   }
 }

@@ -2,24 +2,41 @@
 
 #include <cstdint>
 
+#include "godot/local_vector.hpp"
 #include "godot/variant.hpp"
 #include "godot/ref_counted.hpp"
+#include "netw/api/session.hpp"
 #include "netw/wire/describe.hpp"
 
 namespace netw {
 
+class NetwMultiplayer;
+
 class NetwJoinRequest : public godot::RefCounted {
     GDCLASS(NetwJoinRequest, godot::RefCounted)
+
+    struct Proven {
+        godot::String account;
+        godot::String name;
+        bool bound = false;
+    };
 
     int64_t peer_id = 0;
     godot::StringName username;
     godot::Array args;
     godot::String challenge;
     bool challenge_bound = false;
-    godot::Variant proof;
-    godot::PackedStringArray identities;
+    godot::LocalVector<Proven> proven;
     godot::String account;
     godot::String account_name;
+    godot::ObjectID core_id;
+
+    const Proven *find(const godot::String &p_account) const;
+    void merge(
+        const godot::String &p_account,
+        const godot::String &p_name,
+        bool p_bound
+    );
 
 protected:
     static void _bind_methods();
@@ -30,18 +47,27 @@ public:
         const godot::StringName &p_username,
         const godot::Array &p_args,
         const godot::String &p_challenge,
-        bool p_challenge_bound,
-        const godot::Variant &p_proof,
-        const godot::PackedStringArray &p_identities,
-        const godot::String &p_account_name
+        bool p_challenge_bound
     );
+    void bind_session(NetwMultiplayer *p_core);
+    godot::Ref<NetwSession> get_session() const;
+    void add_account(
+        const godot::String &p_account,
+        const godot::String &p_name,
+        bool p_answers_challenge = true
+    );
+    void add_vouched_account(
+        const godot::String &p_account,
+        const godot::String &p_name
+    );
+    void start_from_first_account();
+    godot::String name_of(const godot::String &p_account) const;
+    bool is_bound(const godot::String &p_account) const;
     int64_t get_peer_id() const { return peer_id; }
     godot::StringName get_username() const { return username; }
     godot::Array get_args() const { return args.duplicate(true); }
     godot::String get_challenge() const { return challenge; }
-    bool get_challenge_bound() const { return challenge_bound; }
-    godot::Variant get_proof() const { return proof; }
-    godot::PackedStringArray get_identities() const { return identities; }
+    godot::PackedStringArray get_accounts() const;
     void set_account(const godot::String &p_account) { account = p_account; }
     godot::String get_account() const { return account; }
     void set_account_name(const godot::String &p_name) {

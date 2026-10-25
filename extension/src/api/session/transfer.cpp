@@ -6,6 +6,7 @@
 #include "netw/api/entity.hpp"
 #include "netw/api/entity_options.hpp"
 #include "netw/api/interest_layer.hpp"
+#include "netw/api/nodes/lobby_directory.hpp"
 #include "netw/api/participant.hpp"
 #include "netw/api/persistence_config.hpp"
 #include "netw/api/prediction.hpp"
@@ -266,7 +267,7 @@ void NetwMultiplayer::session_follow_relabel(
     transfer_follow_scenes(succeeds);
     transfer_follow_interest(succeeds);
     transfer_follow_prediction();
-    transfer_follow_players(succeeds);
+    transfer_follow_players(succeeds, was_server);
     transfer_follow_persistence(succeeds);
     transfer_generation += 1;
     resync_generation = transfer_generation;
@@ -377,14 +378,38 @@ void NetwMultiplayer::transfer_follow_persistence(bool p_succeeds) {
     }
 }
 
-void NetwMultiplayer::transfer_follow_players(bool p_succeeds) {
+void NetwMultiplayer::transfer_follow_players(
+    bool p_succeeds,
+    bool p_was_server
+) {
+    const int64_t own = get_unique_id();
     if (!p_succeeds) {
+        if (!p_was_server) {
+            return;
+        }
+        for (KeyValue<int64_t, PlayerRow> &row : players) {
+            if (row.value.row.is_valid() && row.value.peer != own) {
+                row.value.row->bind_account(
+                    String(), row.value.row->get_account_name()
+                );
+            }
+        }
         return;
     }
+    LobbyDirectory *directory = session_serving_directory();
     for (KeyValue<int64_t, PlayerRow> &row : players) {
         row.value.handled = row.value.handled || row.value.admitted;
         if (row.key >= player_incarnation_next) {
             player_incarnation_next = row.key + 1;
+        }
+        if (directory == nullptr || row.value.row.is_null()) {
+            continue;
+        }
+        const String account = directory->account_of(row.value.peer);
+        if (!account.is_empty()) {
+            row.value.row->bind_account(
+                account, directory->member_name(row.value.peer)
+            );
         }
     }
 }

@@ -77,6 +77,7 @@ func _ready() -> void:
 	session.state_changed.connect(on_state_changed)
 	connection.progressed.connect(on_progressed)
 	connection.failed.connect(on_failed, CONNECT_DEFERRED)
+	session.join_failed.connect(on_failed, CONNECT_DEFERRED)
 	connection.join_address_changed.connect(on_join_address_changed)
 	connection.invited.connect(_on_invited)
 	server_list.visibility_changed.connect(on_server_list_visibility_changed)

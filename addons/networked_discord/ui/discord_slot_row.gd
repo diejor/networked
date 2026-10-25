@@ -13,6 +13,7 @@ const VOICE_BADGES: Dictionary[DiscordParty.VoiceState, Texture2D] = {
 
 ## The width and height of one slot, in pixels.
 @export var slot_size := 24
+
 ## A larger party draws one fewer slot and a count of the rest.
 @export var max_slots := 10
 

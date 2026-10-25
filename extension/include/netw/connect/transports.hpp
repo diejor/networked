@@ -2,6 +2,7 @@
 
 #include <cstdint>
 
+#include "godot/ip.hpp"
 #include "godot/multiplayer.hpp"
 #include "godot/variant.hpp"
 #include "netw/api/loopback.hpp"
@@ -24,6 +25,9 @@ void split_host_port(
     int64_t p_default_port,
     godot::String &r_host,
     int64_t &r_port
+);
+godot::String pick_lan_address(
+    const godot::LocalVector<gd::LocalAddress> &p_found
 );
 godot::String lan_address();
 

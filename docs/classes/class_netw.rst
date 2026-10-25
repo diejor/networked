@@ -47,6 +47,18 @@ A level is spawned like any other node, with :ref:`configure_scene()<class_Netw_
         for player: NetwPlayer in Netw.session(self).players:
             arena.add_child(Netw.spawn_player(player, make_car))
 
+\ **Accounts**\ 
+
+\ :ref:`configure_admission()<class_Netw_method_configure_admission>` decides who joins. Each :ref:`NetwAccountProvider<class_NetwAccountProvider>` added with :ref:`NetwAdmissionConfig.accept()<class_NetwAdmissionConfig_method_accept>` proves an account before the handler runs, and the player keeps it as :ref:`NetwPlayer.account<class_NetwPlayer_property_account>`. :ref:`NetwIdToken<class_NetwIdToken>` proves one with a token signed by a backend the server trusts. The Steam, Nakama and Discord addons each ship a provider.
+
+::
+
+    func _init() -> void:
+        Netw.configure_admission(admit).accept(id_token)
+
+    func admit(request: NetwJoinRequest) -> Error:
+        return OK if request.account else ERR_UNAUTHORIZED
+
 .. rst-class:: classref-reftable-group
 
 Methods
@@ -183,7 +195,7 @@ A :ref:`NetwChannel<class_NetwChannel>` for sending raw bytes in batches.
 
 :ref:`NetwAdmissionConfig<class_NetwAdmissionConfig>` **configure_admission**\ (\ handler\: :godot:`Callable`\ ) |static| :ref:`🔗<class_Netw_method_configure_admission>`
 
-Declares the session's admission handler and returns its :ref:`NetwAdmissionConfig<class_NetwAdmissionConfig>`. The server calls ``handler`` with each :ref:`NetwJoinRequest<class_NetwJoinRequest>` and admits the peer when it returns :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>`. The handler may ``await`` for up to :ref:`NetwMultiplayer.auth_timeout<class_NetwMultiplayer_property_auth_timeout>`.
+Declares the session's admission handler and returns its :ref:`NetwAdmissionConfig<class_NetwAdmissionConfig>`. The server calls ``handler`` with each :ref:`NetwJoinRequest<class_NetwJoinRequest>` once every :ref:`NetwAccountProvider<class_NetwAccountProvider>` accepted with :ref:`NetwAdmissionConfig.accept()<class_NetwAdmissionConfig_method_accept>` has verified, and admits the peer when it returns :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>`. Verifying and the handler together may ``await`` for up to :ref:`NetwMultiplayer.auth_timeout<class_NetwMultiplayer_property_auth_timeout>`.
 
 .. rst-class:: classref-item-separator
 

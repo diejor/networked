@@ -1,5 +1,6 @@
 #include "support/netw_test.h"
 
+#include "godot/callable.hpp"
 #include "netw/api/promise.hpp"
 #include "support/netw_call_log.h"
 
@@ -8,6 +9,30 @@ namespace TestNetwPromiseWhenSettledLaws {
 using namespace godot;
 using netw::NetwPromise;
 using netw_test::CallLog;
+
+Ref<NetwPromise> &sole_holder() {
+    static Ref<NetwPromise> held;
+    return held;
+}
+
+bool &alive_after_release() {
+    static bool alive = false;
+    return alive;
+}
+
+void release_holder(int64_t p_promise) {
+    sole_holder().unref();
+    alive_after_release()
+        = netw::gd::instance_from_id(ObjectID(uint64_t(p_promise))) != nullptr;
+}
+
+void release_on_resolve(const Variant &, int64_t p_promise) {
+    release_holder(p_promise);
+}
+
+void release_on_reject(int64_t, const String &, int64_t p_promise) {
+    release_holder(p_promise);
+}
 
 TEST_CASE(
     "[Networked][Session][Hosted] WS1 a promise that already settled runs the "
@@ -111,6 +136,37 @@ TEST_CASE(
     promise->resolve(Variant(7));
 
     CHECK(promise->get_is_settled());
+}
+
+TEST_CASE(
+    "[Networked][Session][Hosted] WS7 a promise whose last holder lets go "
+    "inside its own callback lives until the settle returns, so a transport "
+    "freed by the answer it delivered cannot free the promise mid-settle"
+) {
+    for (const bool rejects : {false, true}) {
+        CAPTURE(rejects);
+        Ref<NetwPromise> made;
+        made.instantiate();
+        const int64_t id = int64_t(uint64_t(netw::gd::instance_id(made.ptr())));
+        NetwPromise *settling = made.ptr();
+        if (rejects) {
+            made->catch_error(callable_mp_static(&release_on_reject).bind(id));
+        } else {
+            made->then(callable_mp_static(&release_on_resolve).bind(id));
+        }
+        sole_holder() = made;
+        made.unref();
+        alive_after_release() = false;
+
+        if (rejects) {
+            settling->reject(ERR_CANT_CREATE, String("refused"));
+        } else {
+            settling->resolve(Variant(7));
+        }
+
+        CHECK(alive_after_release());
+        CHECK(netw::gd::instance_from_id(ObjectID(uint64_t(id))) == nullptr);
+    }
 }
 
 } // namespace TestNetwPromiseWhenSettledLaws

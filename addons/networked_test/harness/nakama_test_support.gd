@@ -1,11 +1,12 @@
 ## Static helpers for live Nakama integration tests.
 ##
 ## [NakamaTestSupport] mirrors [WebRTCTestSupport] for real relay sessions. It
-## wires [MultiplayerViewport], [NakamaLobbyDirectory], and [NakamaBackend] directly
-## so tests own raw trees and frame polling. Every tree here comes online
-## through [NetwOrdinarySetup], so the relay peer is built by the provider and
-## then assigned like any other, which is what makes delivery and adoption
-## ordering observable.
+## wires [MultiplayerViewport], [NakamaAccount] and [NakamaLobbyDirectory]
+## directly so tests own raw trees and frame polling. Every tree here comes
+## online through [NetwOrdinarySetup], so the relay peer is built by the
+## provider and then assigned like any other, which is what makes delivery and
+## adoption ordering observable. Each tree signs in as its own Nakama user,
+## through [method NakamaAccount.use_session].
 ## [codeblock]
 ## var host := await NakamaTestSupport.start_host(self)
 ## var client := NakamaTestSupport.make_client_tree(self, "client")
@@ -72,7 +73,7 @@ static func undrivable(packed: PackedScene) -> String:
 	return reason
 
 
-## Builds and hosts a [MultiplayerViewport] backed by [NakamaBackend].
+## Builds and hosts a [MultiplayerViewport] signed in as [param username].
 ##
 ## Returns a dictionary with [code]tree[/code] (the [MultiplayerViewport]) and
 ## [code]room[/code] (the Nakama relay match id).
@@ -80,7 +81,10 @@ static func start_host(
 		parent: Node,
 		username: String = "host",
 ) -> Dictionary:
-	var tree := _make_tree(parent, "NakamaHost", username)
+	var tree := _make_tree(parent, "NakamaHost")
+	if await sign_in(tree, username) != OK:
+		tree.queue_free()
+		return { }
 	var settled := await NetwOrdinarySetup.connect_through(
 			tree,
 			PEER_CLASS,
@@ -114,6 +118,9 @@ static func join_client(
 		username: String,
 		join_args: Array = [],
 ) -> Error:
+	var signed_in := await sign_in(client, username)
+	if signed_in != OK:
+		return signed_in
 	var settled := await NetwOrdinarySetup.connect_through(
 			client,
 			PEER_CLASS,
@@ -126,12 +133,35 @@ static func join_client(
 	return settled.error
 
 
+## Signs the [NakamaAccount] of [param tree] in as the Nakama user
+## [param username] of this test run, unless it is already signed in.
+static func sign_in(tree: MultiplayerViewport, username: String) -> Error:
+	var nakama := account(tree)
+	if nakama.socket != null:
+		return OK
+	var made := await nakama.client.authenticate_device_async(
+		"%s-%s" % [_run_prefix(), username],
+		null,
+		true,
+	)
+	if made.is_exception():
+		push_error(
+			"NakamaTestSupport could not sign in %s (%s)."
+			% [username, made.get_exception().message],
+		)
+		return ERR_UNAUTHORIZED
+	nakama.use_session(made)
+	var signing_in := nakama.sign_in()
+	await signing_in.wait()
+	return signing_in.code
+
+
 ## Builds an offline client [MultiplayerViewport] wired for Nakama.
 static func make_client_tree(
 		parent: Node,
 		username: String,
 ) -> MultiplayerViewport:
-	return _make_tree(parent, "NakamaClient_%s" % username, username)
+	return _make_tree(parent, "NakamaClient_%s" % username)
 
 
 ## Tears down [param tree] and leaves the Nakama relay match.
@@ -143,7 +173,7 @@ static func stop_tree(tree: MultiplayerViewport) -> void:
 	if dir != null:
 		# _leave_lobby is a coroutine when it deletes a hosted browse card, so
 		# await it before freeing the tree or the storage delete races the
-		# facade teardown.
+		# account teardown.
 		await dir._leave_lobby()
 	tree.queue_free()
 	if scene_tree:
@@ -158,9 +188,12 @@ static func host_scene(
 ) -> Dictionary:
 	var scene := packed.instantiate()
 	var tree := _find_tree(scene)
-	_configure_tree(tree, username)
+	_attach_nodes(tree)
 	parent.add_child(scene)
 
+	if await sign_in(tree, username) != OK:
+		scene.queue_free()
+		return { }
 	var settled := await NetwOrdinarySetup.connect_through(
 			tree,
 			PEER_CLASS,
@@ -195,7 +228,7 @@ static func join_scene(
 ) -> MultiplayerViewport:
 	var scene := packed.instantiate()
 	var tree := _find_tree(scene)
-	_configure_tree(tree, username)
+	_attach_nodes(tree)
 	parent.add_child(scene)
 
 	var err := await join_client(tree, room, username, _level_1_spawn())
@@ -206,33 +239,34 @@ static func join_scene(
 	return tree
 
 
-static func _make_tree(
-		parent: Node,
-		tree_name: String,
-		username: String,
-) -> MultiplayerViewport:
+static func _make_tree(parent: Node, tree_name: String) -> MultiplayerViewport:
 	var tree := MultiplayerViewport.new()
 	tree.name = tree_name
-	_configure_tree(tree, username)
+	_attach_nodes(tree)
 	parent.add_child(tree)
 	return tree
 
 
-static func _configure_tree(tree: MultiplayerViewport, username: String) -> void:
-	_attach_directory(tree, username)
-
-
-static func _attach_directory(tree: MultiplayerViewport, username: String) -> void:
-	var dir := directory(tree)
-	if dir == null:
-		dir = NakamaLobbyDirectory.new()
+static func _attach_nodes(tree: MultiplayerViewport) -> void:
+	var nakama := account(tree)
+	if nakama == null:
+		nakama = NakamaAccount.new()
+		nakama.name = &"NakamaAccount"
+		tree.add_child(nakama)
+	nakama.host = NakamaTestServer.host()
+	nakama.port = NakamaTestServer.DEFAULT_PORT
+	nakama.use_ssl = false
+	if directory(tree) == null:
+		var dir := NakamaLobbyDirectory.new()
 		dir.name = &"NakamaLobbyDirectory"
 		tree.add_child(dir)
-	dir.host = NakamaTestServer.host()
-	dir.port = NakamaTestServer.DEFAULT_PORT
-	dir.use_ssl = false
-	dir.device_id = "%s-%s" % [_run_prefix(), username]
-	dir.local_member_name = "%s-%s" % [_run_prefix(), username]
+
+
+## Returns the [NakamaAccount] attached to [param tree].
+static func account(tree: MultiplayerViewport) -> NakamaAccount:
+	for child in tree.find_children("*", "NakamaAccount", true):
+		return child as NakamaAccount
+	return tree.get_node_or_null("NakamaAccount") as NakamaAccount
 
 
 ## Returns the [NakamaLobbyDirectory] attached to [param tree].

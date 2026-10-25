@@ -27,6 +27,7 @@
 #include "netw/api/interpolate.hpp"
 #include "netw/api/join_config.hpp"
 #include "netw/api/admission_config.hpp"
+#include "netw/api/id_token.hpp"
 #include "netw/api/join_request.hpp"
 #include "netw/api/lag_compensation_config.hpp"
 #include "netw/api/lifecycle_request.hpp"
@@ -211,6 +212,8 @@ void initialize_networked_module(ModuleInitializationLevel level) {
     GDREGISTER_ABSTRACT_CLASS(netw::NetwPersistenceConfig);
     GDREGISTER_ABSTRACT_CLASS(netw::NetwPersistence);
     GDREGISTER_ABSTRACT_CLASS(netw::NetwJoinConfig);
+    GDREGISTER_CLASS(netw::NetwAccountProvider);
+    GDREGISTER_CLASS(netw::NetwIdToken);
     GDREGISTER_ABSTRACT_CLASS(netw::NetwAdmissionConfig);
     GDREGISTER_ABSTRACT_CLASS(netw::NetwJoinRequest);
     GDREGISTER_ABSTRACT_CLASS(netw::NetwMemberConfig);
@@ -302,6 +305,7 @@ void uninitialize_networked_module(ModuleInitializationLevel level) {
     netw::NetwMultiplayer::clear_wrapper_factory();
     netw::connect::TransportBook::shared().clear();
     netw::SceneLoads::shared().clear();
+    netw::NetwIdToken::forget_sources();
     netw::schema_model::clear();
     netw::script::model::clear();
     netw::entity::shutdown();

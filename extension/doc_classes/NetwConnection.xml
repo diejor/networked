@@ -153,7 +153,7 @@
 			<param index="1" name="address" type="String" />
 			<param index="2" name="from_name" type="String" default="&quot;&quot;" />
 			<description>
-				Sets [member NetwEndpoint.is_invited] and [member NetwEndpoint.invited_by] before emitting [signal invited]. Reuses the row at [param address]. Returns [code]null[/code] if [param transport] is unavailable or the address is empty.
+				Sets [member NetwEndpoint.is_invited] and [member NetwEndpoint.invited_by] before emitting [signal invited]. Reuses the row at [param address]. An invitation to the server the session is already on returns its endpoint and emits nothing. Returns [code]null[/code] if [param transport] is unavailable or the address is empty.
 			</description>
 		</method>
 		<method name="join">
@@ -239,7 +239,7 @@
 		</member>
 		<member name="join_address" type="String" setter="set_join_address" getter="get_join_address">
 			The address other players use to join this server. A server reads its own transport's address, such as its LAN address for ENet, until it sets another. A client reads the address passed to [method join] until its join is accepted, then the server's value. Empty before [constant NetwSession.STATE_ONLINE] or when an assigned peer supplies no address.
-			Only an online server sets it. A server behind a router sets its internet address after [method host] settles, and every client follows.
+			Only an online server sets it, to at most 1023 bytes of UTF-8. A server behind a router sets its internet address after [method host] settles, and every client follows.
 		</member>
 		<member name="max_players" type="int" setter="" getter="get_max_players">
 			The server's player limit from [member NetwServerInfo.max_players] in [member NetwSessionConfig.server_info]. A client reads the server's value once its join is accepted. [code]0[/code] when no limit is declared or before that.

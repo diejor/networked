@@ -29,6 +29,15 @@
 		    for player: NetwPlayer in Netw.session(self).players:
 		        arena.add_child(Netw.spawn_player(player, make_car))
 		[/codeblock]
+		[b]Accounts[/b]
+		[method configure_admission] decides who joins. Each [NetwAccountProvider] added with [method NetwAdmissionConfig.accept] proves an account before the handler runs, and the player keeps it as [member NetwPlayer.account]. [NetwIdToken] proves one with a token signed by a backend the server trusts. The Steam, Nakama and Discord addons each ship a provider.
+		[codeblock]
+		func _init() -&gt; void:
+		    Netw.configure_admission(admit).accept(id_token)
+
+		func admit(request: NetwJoinRequest) -&gt; Error:
+		    return OK if request.account else ERR_UNAUTHORIZED
+		[/codeblock]
 	</description>
 	<tutorials>
 	</tutorials>
@@ -58,7 +67,7 @@
 			<return type="NetwAdmissionConfig" />
 			<param index="0" name="handler" type="Callable" />
 			<description>
-				Declares the session's admission handler and returns its [NetwAdmissionConfig]. The server calls [param handler] with each [NetwJoinRequest] and admits the peer when it returns [constant @GlobalScope.OK]. The handler may [code]await[/code] for up to [member NetwMultiplayer.auth_timeout].
+				Declares the session's admission handler and returns its [NetwAdmissionConfig]. The server calls [param handler] with each [NetwJoinRequest] once every [NetwAccountProvider] accepted with [method NetwAdmissionConfig.accept] has verified, and admits the peer when it returns [constant @GlobalScope.OK]. Verifying and the handler together may [code]await[/code] for up to [member NetwMultiplayer.auth_timeout].
 			</description>
 		</method>
 		<method name="configure_clock" qualifiers="static">

@@ -4,51 +4,71 @@
 		A player's request to join a session.
 	</brief_description>
 	<description>
-		The server passes this request to the handler declared with [method Netw.configure_admission]. A requested [member username] does not verify an account.
+		The server passes this request to the handler declared with [method Netw.configure_admission], after every [NetwAccountProvider] has verified. A requested [member username] does not verify an account.
 		[codeblocks]
 		[gdscript]
 		func admit(request: NetwJoinRequest) -&gt; Error:
-		    if request.identities.is_empty():
-		        return ERR_UNAUTHORIZED
-		    return OK
+		    return OK if request.account else ERR_UNAUTHORIZED
 		[/gdscript]
 		[csharp]
 		private Error Admit(Variant value)
 		{
 		    using var request = NetwJoinRequest.From(value);
-		    return request.Identities.Length == 0
+		    return string.IsNullOrEmpty(request.Account)
 		        ? Error.Unauthorized : Error.Ok;
 		}
 		[/csharp]
 		[/codeblocks]
 	</description>
+	<methods>
+		<method name="add_account">
+			<return type="void" />
+			<param index="0" name="account" type="String" />
+			<param index="1" name="name" type="String" />
+			<param index="2" name="answers_challenge" type="bool" default="true" />
+			<description>
+				Adds [param account] with the display [param name] to [member accounts], from [method NetwAccountProvider._verify]. Pass [code]false[/code] for [param answers_challenge] when the proof does not depend on [member challenge]. An account already listed keeps its place.
+			</description>
+		</method>
+		<method name="is_bound" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="account" type="String" />
+			<description>
+				Returns [code]true[/code] when another server of this game could not have passed on the proof of [param account]. That holds when the transport reports the account, or when its proof answered a [member challenge] bound to this server, as over WebRTC or through a [LobbyDirectory] that reports the server's account.
+			</description>
+		</method>
+		<method name="name_of" qualifiers="const">
+			<return type="String" />
+			<param index="0" name="account" type="String" />
+			<description>
+				Returns the display name proven with [param account], or [code]""[/code].
+			</description>
+		</method>
+	</methods>
 	<members>
-		<member name="peer_id" type="int" setter="" getter="get_peer_id">
-			The joining peer's id.
+		<member name="account" type="String" setter="set_account" getter="get_account">
+			The account the new [NetwPlayer] takes, such as [code]"steam:76561198000000000"[/code]. Starts as the first of [member accounts]. Empty for a guest.
 		</member>
-		<member name="username" type="StringName" setter="" getter="get_username">
-			The name requested through [method Netw.prepare_join].
+		<member name="account_name" type="String" setter="set_account_name" getter="get_account_name">
+			The display name for [member account]. Starts as the name of the first of [member accounts].
+		</member>
+		<member name="accounts" type="PackedStringArray" setter="" getter="get_accounts">
+			Every account proven for this join. Each [NetwAccountProvider]'s comes first, in the order they were accepted, then the account the serving [LobbyDirectory] reports.
 		</member>
 		<member name="args" type="Array" setter="" getter="get_args">
 			The arguments of [method Netw.prepare_join], decoded with the types declared by [method Netw.configure_join].
 		</member>
 		<member name="challenge" type="String" setter="" getter="get_challenge">
-			The challenge the joining peer's [method NetwAdmissionConfig.proof] handler answered, or [code]""[/code] without a proof. Verify that [member proof] answers this value. Over WebRTC it is bound to this server's certificate on the connection, and over Steam to this server's Steam ID, so a proof that another server relays does not answer it.
+			The challenge every [NetwAccountProvider] proved on the joining peer, or [code]""[/code] when none is accepted.
 		</member>
-		<member name="challenge_bound" type="bool" setter="" getter="get_challenge_bound">
-			[code]true[/code] when [member challenge] is bound to this server, over WebRTC, over Steam and for the host's own join. [code]false[/code] over ENet and other transports that do not identify the server, where another server of this game can pass the challenge to its own player and forward the answer. Refuse such a request when an account depends on [member proof].
+		<member name="peer_id" type="int" setter="" getter="get_peer_id">
+			The joining peer's id.
 		</member>
-		<member name="proof" type="Variant" setter="" getter="get_proof">
-			The value returned by the joining peer's [method NetwAdmissionConfig.proof] handler. [code]null[/code] when no proof was requested.
+		<member name="session" type="NetwSession" setter="" getter="get_session">
+			The server's session the peer is joining.
 		</member>
-		<member name="identities" type="PackedStringArray" setter="" getter="get_identities">
-			Accounts verified by the active [LobbyDirectory] through [method LobbyDirectory._account_of]. The first initializes [member account].
-		</member>
-		<member name="account" type="String" setter="set_account" getter="get_account">
-			The account to assign in the admission handler, such as [code]"discord:80351110224678912"[/code] or [code]"steam:76561198000000000"[/code]. Empty for a guest.
-		</member>
-		<member name="account_name" type="String" setter="set_account_name" getter="get_account_name">
-			The verified display name, initially supplied by the active [LobbyDirectory]. Empty for a guest.
+		<member name="username" type="StringName" setter="" getter="get_username">
+			The name requested through [method Netw.prepare_join].
 		</member>
 	</members>
 </class>

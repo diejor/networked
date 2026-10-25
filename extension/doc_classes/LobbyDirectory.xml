@@ -40,7 +40,7 @@
 		func _leave_lobby() -&gt; void:
 		    Rooms.leave()
 		[/codeblock]
-		A directory whose peer class already has a transport only lists lobbies, and joining one goes through that transport. [WebTorrentLobbyDirectory] and [LANLobbyDirectory] work this way. Use [SteamLobbyDirectory] for Steam lobbies.
+		A directory whose peer class already has a transport only lists lobbies, and joining one goes through that transport. [WebTorrentLobbyDirectory] and [LANLobbyDirectory] work this way.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -49,7 +49,7 @@
 			<return type="String" />
 			<param index="0" name="peer_id" type="int" />
 			<description>
-				Returns the account verified for [param peer_id] by this transport, with a provider prefix such as [code]"steam:"[/code]. Empty when no account is verified. Supplies [member NetwJoinRequest.identities] when this [LobbyDirectory] serves the connected [MultiplayerPeer].
+				Returns the account verified for [param peer_id] by this transport, with a provider prefix such as [code]"steam:"[/code]. Empty when no account is verified. While this [LobbyDirectory] serves the connected [MultiplayerPeer], its answer for the joining peer comes last in [member NetwJoinRequest.accounts], and its answer for peer [code]1[/code] binds [member NetwJoinRequest.challenge] to the server. Answer peer [code]1[/code] on the server and on every client.
 			</description>
 		</method>
 		<method name="_client_settings" qualifiers="virtual">

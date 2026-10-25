@@ -95,15 +95,13 @@ func test_private_lobby_is_unlisted_but_joinable() -> void:
 			.is_not_null()
 
 
-func test_browsing_from_a_ready_callback_lists_once_the_session_is_ready() -> void:
+func test_browsing_from_a_ready_callback_signs_in_a_guest_and_lists() -> void:
 	var tree := MultiplayerViewport.new()
+	var account := NakamaAccount.new()
+	account.host = NakamaTestServer.host()
+	account.port = NakamaTestServer.DEFAULT_PORT
+	tree.add_child(account)
 	var dir := NakamaLobbyDirectory.new()
-	dir.name = &"NakamaLobbyDirectory"
-	dir.host = NakamaTestServer.host()
-	dir.port = NakamaTestServer.DEFAULT_PORT
-	dir.use_ssl = false
-	dir.device_id = run_uid
-	dir.local_member_name = run_uid
 	dir.browser_filter_uid = run_uid
 	tree.add_child(dir)
 	tree.add_child(ReadyBrowser.new())
@@ -116,10 +114,9 @@ func test_browsing_from_a_ready_callback_lists_once_the_session_is_ready() -> vo
 	add_child(tree)
 
 	await wait_for(func() -> bool: return listed[0], "the first listing")
-	var service := tree.get_node_or_null("NakamaSession")
-	assert_bool(service != null and service.is_inside_tree()) \
-			.override_failure_message("The Nakama session never entered the tree.") \
-			.is_true()
+	assert_str(account.user_id) \
+			.override_failure_message("Listing lobbies signed nobody in.") \
+			.is_not_empty()
 
 
 func host_lobby(dir: LobbyDirectory, settings: Dictionary) -> MultiplayerPeer:
@@ -150,6 +147,7 @@ func make_directory(username: String) -> NakamaLobbyDirectory:
 	var tree := NakamaTestSupport.make_client_tree(self, username)
 	trees.append(tree)
 	await NetwTestSuite.drain_frames(get_tree(), 2)
+	await NakamaTestSupport.sign_in(tree, "%s-%s" % [run_uid, username])
 	var dir := NakamaTestSupport.directory(tree)
 	dir.browser_filter_uid = run_uid
 	return dir

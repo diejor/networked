@@ -101,6 +101,7 @@
 
 namespace netw {
 
+class LobbyDirectory;
 class NetwDatabase;
 class NetwPersistence;
 class NetwPredictStats;
@@ -916,13 +917,19 @@ private:
     };
     struct LinkHandshake {
         bool completed = false;
+        bool proven = false;
         godot::String challenge;
+        godot::String bound_challenge;
+        godot::Array proofs;
         Awaited proof;
         std::optional<JoinRequest> local_join;
     };
     struct PendingAdmission {
         JoinRequest submitted;
         godot::Ref<NetwJoinRequest> request;
+        godot::Array proofs;
+        int64_t verified = 0;
+        bool asked = false;
         Awaited verdict;
     };
     godot::HashMap<int64_t, PendingAdmission> pending_admissions;
@@ -3377,7 +3384,7 @@ public:
     void transfer_follow_scenes(bool p_succeeds);
     void transfer_follow_interest(bool p_succeeds);
     void transfer_follow_prediction();
-    void transfer_follow_players(bool p_succeeds);
+    void transfer_follow_players(bool p_succeeds, bool p_was_server);
     void transfer_resubmit_join();
     void transfer_follow_persistence(bool p_succeeds);
     bool transfer_rejoins() const;
@@ -3987,21 +3994,25 @@ public:
         int64_t p_peer,
         const godot::String &p_challenge
     );
+    void session_prove_next(int64_t p_peer);
+    void session_proof_failed(int64_t p_peer, godot::Error p_error);
     void session_proof_settled(int64_t p_peer, uint64_t p_promise);
+    void session_verify_next(int64_t p_peer);
+    void session_ask_admission(int64_t p_peer);
     Awaited *session_awaited(int64_t p_peer, bool p_proof);
     Awaited *session_awaited_settle(
         int64_t p_peer,
         bool p_proof,
         uint64_t p_promise
     );
+    void session_arm_deadline(Awaited &r_awaited, uint64_t p_declaration);
     void session_await(
         int64_t p_peer,
         bool p_proof,
-        const godot::Callable &p_handler,
-        const godot::Variant &p_argument,
-        uint64_t p_declaration
+        const godot::Variant &p_returned
     );
     godot::String session_mint_challenge();
+    LobbyDirectory *session_serving_directory() const;
     godot::String session_bind_challenge(
         const godot::String &p_challenge,
         int64_t p_link,
@@ -4164,6 +4175,12 @@ public:
     void auth_forget_link(int64_t p_peer);
 #if defined(NETW_TESTS)
     bool auth_link_is_completed(int64_t p_peer) const;
+    void auth_open_challenge_under_test(
+        int64_t p_peer,
+        const godot::String &p_challenge
+    ) {
+        link_handshakes[p_peer].challenge = p_challenge;
+    }
     bool entity_book_holds_under_test(godot::Node *p_node) const {
         return entity_book.has(uint64_t(p_node->get_instance_id()));
     }

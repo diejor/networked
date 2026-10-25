@@ -9,7 +9,10 @@ extends EditorExportPlugin
 ## stays out even when the editor itself cannot load the binding.
 const OPTIONAL := {
 	"res://addons/godotsteam/godotsteam.gdextension": [
-		"res://addons/networked_steam/",
+		"res://addons/networked_steam/steam_lobby_directory.gd",
+		"res://addons/networked_steam/steam_social.gd",
+		"res://addons/networked_steam/steam_profile.gd",
+		"res://addons/networked_steam/steam_party.gd",
 	],
 	"res://addons/webrtc/webrtc.gdextension": [],
 	"res://addons/discord_social_sdk/lib/discord.gdextension": [

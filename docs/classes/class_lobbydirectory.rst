@@ -59,7 +59,7 @@ A lobby directory is a :ref:`NetwService<class_NetwService>` that implements :re
     func _leave_lobby() -> void:
         Rooms.leave()
 
-\ A directory whose peer class already has a transport only lists lobbies, and joining one goes through that transport. :ref:`WebTorrentLobbyDirectory<class_WebTorrentLobbyDirectory>` and :ref:`LANLobbyDirectory<class_LANLobbyDirectory>` work this way. Use :ref:`SteamLobbyDirectory<class_SteamLobbyDirectory>` for Steam lobbies.
+\ A directory whose peer class already has a transport only lists lobbies, and joining one goes through that transport. :ref:`WebTorrentLobbyDirectory<class_WebTorrentLobbyDirectory>` and :ref:`LANLobbyDirectory<class_LANLobbyDirectory>` work this way.
 
 .. rst-class:: classref-reftable-group
 
@@ -431,7 +431,7 @@ Method Descriptions
 
 :godot:`String` **_account_of**\ (\ peer_id\: :godot:`int`\ ) |virtual| :ref:`🔗<class_LobbyDirectory_private_method__account_of>`
 
-Returns the account verified for ``peer_id`` by this transport, with a provider prefix such as ``"steam:"``. Empty when no account is verified. Supplies :ref:`NetwJoinRequest.identities<class_NetwJoinRequest_property_identities>` when this **LobbyDirectory** serves the connected :godot:`MultiplayerPeer`.
+Returns the account verified for ``peer_id`` by this transport, with a provider prefix such as ``"steam:"``. Empty when no account is verified. While this **LobbyDirectory** serves the connected :godot:`MultiplayerPeer`, its answer for the joining peer comes last in :ref:`NetwJoinRequest.accounts<class_NetwJoinRequest_property_accounts>`, and its answer for peer ``1`` binds :ref:`NetwJoinRequest.challenge<class_NetwJoinRequest_property_challenge>` to the server. Answer peer ``1`` on the server and on every client.
 
 .. rst-class:: classref-item-separator
 

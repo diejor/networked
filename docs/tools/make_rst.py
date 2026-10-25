@@ -1832,6 +1832,7 @@ FOLDER_GROUPS: list[tuple[str, list[str]]] = [
         ],
     ),
     ("Scene Node Path (editor)", ["addons/networked/addons/scene_node_path"]),
+    ("Nakama", ["addons/networked_nakama"]),
     ("Steam", ["addons/networked_steam"]),
     ("Testing", ["addons/networked_test"]),
 ]
@@ -1852,7 +1853,8 @@ def build_class_source_paths() -> dict[str, str]:
     mapping: dict[str, str] = {}
     decl = re.compile(r"^\s*class_name\s+([A-Za-z_][A-Za-z0-9_]*)", re.MULTILINE)
     for addon in (
-        "addons/networked", "addons/networked_steam", "addons/networked_test"
+        "addons/networked", "addons/networked_nakama", "addons/networked_steam",
+        "addons/networked_test",
     ):
         base = os.path.join(repo_root, addon)
         if not os.path.isdir(base):

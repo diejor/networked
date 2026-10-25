@@ -3,21 +3,25 @@ extends GdUnitTestSuite
 const WAIT_SECONDS := 300.0
 
 
+class EchoAccount extends NetwAccountProvider:
+	func _prove(challenge: String, _session: NetwSession) -> Variant:
+		return "proof:" + challenge
+
+
+	func _verify(request: NetwJoinRequest, proof: Variant) -> Variant:
+		if proof is String and proof == "proof:" + request.challenge:
+			request.add_account("echo:%d" % request.peer_id, "")
+		return OK
+
+
 class Gate extends Node:
 	var requests: Array[NetwJoinRequest] = []
 
 
-	func prove(value: String) -> String:
-		return "proof:" + value
-
-
 	func admit(request: NetwJoinRequest) -> Error:
 		requests.append(request)
-		if not request.challenge_bound:
-			return ERR_UNAUTHORIZED
-		if request.proof != "proof:" + request.challenge:
-			return ERR_UNAUTHORIZED
-		return OK
+		var echo := "echo:%d" % request.peer_id
+		return OK if request.is_bound(echo) else ERR_UNAUTHORIZED
 
 
 func before(
@@ -37,7 +41,7 @@ func test_steam_binds_the_challenge_to_the_host() -> void:
 	viewport.add_child(directory)
 	viewport.add_child(gate)
 	add_child(viewport)
-	Netw.configure_admission(gate.admit).proof(gate.prove)
+	Netw.configure_admission(gate.admit).accept(EchoAccount.new())
 	var session: NetwSession = Netw.session(viewport)
 	if role == "host":
 		var hosted: NetwPromise = session.connection.host(
@@ -56,8 +60,8 @@ func test_steam_binds_the_challenge_to_the_host() -> void:
 			waited += 0.5
 		assert_array(gate.requests).is_not_empty()
 		var remote: NetwJoinRequest = gate.requests[0]
-		assert_bool(remote.challenge_bound).is_true()
-		assert_str(remote.proof).is_equal("proof:" + remote.challenge)
+		assert_bool(remote.is_bound("echo:%d" % remote.peer_id)).is_true()
+		assert_str(remote.accounts[-1]).starts_with("steam:")
 		await get_tree().create_timer(5.0).timeout
 	else:
 		var endpoint: NetwEndpoint = session.connection.add(

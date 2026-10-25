@@ -19,6 +19,7 @@ using netw_test::LawRowFor;
 using netw_test::LawVerdict;
 
 const char *ADDON_ROOT = "res://addons/networked";
+const char *NAKAMA_ROOT = "res://addons/networked_nakama";
 const char *CONNECT_ROOT = "res://addons/networked/gdscript/connect";
 enum Plant {
     PLANT_NONE,
@@ -28,7 +29,7 @@ enum Plant {
 
 struct LintScenario {
     String label;
-    const char *root = ADDON_ROOT;
+    const char *roots[2] = {ADDON_ROOT, nullptr};
     const char *patterns[10] = {nullptr};
     bool exempts_a_comment = false;
 };
@@ -36,7 +37,8 @@ struct LintScenario {
 LintScenario no_native_name_is_shadowed() {
     LintScenario scenario;
     scenario.label = "no-native-name-is-shadowed";
-    scenario.root = ADDON_ROOT;
+    scenario.roots[0] = ADDON_ROOT;
+    scenario.roots[1] = NAKAMA_ROOT;
     scenario.patterns[0] = "func is_server(";
     scenario.patterns[1] = "func get_unique_id(";
     scenario.patterns[2] = "func has_multiplayer_peer(";
@@ -46,7 +48,7 @@ LintScenario no_native_name_is_shadowed() {
 LintScenario the_kit_reaches_no_core_private() {
     LintScenario scenario;
     scenario.label = "the-kit-reaches-no-core-private";
-    scenario.root = CONNECT_ROOT;
+    scenario.roots[0] = CONNECT_ROOT;
     scenario.patterns[0] = "._session";
     scenario.patterns[1] = "._replication";
     scenario.patterns[2] = "._interest";
@@ -98,9 +100,12 @@ class LintRun {
 public:
     LintRun(const LintScenario &p_scenario, Plant p_plant = PLANT_NONE)
         : declared(p_scenario), planted(p_plant) {
-        const String root(declared.root);
         PackedStringArray files;
-        walk(root, files);
+        for (const char *root : declared.roots) {
+            if (root != nullptr) {
+                walk(String(root), files);
+            }
+        }
         files_read = int(files.size());
 
         for (int at = 0; at < files.size(); at++) {

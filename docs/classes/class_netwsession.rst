@@ -39,16 +39,16 @@ Connecting is done as you would normally do with :godot:`SceneMultiplayer`, by a
 
 \ **Moving the server**\ 
 
-The session survives the server leaving when its :godot:`MultiplayerPeer` can hand the server role to another peer. Such a peer declares this signal, and :ref:`transfer_server()<class_NetwSession_method_transfer_server>` works when it also has the method.
+\ :ref:`transfer_server()<class_NetwSession_method_transfer_server>` makes another peer the server, and :ref:`server_transferred<class_NetwSession_signal_server_transferred>` reports it on every peer. The session also survives the server leaving when its :godot:`MultiplayerPeer` can promote a client by itself. ENet, WebRTC, Steam and :godot:`OfflineMultiplayerPeer` cannot, so losing the server ends them.
+
+On a peer that can, closing the server's window moves the server. :ref:`leave()<class_NetwSession_method_leave>` ends every client's session on any peer, so a server that wants the game to go on without it moves the server first.
 
 ::
 
-    signal server_relabelled(successor_was: int, former_now: int)
-
-    func transfer_server(peer_id: int) -> Error:
-        pass
-
-\ The peer emits the signal from its own :godot:`MultiplayerPeer.poll() <MultiplayerPeer#class_MultiplayerPeer_method_poll>`, once it already answers the new ids. :ref:`NakamaWrapper<class_NakamaWrapper>` does this when :ref:`NakamaWrapper.migrate_on_host_loss<class_NakamaWrapper_property_migrate_on_host_loss>` is on. ENet, WebRTC, Steam and :godot:`OfflineMultiplayerPeer` do not, so losing the server ends the session.
+    func hand_over(successor: NetwPlayer) -> void:
+        if session.transfer_server(successor.peer_id) == OK:
+            await session.server_transferred
+        await session.leave().wait()
 
 \ **Pausing**\ 
 
@@ -839,7 +839,7 @@ Removes ``player`` from the session and disconnects their peer with ``reason``. 
 
 :ref:`NetwPromise<class_NetwPromise>` **leave**\ (\ ) :ref:`🔗<class_NetwSession_method_leave>`
 
-Leaves the session. The server saves its entity rows first, and stays online if the database refuses a row. The promise resolves with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>` once the peer is down or the save failed. Closing the game window leaves the same way. A server that saves entities loses unsaved changes when its window closes, so it sets :godot:`SceneTree.auto_accept_quit <SceneTree#class_SceneTree_property_auto_accept_quit>` to ``false`` and quits after :ref:`leave()<class_NetwSession_method_leave>` resolves.
+Leaves the session. The server saves its entity rows first, and stays online if the database refuses a row. The promise resolves with an :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>` once the peer is down or the save failed. Closing the game window leaves the same way. On a server whose :godot:`MultiplayerPeer` can move the server, closing the window tells no client, so the peer promotes one when it can. A server that saves entities loses unsaved changes when its window closes, so it sets :godot:`SceneTree.auto_accept_quit <SceneTree#class_SceneTree_property_auto_accept_quit>` to ``false`` and quits after :ref:`leave()<class_NetwSession_method_leave>` resolves.
 
 .. rst-class:: classref-item-separator
 
@@ -984,7 +984,23 @@ The table of the schema declared as ``name`` with :ref:`Netw.configure_schema()<
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **transfer_server**\ (\ peer_id\: :godot:`int`\ ) :ref:`🔗<class_NetwSession_method_transfer_server>`
 
-Asks the transport to make ``peer_id`` the server and this peer a client under a new id. :ref:`server_transferred<class_NetwSession_signal_server_transferred>` follows on every peer. Whether a transport can is stated in the class description. When the server moves, players who have left lose their return window, and their kept entities despawn.
+Asks the :godot:`MultiplayerPeer` to make ``peer_id`` the server and this peer a client under a new id. :ref:`server_transferred<class_NetwSession_signal_server_transferred>` follows on every peer. A peer supports this when it declares a ``server_relabelled`` signal and a ``transfer_server`` method. It emits the signal once :godot:`MultiplayerPeer.get_unique_id() <MultiplayerPeer#class_MultiplayerPeer_method_get_unique_id>` already answers the new id. A peer with only the signal can still promote a client when the server is lost.
+
+::
+
+    extends MultiplayerPeerExtension
+
+    signal server_relabelled(successor_was: int, former_now: int)
+
+    func transfer_server(peer_id: int) -> Error:
+        return relay.promote(peer_id)
+
+    func _poll() -> void:
+        relay.poll()
+        if relay.promoted:
+            server_relabelled.emit(relay.successor_was, relay.former_now)
+
+\ When the server moves, players who have left lose their return window, and their kept entities despawn. The new server reads each :ref:`NetwPlayer.account<class_NetwPlayer_property_account>` again from the :ref:`LobbyDirectory<class_LobbyDirectory>` serving the session when it names one, and the old server keeps only its own.
 
 .. code:: text
 

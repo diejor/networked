@@ -22,11 +22,11 @@ Properties
 .. table::
    :widths: auto
 
-   +------------------+------------------------------------------------------------------------+
-   | :godot:`Variant` | :ref:`wrapper<class_NakamaDatabase_Connection_property_wrapper>`       |
-   +------------------+------------------------------------------------------------------------+
-   | :godot:`String`  | :ref:`collection<class_NakamaDatabase_Connection_property_collection>` |
-   +------------------+------------------------------------------------------------------------+
+   +-------------------------------------------+------------------------------------------------------------------------+
+   | :ref:`NakamaAccount<class_NakamaAccount>` | :ref:`account<class_NakamaDatabase_Connection_property_account>`       |
+   +-------------------------------------------+------------------------------------------------------------------------+
+   | :godot:`String`                           | :ref:`collection<class_NakamaDatabase_Connection_property_collection>` |
+   +-------------------------------------------+------------------------------------------------------------------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -55,13 +55,13 @@ Methods
 Property Descriptions
 ---------------------
 
-.. _class_NakamaDatabase_Connection_property_wrapper:
+.. _class_NakamaDatabase_Connection_property_account:
 
 .. rst-class:: classref-property
 
-:godot:`Variant` **wrapper** :ref:`🔗<class_NakamaDatabase_Connection_property_wrapper>`
+:ref:`NakamaAccount<class_NakamaAccount>` **account** :ref:`🔗<class_NakamaDatabase_Connection_property_account>`
 
-The :ref:`NakamaWrapper<class_NakamaWrapper>` used for storage.
+The :ref:`NakamaAccount<class_NakamaAccount>` whose storage holds this slot.
 
 .. rst-class:: classref-item-separator
 

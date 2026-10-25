@@ -1,20 +1,26 @@
 @tool
 extends Node
 
-# An adapter which implements the HTTP protocol.
+## An adapter which implements the HTTP protocol.
 class_name NakamaHTTPAdapter
 
-# The logger to use with the adapter.
+## The logger to use with the adapter.
 var logger : RefCounted = NakamaLogger.new()
 
-# The timeout for requests
+## The timeout for requests
 var timeout : int = 3
-# If request should be automatically retried when a network error occurs.
+
+## If request should be automatically retried when a network error occurs.
 var auto_retry : bool = true
-# The maximum number of time a request will be retried when auto_retry is true
+
+## The maximum number of time a request will be retried when auto_retry is true
 var auto_retry_count : int = 3
 var auto_retry_backoff_base : int = 10
-# Whether or not to use threads when making HTTP requests.
+
+## Maximum total duration in milliseconds across all retries. Set to 0 to disable.
+var max_total_timeout_ms : int = 10000
+
+## Whether or not to use threads when making HTTP requests.
 var use_threads : bool = true
 
 var _pending = {}
@@ -38,10 +44,12 @@ class AsyncRequest:
 	var timer : SceneTreeTimer = null
 	var cur_try : int = 1
 	var rng = RandomNumberGenerator.new()
+	var max_total_timeout_ms : int = 10000
 
 	func _init(p_id : int, p_request : HTTPRequest, p_uri : String,
 			p_method : int, p_headers : PackedStringArray, p_body : PackedByteArray,
-			p_retry_count : int, p_backoff_time : int, p_logger : NakamaLogger):
+			p_retry_count : int, p_backoff_time : int, p_logger : NakamaLogger,
+			p_max_total_timeout_ms : int):
 		rng.seed = Time.get_ticks_usec()
 		id = p_id
 		request = p_request
@@ -52,9 +60,10 @@ class AsyncRequest:
 		retry_count = p_retry_count
 		backoff_time = p_backoff_time
 		logger = p_logger
+		max_total_timeout_ms = p_max_total_timeout_ms
 
 	func should_retry():
-		return cur_try < retry_count and not cancelled
+		return not cancelled and cur_try < retry_count
 
 	func retry():
 		var time = pow(backoff_time, cur_try) * rng.randf_range(0.5, 1)
@@ -135,13 +144,13 @@ class AsyncRequest:
 		return parsed
 
 
-# Send a HTTP request.
-# @param method - HTTP method to use for this request.
-# @param uri - The fully qualified URI to use.
-# @param headers - Request headers to set.
-# @param body - Request content body to set.
-# @param timeoutSec - Request timeout.
-# Returns a task which resolves to the contents of the response.
+## Send a HTTP request. [br]
+## method - HTTP method to use for this request. [br]
+## uri - The fully qualified URI to use. [br]
+## headers - Request headers to set. [br]
+## body - Request content body to set. [br]
+## timeoutSec - Request timeout. [br]
+## Returns a task which resolves to the contents of the response.
 func send_async(p_method : String, p_uri : String, p_headers : Dictionary, p_body : PackedByteArray):
 	var req = HTTPRequest.new()
 	req.timeout = timeout
@@ -168,7 +177,7 @@ func send_async(p_method : String, p_uri : String, p_headers : Dictionary, p_bod
 	id += 1
 	var retry = auto_retry_count if auto_retry else 0
 	var backoff = auto_retry_backoff_base
-	_pending[id] = AsyncRequest.new(id, req, p_uri, method, headers, p_body, retry, backoff, logger)
+	_pending[id] = AsyncRequest.new(id, req, p_uri, method, headers, p_body, retry, backoff, logger, max_total_timeout_ms)
 
 	logger.debug("Sending request [ID: %d, Method: %s, Uri: %s, Headers: %s, Body: %s, Timeout: %d, Retries: %d, Backoff base: %d ms]" % [
 		id, p_method, p_uri, p_headers, p_body.get_string_from_utf8(), timeout, retry, backoff
@@ -194,6 +203,12 @@ static func _clear_request(p_request : AsyncRequest, p_pending : Dictionary, p_i
 static func _send_async(p_id : int, p_pending : Dictionary):
 
 	var req : AsyncRequest = p_pending[p_id]
+
+	var global_timer : SceneTreeTimer = null
+	if req.max_total_timeout_ms > 0:
+		global_timer = req.request.get_tree().create_timer(req.max_total_timeout_ms / 1000.0)
+		global_timer.timeout.connect(req.cancel)
+
 	await req.make_request()
 
 	while req.result != HTTPRequest.RESULT_SUCCESS:
@@ -203,6 +218,9 @@ static func _send_async(p_id : int, p_pending : Dictionary):
 		if not req.should_retry():
 			break
 		await req.retry()
+
+	if global_timer != null and global_timer.timeout.is_connected(req.cancel):
+		global_timer.timeout.disconnect(req.cancel)
 
 	_clear_request(req, p_pending, p_id)
 	return req.parse_result()

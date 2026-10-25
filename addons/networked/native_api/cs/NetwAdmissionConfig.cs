@@ -11,10 +11,15 @@ namespace Networked;
 /// <remarks>
 /// The server receives a <see cref="NetwJoinRequest"/> and waits for the
 /// handler to return <c>@GlobalScope.OK</c> before admitting its
-/// <see cref="NetwPlayer"/>. The handler may <c>await</c>.
+/// <see cref="NetwPlayer"/>. The handler may <c>await</c>. Each
+/// <see cref="NetwAccountProvider"/> accepted here proves one kind of account
+/// first.
 /// <code>
 /// func _init() -&gt; void:
-///     Netw.configure_admission(admit).proof(prove)
+///     Netw.configure_admission(admit).accept(PasscodeAccount.new())
+///
+/// func admit(request: NetwJoinRequest) -&gt; Error:
+///     return OK if request.account else ERR_UNAUTHORIZED
 /// </code>
 /// </remarks>
 public sealed class NetwAdmissionConfig : NetwRefCounted
@@ -33,34 +38,23 @@ public sealed class NetwAdmissionConfig : NetwRefCounted
         return Adopt(NetwApi.Retained(NetwApi.ObjectOf(value)));
     }
 
-    private static readonly IntPtr _bindProof =
-        NetwApi.MethodBind("NetwAdmissionConfig", "proof", 2472650386UL);
+    private static readonly IntPtr _bindAccept =
+        NetwApi.MethodBind("NetwAdmissionConfig", "accept", 1436600311UL);
 
     /// <summary>
-    /// Set this on both peers. Calls <paramref name="handler"/> on the joining
-    /// peer with the challenge the server reads as
-    /// <see cref="NetwJoinRequest.Challenge"/>. Over WebRTC and Steam both
-    /// peers bind it to the server the peer is connected to, as
-    /// <see cref="NetwJoinRequest.ChallengeBound"/> reports. Its result becomes
-    /// <see cref="NetwJoinRequest.Proof"/>. The handler may <c>await</c> or
-    /// return a <see cref="NetwPromise"/>. Return a <see cref="Variant"/> that
-    /// can be sent with <c>@GlobalScope.var_to_bytes</c>.
-    /// <code>
-    /// func prove(challenge: String) -&gt; Variant:
-    ///     return await identity.prove(challenge)
-    /// </code>
+    /// Adds <paramref name="provider"/> to the accounts a joining player
+    /// proves, in preference order. Accept the same providers in the same order
+    /// on every peer. A config with no provider sends no challenge.
     /// </summary>
-    public NetwAdmissionConfig Proof(Callable handler)
+    public NetwAdmissionConfig Accept(NetwAccountProvider provider)
     {
-        godot_variant slot0 = VariantUtils.CreateFromCallable(handler);
-        godot_variant answered = default;
-        NetwThunks.Call1(_bindProof, Checked, in slot0, ref answered);
-        slot0.Dispose();
-        NetwAdmissionConfig result =
-            NetwAdmissionConfig.Adopt(
-                NetwApi.Retained(
-                    VariantUtils.ConvertToGodotObjectPtr(answered)));
-        answered.Dispose();
-        return result;
+        IntPtr slot0 = provider?.Native ?? IntPtr.Zero;
+        IntPtr answered = default;
+        NetwThunks.Ptrcall1_IntPtr_IntPtr(
+            _bindAccept,
+            Checked,
+            in slot0,
+            ref answered);
+        return NetwAdmissionConfig.Adopt(answered);
     }
 }

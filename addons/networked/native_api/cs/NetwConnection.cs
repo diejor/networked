@@ -305,8 +305,9 @@ public sealed class NetwConnection : NetwRefCounted
     /// <see cref="NetwConnection.Join"/> until its join is accepted, then the
     /// server's value. Empty before <see cref="NetwSession.StateEnum.Online"/>
     /// or when an assigned peer supplies no address. Only an online server sets
-    /// it. A server behind a router sets its internet address after
-    /// <see cref="NetwConnection.Host"/> settles, and every client follows.
+    /// it, to at most 1023 bytes of UTF-8. A server behind a router sets its
+    /// internet address after <see cref="NetwConnection.Host"/> settles, and
+    /// every client follows.
     /// </summary>
     public string JoinAddress
     {
@@ -799,8 +800,9 @@ public sealed class NetwConnection : NetwRefCounted
     /// Sets <see cref="NetwEndpoint.IsInvited"/> and
     /// <see cref="NetwEndpoint.InvitedBy"/> before emitting
     /// <see cref="NetwConnection.Invited"/>. Reuses the row at
-    /// <paramref name="address"/>. Returns <c>null</c> if
-    /// <paramref name="transport"/> is unavailable or the address is empty.
+    /// <paramref name="address"/>. An invitation to the server the session is
+    /// already on returns its endpoint and emits nothing. Returns <c>null</c>
+    /// if <paramref name="transport"/> is unavailable or the address is empty.
     /// </summary>
     public NetwEndpoint Invite(
         Variant transport,

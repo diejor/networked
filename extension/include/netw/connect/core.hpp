@@ -72,6 +72,7 @@ public:
     void on_session_edge(int p_old, int p_new);
     void on_server_answered();
     void on_session_online();
+    void on_session_left();
     void on_transport_failed();
 
     godot::Error set_defaults(

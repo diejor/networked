@@ -900,7 +900,16 @@ var _events := ["VOICE_STATE_UPDATE", "SPEAKING_START", "SPEAKING_STOP",
 	"THERMAL_STATE_UPDATE", "ACTIVITY_INSTANCE_PARTICIPANTS_UPDATE", "ENTITLEMENT_CREATE",
 	"CURRENT_GUILD_MEMBER_UPDATE"]
 
+const ALLOWED_ORIGINS := ["https://discord.com", "https://discordapp.com",
+	"https://ptb.discord.com", "https://ptb.discordapp.com",
+	"https://canary.discord.com", "https://canary.discordapp.com",
+	"https://staging.discord.co", "http://localhost:3333",
+	"https://pax.discord.com", "null"]
+
 func _handle_message(event):
+	var origin := str(event[0].origin)
+	if not (origin in ALLOWED_ORIGINS or origin == str(JavaScriptBridge.eval("window.location.origin", true))):
+		return
 	var data_json = JavaScriptBridge.get_interface("JSON").stringify(event[0].data[1])
 	var data = JSON.parse_string(data_json)
 
@@ -1030,7 +1039,7 @@ func sendMessage(opcode: int, body: Dictionary):
 	# note about this, source.postMessage doesn't work, because `data` somehow
 	# turns into `undefined` somewhere. not sure how to fix, but this works
 	# for now.
-	JavaScriptBridge.eval("window.source.postMessage(" + JSON.stringify(data).replace("'", "\\'") + ", '*')", false)
+	JavaScriptBridge.eval("window.source.postMessage(" + JSON.stringify(data).replace("'", "\\'") + ", " + JSON.stringify(source_origin) + ")", false)
 	#source.postMessage(data, "*")
 
 func sendCommand(cmd: String, args: Dictionary, nonce: String):

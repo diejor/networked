@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="NetwIdToken" inherits="NetwAccountProvider" api_type="extension" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/godotengine/godot/master/doc/class.xsd">
+	<brief_description>
+		Proves an account with a signed token from an issuer the server trusts, such as a game's own backend.
+	</brief_description>
+	<description>
+		The token's nonce names a key the joining peer keeps, and that key signs each server's challenge, so one token serves every join until it expires. The server needs no secret, only [member key] or [member keys_url].
+		[codeblock]
+		const ISSUER := "https://api.mygame.com"
+
+		func _init() -&gt; void:
+		    var token := NetwIdToken.new()
+		    token.issuer = ISSUER
+		    token.audience = "my-game"
+		    token.prefix = "mygame"
+		    token.key = load("res://backend.pub")
+		    Netw.configure_admission(admit).accept(token)
+		    NetwIdToken.provide(ISSUER, fetch_token)
+
+		func fetch_token(nonce: String) -&gt; NetwPromise:
+		    return backend.request_join_token(nonce)
+
+		func admit(request: NetwJoinRequest) -&gt; Error:
+		    return OK if request.account else ERR_UNAUTHORIZED
+		[/codeblock]
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="fetch_keys">
+			<return type="NetwPromise" />
+			<description>
+				Downloads the signing keys from [member keys_url] and resolves with [constant @GlobalScope.OK]. Call it before hosting so the first join does not wait for them.
+			</description>
+		</method>
+		<method name="hold" qualifiers="static">
+			<return type="void" />
+			<param index="0" name="issuer" type="String" />
+			<param index="1" name="token" type="String" />
+			<param index="2" name="key" type="CryptoKey" />
+			<description>
+				Gives the joining peer a [param token] for [param issuer] whose nonce names the private [param key], used before asking the source set with [method provide].
+			</description>
+		</method>
+		<method name="provide" qualifiers="static">
+			<return type="void" />
+			<param index="0" name="issuer" type="String" />
+			<param index="1" name="fetch" type="Callable" />
+			<description>
+				Sets where the joining peer gets tokens for [param issuer]. [param fetch] takes the nonce the token must carry and returns a [NetwPromise] of the token. A later call for the same issuer replaces it, and an empty [Callable] removes it.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="audience" type="String" setter="set_audience" getter="get_audience" default="&quot;&quot;">
+			The token's [code]aud[/code] must be this, alone or as the only entry of a list.
+		</member>
+		<member name="issuer" type="String" setter="set_issuer" getter="get_issuer" default="&quot;&quot;">
+			The token's [code]iss[/code] must equal this.
+		</member>
+		<member name="key" type="CryptoKey" setter="set_key" getter="get_key">
+			The public key that checks every token, such as a [code].pub[/code] file shipped with the game. It is used before [member keys_url].
+		</member>
+		<member name="keys_url" type="String" setter="set_keys_url" getter="get_keys_url" default="&quot;&quot;">
+			The address of the issuer's JWKS key set. A token checked against it must name its key with [code]kid[/code].
+		</member>
+		<member name="name_claim" type="String" setter="set_name_claim" getter="get_name_claim" default="&quot;name&quot;">
+			The claim read as the account's display name.
+		</member>
+		<member name="prefix" type="String" setter="set_prefix" getter="get_prefix" default="&quot;&quot;">
+			Put before the token's [code]sub[/code] with a colon to make the account, as in [code]"mygame:42"[/code].
+		</member>
+	</members>
+</class>

@@ -401,7 +401,7 @@ The rows from :ref:`add()<class_NetwConnection_method_add>` come first.
 
 The address other players use to join this server. A server reads its own transport's address, such as its LAN address for ENet, until it sets another. A client reads the address passed to :ref:`join()<class_NetwConnection_method_join>` until its join is accepted, then the server's value. Empty before :ref:`NetwSession.STATE_ONLINE<class_NetwSession_constant_STATE_ONLINE>` or when an assigned peer supplies no address.
 
-Only an online server sets it. A server behind a router sets its internet address after :ref:`host()<class_NetwConnection_method_host>` settles, and every client follows.
+Only an online server sets it, to at most 1023 bytes of UTF-8. A server behind a router sets its internet address after :ref:`host()<class_NetwConnection_method_host>` settles, and every client follows.
 
 .. rst-class:: classref-item-separator
 
@@ -561,7 +561,7 @@ Invalid :ref:`NetwSessionConfig<class_NetwSessionConfig>`, :ref:`NetwClockConfig
 
 :ref:`NetwEndpoint<class_NetwEndpoint>` **invite**\ (\ transport\: :godot:`Variant`, address\: :godot:`String`, from_name\: :godot:`String` = ""\ ) :ref:`🔗<class_NetwConnection_method_invite>`
 
-Sets :ref:`NetwEndpoint.is_invited<class_NetwEndpoint_property_is_invited>` and :ref:`NetwEndpoint.invited_by<class_NetwEndpoint_property_invited_by>` before emitting :ref:`invited<class_NetwConnection_signal_invited>`. Reuses the row at ``address``. Returns ``null`` if ``transport`` is unavailable or the address is empty.
+Sets :ref:`NetwEndpoint.is_invited<class_NetwEndpoint_property_is_invited>` and :ref:`NetwEndpoint.invited_by<class_NetwEndpoint_property_invited_by>` before emitting :ref:`invited<class_NetwConnection_signal_invited>`. Reuses the row at ``address``. An invitation to the server the session is already on returns its endpoint and emits nothing. Returns ``null`` if ``transport`` is unavailable or the address is empty.
 
 .. rst-class:: classref-item-separator
 

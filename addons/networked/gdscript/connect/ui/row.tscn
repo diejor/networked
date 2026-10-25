@@ -41,6 +41,7 @@ size_flags_vertical = 4
 
 [node name="ServerContainer" type="VBoxContainer" parent="MarginContainer/HBox" unique_id=560726943]
 layout_mode = 2
+size_flags_horizontal = 3
 mouse_filter = 2
 alignment = 1
 
@@ -80,6 +81,7 @@ layout_mode = 2
 theme_type_variation = &"SmallLabel"
 text = "localhost"
 vertical_alignment = 1
+text_overrun_behavior = 3
 
 [node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer/HBox" unique_id=769585261]
 layout_mode = 2

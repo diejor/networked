@@ -1,5 +1,7 @@
 #pragma once
 
+#include "godot/hash_map.hpp"
+#include "godot/local_vector.hpp"
 #include "godot/variant.hpp"
 
 #if defined(NETW_MODULE)
@@ -16,22 +18,41 @@ using ::IP;
 
 namespace netw::gd {
 
-inline godot::PackedStringArray local_addresses() {
+struct LocalAddress {
+    godot::String interface_name;
+    godot::String address;
+};
+
+inline godot::LocalVector<LocalAddress> local_interface_addresses() {
+    godot::LocalVector<LocalAddress> out;
     godot::IP *ip = godot::IP::get_singleton();
     if (ip == nullptr) {
-        return godot::PackedStringArray();
+        return out;
     }
 #if defined(NETW_MODULE)
-    godot::PackedStringArray out;
-    List<IPAddress> found;
-    ip->get_local_addresses(&found);
-    for (const IPAddress &address : found) {
-        out.push_back(godot::String(address));
+    HashMap<String, IP::Interface_Info> interfaces;
+    ip->get_local_interfaces(&interfaces);
+    for (const KeyValue<String, IP::Interface_Info> &entry : interfaces) {
+        const String named
+            = entry.value.name + " " + entry.value.name_friendly;
+        for (const IPAddress &address : entry.value.ip_addresses) {
+            out.push_back({ named, String(address) });
+        }
     }
-    return out;
 #else
-    return ip->get_local_addresses();
+    const godot::TypedArray<godot::Dictionary> interfaces
+        = ip->get_local_interfaces();
+    for (int64_t at = 0; at < interfaces.size(); at++) {
+        const godot::Dictionary entry = interfaces[at];
+        const godot::String named = godot::String(entry.get("name", ""))
+            + " " + godot::String(entry.get("friendly", ""));
+        const godot::Array addresses = entry.get("addresses", godot::Array());
+        for (int64_t index = 0; index < addresses.size(); index++) {
+            out.push_back({ named, godot::String(addresses[index]) });
+        }
+    }
 #endif
+    return out;
 }
 
 } // namespace netw::gd

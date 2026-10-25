@@ -69,6 +69,7 @@
 #include "file_store_laws.cpp"
 #include "group_promise_tests.cpp"
 #include "handle_ledger_tests.cpp"
+#include "id_token_laws.cpp"
 #include "interest_decl_tests.cpp"
 #include "interest_engine_tests.cpp"
 #include "interest_handle_laws.cpp"

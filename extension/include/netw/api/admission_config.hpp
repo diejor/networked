@@ -1,22 +1,30 @@
 #pragma once
 
-#include "godot/callable.hpp"
+#include <cstdint>
+
+#include "godot/local_vector.hpp"
 #include "godot/ref_counted.hpp"
+#include "netw/api/account_provider.hpp"
 
 namespace netw {
 
 class NetwAdmissionConfig : public godot::RefCounted {
     GDCLASS(NetwAdmissionConfig, godot::RefCounted)
 
-    godot::Callable proof_handler;
+    godot::LocalVector<godot::Ref<NetwAccountProvider>> providers;
 
 protected:
     static void _bind_methods();
 
 public:
-    godot::Ref<NetwAdmissionConfig> proof(const godot::Callable &p_handler);
-    godot::Callable get_proof_handler() const {
-        return proof_handler;
+    godot::Ref<NetwAdmissionConfig> accept(
+        const godot::Ref<NetwAccountProvider> &p_provider
+    );
+    int64_t provider_count() const {
+        return int64_t(providers.size());
+    }
+    godot::Ref<NetwAccountProvider> provider_at(int64_t p_index) const {
+        return providers[uint32_t(p_index)];
     }
 };
 

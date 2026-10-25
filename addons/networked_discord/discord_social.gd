@@ -1,10 +1,6 @@
 ## Shows the player's [member party] on their Discord profile and connects
 ## the player with their Discord friends.
 ##
-## A signed in player is always in a [DiscordParty], so a Join click on their
-## profile joins that party, and the leader's server reaches every member at
-## [signal NetwConnection.invited]. Only one [DiscordSocial] per process talks
-## to Discord, and any other one has a [code]null[/code] [member client].
 ## [codeblock]
 ## @onready var session: NetwSession = Netw.session(self)
 ## @onready var discord: DiscordSocial = session.service(DiscordSocial)
@@ -28,11 +24,6 @@
 ## func _on_invited(endpoint: NetwEndpoint) -> void:
 ##     await session.connection.join(endpoint).settled
 ## [/codeblock]
-## A game that keeps a [ConnectBrowser] lets it answer
-## [signal NetwConnection.invited], or turns off
-## [member ConnectBrowser.join_invites] before joining from its own handler,
-## so the player joins once.
-## [br][br]
 ## Over ENet the host advertises its LAN address, so a host reached over the
 ## internet sets [member NetwConnection.join_address] after hosting.
 ## [br][br]
@@ -40,8 +31,15 @@
 ## ready made panel of friends, invitations and the party.
 ## [br][br]
 ## A Discord user ID that another peer reports is only a claim, so never key
-## saved data, bans or inventory to it. A game without its own backend can
-## check who is joining with [method prove].
+## saved data, bans or inventory to it. [DiscordIdToken] proves the player's
+## Discord account to the server. A proof opens a Discord page at most once an
+## hour, so raise [member NetwMultiplayer.auth_timeout] on the server and the
+## client to give the player time to approve it.
+## [br][br]
+## With two sessions in one game, such as split screen, only the first
+## [DiscordSocial] to enter the tree talks to Discord, because Discord signs
+## in one player per game. Every other one has a [code]null[/code]
+## [member client] and stays signed out.
 class_name DiscordSocial
 extends NetwService
 
@@ -55,6 +53,7 @@ signal signed_out
 ## [signal DiscordProfile.changed] on [method profile].
 signal friends_changed
 
+const _ISSUER := "https://discord.com"
 const _CREDENTIALS_PATH := "user://discord_%d.cfg"
 const _DISCORD_TOKEN_URL := "https://discord.com/api/oauth2/token"
 const _GRANT_FIELDS := {
@@ -68,15 +67,19 @@ const _AVATAR_DOWNLOADS := 4
 
 ## The Discord application ID with the Social SDK enabled.
 @export var application_id: int
+
 ## The Steam app ID Discord launches for a Join click. [code]0[/code]
 ## launches this executable.
 @export var steam_app_id: int
-## Keeps the player signed in and [method prove] silent across restarts. The
-## player is signed back in when the game starts, unless the game sets
-## [member token_url] or runs headless. Then [method sign_in] does it. Someone
-## who copies the player's files could use a saved proof for up to an hour.
+
+## Keeps the player signed in, and the [DiscordIdToken] proof silent, across
+## restarts. The player is signed back in when the game starts, unless the
+## game sets [member token_url] or runs headless. Then [method sign_in] does
+## it. Someone who copies the player's files could use a saved proof for up to
+## an hour.
 @export var remember_sign_in := true
-## Where [method sign_in] and [method prove] post their token requests. A
+
+## Where [method sign_in] posts its token requests. A
 ## game with its own server points it there, and the server adds the client
 ## secret and answers with Discord's response unchanged, as
 ## [url=https://docs.discord.com/developers/discord-social-sdk/development-guides/account-linking-with-discord#step-4-exchanging-the-authorization-code-for-an-access-token]Discord's guide[/url]
@@ -115,6 +118,7 @@ const _AVATAR_DOWNLOADS := 4
 				)
 				return
 		token_url = value
+
 ## Headers sent with each request to [member token_url], such as the
 ## player's session on the game's own server. An Authorization header needs
 ## [member token_url] set to the game's own server first.
@@ -134,22 +138,29 @@ var token_headers: PackedStringArray:
 @export_group("Presence")
 ## The first line under the game's name on the player's Discord profile.
 @export var details: String
+
 ## The second line under the game's name on the player's Discord profile.
 @export var state_text: String
+
 ## The large image's asset key on the Discord application.
 @export var large_image: String
+
 ## The text shown over [member large_image].
 @export var large_text: String
+
 ## The small image's asset key on the Discord application.
 @export var small_image: String
+
 ## The text shown over [member small_image].
 @export var small_text: String
+
 ## Lets friends join the [member party] without asking, subject to their
 ## Discord settings.
 @export var public_party := false
 
 ## The signed in player's Discord user ID, or [code]0[/code] while signed out.
 var user_id: int
+
 ## The Discord user IDs of the player's friends, empty while signed out.
 ## Friends playing this game come first, then friends online elsewhere, then
 ## offline friends. [signal friends_changed] tells when it changes.
@@ -171,14 +182,14 @@ var friends: Array[int]:
 				]:
 					ids.append(relation.id())
 		return ids
+
 ## The player's [DiscordParty] of Discord friends and its voice call. It is
 ## read-only.
 var party := DiscordParty.new(self)
 
-## The [DiscordClient] this node owns. It is [code]null[/code] after this
-## node reported a configuration error, and on every [DiscordSocial] but the
-## first in the process. Use it for what this node does not wrap, such as
-## messages, voice settings and devices. It is read-only.
+## The [DiscordClient] this node owns, for what this node does not wrap, such
+## as messages, voice settings and devices. It is [code]null[/code] after this
+## node reported a configuration error. It is read-only.
 ## [br][br]
 ## A second call to a [code]set_*_callback[/code] method replaces the first,
 ## so leave these to this node and its [member party].[br]
@@ -201,10 +212,10 @@ var client: DiscordClient:
 
 static var _client: DiscordClient
 static var _owner: DiscordSocial
-
 var _signing_in := NetwPromise.resolved(0)
 var _authorizing := NetwPromise.resolved("")
 var _restoring: NetwPromise
+var _nonce: String
 var _proof_key: CryptoKey
 var _proves: bool
 var _verifier: DiscordAuthorizationCodeVerifier
@@ -215,25 +226,17 @@ var _downloads: int
 var _proof: Dictionary
 
 
-static func _proof_of(key: CryptoKey, token: String) -> Dictionary:
+static func _proof_of(token: String, nonce: String) -> Dictionary:
 	var part := token.get_slice(".", 1).replace("-", "+").replace("_", "/")
 	part += "=".repeat(posmod(-part.length(), 4))
 	var claims: Variant = JSON.parse_string(
 		Marshalls.base64_to_raw(part).get_string_from_utf8(),
 	)
-	var public_key := key.save_to_string(true)
 	match claims:
-		{ "exp": var expiry, "sub": var subject, "nonce": var nonce, .. } when (
-				expiry is float and subject is String and nonce is String
-				and nonce == public_key.sha256_text()
+		{ "exp": var expiry, "sub": var subject, "nonce": var named, .. } when (
+				expiry is float and subject is String and named == nonce
 		):
-			return {
-				"key": key,
-				"public_key": public_key,
-				"token": token,
-				"expires_at": expiry,
-				"subject": subject,
-			}
+			return { "token": token, "expires_at": expiry, "subject": subject }
 	return { }
 
 
@@ -265,6 +268,7 @@ static func _on_status_changed(status: int, error: int, _detail: int) -> void:
 		if _owner._proof.get("subject", str(user.id())) != str(user.id()):
 			_owner._proof = { }
 			_owner._remember({ "proof_key": null, "id_token": null })
+			NetwIdToken.provide(_ISSUER, _owner._fetch_token)
 		_owner.signed_in.emit(_owner.user_id)
 		_owner._avatar_queue.append_array(_owner._profiles.keys())
 		_owner.friends_changed.emit()
@@ -308,13 +312,12 @@ static func _on_connected_user(
 		authorizing.reject(ERR_UNAVAILABLE, reason)
 		return
 
-	_owner._proof_key = Crypto.new().generate_rsa(2048)
 	_owner._verifier = _client.create_authorization_code_verifier()
 	var args := DiscordAuthorizationArgs.new()
 	args.set_client_id(_owner.application_id)
 	args.set_scopes(DiscordClient.get_default_communication_scopes())
 	args.set_code_challenge(_owner._verifier.challenge())
-	args.set_nonce(_owner._proof_key.save_to_string(true).sha256_text())
+	args.set_nonce(_owner._nonce)
 	_client.authorize(args, DiscordSocial._on_authorized.bind(promise_id))
 	_owner.get_tree().create_timer(_AUTHORIZE_WARN_SECONDS).timeout.connect(
 		DiscordSocial._on_authorize_timeout.bind(promise_id),
@@ -416,12 +419,6 @@ func _service_entered(_session: NetwSession) -> void:
 			+ "Set DiscordSocial.application_id.",
 		)
 		return
-	if NetwService.is_transport_restricted():
-		push_error(
-			"DiscordSocial cannot run inside a Discord activity. "
-			+ "Use DiscordActivityService there.",
-		)
-		return
 	if _owner != null:
 		return
 
@@ -434,6 +431,7 @@ func _service_entered(_session: NetwSession) -> void:
 	)
 	_client.set_status_changed_callback(DiscordSocial._on_status_changed)
 	_client.set_application_id(application_id)
+	NetwIdToken.provide(_ISSUER, _fetch_token)
 
 	# A headless game is a server or a test run. A Join click cannot open it,
 	# and it would replace the launch command and spend the saved sign in of
@@ -474,6 +472,7 @@ func _service_exiting(_session: NetwSession) -> void:
 	user_id = 0
 	_avatar_queue.clear()
 	friends_changed.emit()
+	NetwIdToken.provide(_ISSUER, Callable())
 	_owner = null
 
 
@@ -497,12 +496,17 @@ func _remember(values: Dictionary) -> void:
 	credentials.save(path)
 
 
-func _authorize() -> NetwPromise:
+func _authorize(nonce := "") -> NetwPromise:
 	if not _authorizing.is_settled:
 		return _authorizing
 
 	_authorizing = NetwPromise.new()
 	_verifier = null
+	_proof_key = null
+	_nonce = nonce
+	if nonce.is_empty():
+		_proof_key = Crypto.new().generate_rsa(2048)
+		_nonce = _proof_key.save_to_string(true).sha256_text()
 	var promise_id := _authorizing.get_instance_id()
 	_client.get_discord_client_connected_user(
 		application_id,
@@ -520,6 +524,26 @@ func _renew_proof() -> NetwPromise:
 	if not _proves or left > _PROOF_RENEWAL_SECONDS:
 		return NetwPromise.resolved("")
 	return _authorize()
+
+
+func _fetch_token(nonce: String) -> NetwPromise:
+	if not _proves:
+		_proves = true
+		_remember({ "proves": true })
+
+	var fetched := NetwPromise.new()
+	var authorized := _authorize(nonce)
+	authorized.when_settled(_on_token_fetched.bind(authorized, fetched))
+	return fetched
+
+
+func _on_token_fetched(authorized: NetwPromise, fetched: NetwPromise) -> void:
+	if authorized.is_failed:
+		if authorized.code not in [ERR_SKIP, ERR_UNAVAILABLE]:
+			push_warning(authorized.detail)
+		fetched.reject(authorized.code, authorized.detail)
+		return
+	fetched.resolve(_proof.get("token", ""))
 
 
 func _request_token(form: Dictionary) -> NetwPromise:
@@ -558,13 +582,13 @@ func _request_token(form: Dictionary) -> NetwPromise:
 ## Signs the player in to Discord and resolves with [member user_id]. The
 ## first sign in opens Discord's authorization page in the browser. Later
 ## launches sign in without it while [member remember_sign_in] is on. A call
-## while one is pending returns the same [NetwPromise], and a [method prove]
-## that needs the page shares it. It fails with
+## while one is pending returns the same [NetwPromise], and a [DiscordIdToken]
+## proof that needs the page shares it. It fails with
 ## [constant @GlobalScope.ERR_UNAVAILABLE] while [member client] is
 ## [code]null[/code], and while Vesktop or another app using arRPC stands in
 ## for Discord.
 ## [br][br]
-## A call while signed in renews a proof of [method prove] that is about to
+## A call while signed in renews a [DiscordIdToken] proof that is about to
 ## expire, and resolves once Discord answers.
 ## [br][br]
 ## The default [member token_url] needs Public Client and the redirect
@@ -600,11 +624,13 @@ func sign_in() -> NetwPromise:
 		_proof = { }
 		if key.load_from_string(saved_key) == OK:
 			_proof = _proof_of(
-				key,
 				credentials.get_value("discord", "id_token", ""),
+				key.save_to_string(true).sha256_text(),
 			)
 		if _proof.is_empty():
 			_remember({ "proof_key": null, "id_token": null })
+		else:
+			NetwIdToken.hold(_ISSUER, _proof.token, key)
 
 	var saved: String = credentials.get_value("discord", "refresh_token", "")
 	if saved.is_empty():
@@ -618,7 +644,7 @@ func sign_in() -> NetwPromise:
 	return _signing_in
 
 
-## Signs the player out, forgets the proof [method prove] keeps, deletes the
+## Signs the player out, forgets the [DiscordIdToken] proof, deletes the
 ## saved sign in and asks Discord to revoke it, so the next [method sign_in]
 ## opens the authorization page again. A pending [method sign_in] fails with
 ## [constant @GlobalScope.ERR_SKIP]. With [member token_url] set to the
@@ -628,6 +654,7 @@ func sign_out() -> void:
 		return
 
 	_proof = { }
+	NetwIdToken.provide(_ISSUER, _fetch_token)
 	var path := _CREDENTIALS_PATH % application_id
 	assert(path.begins_with("user://"))
 	var credentials := ConfigFile.new()
@@ -664,61 +691,6 @@ func profile(id: int) -> DiscordProfile:
 		if user_id != 0:
 			_avatar_queue.append(id)
 	return _profiles[id]
-
-
-## Returns a proof of the player's Discord account that answers
-## [param challenge], or empty bytes when the player declines or Discord
-## refuses. The server checks it with [method DiscordIdToken.admit].
-## [br][br]
-## A proof lasts an hour. It opens a Discord page only when it holds no proof
-## with more than five minutes left. [method sign_in] makes a proof when it
-## opens the page, and [member remember_sign_in] keeps it across restarts.
-## Once a game has called it, [method DiscordParty.join] and a Join click
-## renew a proof about to expire before the player follows the leader.
-## Raise [member NetwMultiplayer.auth_timeout] on the server and the client to
-## give the player time to approve the page. A pending [method sign_in] that
-## shows the page shares it.
-## [br][br]
-## Discord recommends linking the Discord account to the game's own account
-## and not using it as the only login, because a player whose Discord
-## account is banned would lose their data. See
-## [url=https://docs.discord.com/developers/discord-social-sdk/development-guides/account-linking-with-discord#recommended-integration-path]Discord's guide[/url].
-## [codeblock]
-## func _init() -> void:
-##     Netw.configure_admission(admit).proof(prove)
-##
-## func prove(challenge: String) -> PackedByteArray:
-##     return await discord.prove(challenge)
-##
-## func admit(request: NetwJoinRequest) -> Error:
-##     return await DiscordIdToken.admit(request, discord.application_id)
-## [/codeblock]
-func prove(challenge: String) -> PackedByteArray:
-	if _owner != self:
-		push_warning(
-			"This DiscordSocial has no Discord client. Fix the error it "
-			+ "reported, or call prove on the first DiscordSocial.",
-		)
-		return PackedByteArray()
-
-	if not _proves:
-		_proves = true
-		_remember({ "proves": true })
-	var renewing := _renew_proof()
-	if not renewing.is_settled:
-		await renewing.wait()
-	if renewing.is_failed:
-		if renewing.code not in [ERR_SKIP, ERR_UNAVAILABLE]:
-			push_warning(renewing.detail)
-		return PackedByteArray()
-
-	assert(not _proof.is_empty(), "An authorization keeps its proof.")
-	var signature := Crypto.new().sign(
-		HashingContext.HASH_SHA256,
-		challenge.sha256_buffer(),
-		_proof.key,
-	)
-	return var_to_bytes([_proof.token, _proof.public_key, signature])
 
 
 func _on_token_request_completed(
@@ -834,7 +806,7 @@ func _on_code_exchanged(grant: Dictionary, promise_id: int) -> void:
 	_proof = { }
 	match grant:
 		{ "id_token": var token, .. } when token is String:
-			_proof = _proof_of(_proof_key, token)
+			_proof = _proof_of(token, _nonce)
 	if _proof.is_empty():
 		authorizing.reject(
 			ERR_UNAUTHORIZED,
@@ -846,13 +818,12 @@ func _on_code_exchanged(grant: Dictionary, promise_id: int) -> void:
 	var refresh: Variant = grant.get("refresh_token")
 	if refresh is not String or refresh.is_empty():
 		refresh = null
-	_remember(
-		{
-			"refresh_token": refresh,
-			"proof_key": _proof_key.save_to_string(),
-			"id_token": _proof.token,
-		},
-	)
+	var saving := { "refresh_token": refresh }
+	if _proof_key != null:
+		NetwIdToken.hold(_ISSUER, _proof.token, _proof_key)
+		saving.proof_key = _proof_key.save_to_string()
+		saving.id_token = _proof.token
+	_remember(saving)
 	authorizing.resolve(grant.access_token)
 
 

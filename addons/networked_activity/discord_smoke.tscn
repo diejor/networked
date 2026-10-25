@@ -1,6 +1,9 @@
 [gd_scene format=3 uid="uid://njuj0gh6v1ku"]
 
 [ext_resource type="Script" uid="uid://dxybnefh7kale" path="res://addons/networked_activity/discord_smoke.gd" id="1_smoke"]
+[ext_resource type="Script" uid="uid://ge70acye7r1c" path="res://addons/networked_nakama/nakama_account.gd" id="2_account"]
+[ext_resource type="Script" uid="uid://d0u2yowat1s3u" path="res://addons/networked_nakama/nakama_lobby_directory.gd" id="3_directory"]
+[ext_resource type="Script" uid="uid://certc8teajoaj" path="res://addons/networked_activity/discord_activity_service.gd" id="4_activity"]
 
 [node name="DiscordSmoke" type="Control" unique_id=629153326]
 layout_mode = 3
@@ -10,10 +13,22 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_smoke")
-client_id = "1519144648411447338"
-nakama_host = "1519144648411447338.discordsays.com"
-nakama_port = 443
-nakama_use_ssl = true
+
+[node name="NakamaAccount" type="Node" parent="." unique_id=118204771]
+script = ExtResource("2_account")
+host = "nakama.example.com"
+port = 443
+use_ssl = true
+
+[node name="NakamaLobbyDirectory" type="Node" parent="." unique_id=118204772]
+script = ExtResource("3_directory")
+
+[node name="DiscordActivityService" type="Node" parent="." unique_id=118204773]
+script = ExtResource("4_activity")
+application_id = 1519144648411447338
+url_mappings = Dictionary[String, String]({
+"/nakama": "nakama.example.com"
+})
 
 [node name="Output" type="RichTextLabel" parent="." unique_id=750102185]
 layout_mode = 1

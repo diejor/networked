@@ -12,23 +12,15 @@ NetwTestDiscordService
 
 **Inherits:** :godot:`DiscordActivityService`
 
-Test double for :godot:`DiscordActivityService` that runs the connect path with no Discord SDK and an injected instance id.
-
-.. rst-class:: classref-introduction-group
-
-Description
------------
-
-A real Discord Activity only exists inside the iframe, where the browser supplies the instance id and the SDK answers the handshake. This fixture stands in for both: set :ref:`fake_instance_id<class_NetwTestDiscordService_property_fake_instance_id>` (the rendezvous key every participant shares) and :ref:`fake_device_id<class_NetwTestDiscordService_property_fake_device_id>` (a per-participant id so two instances are distinct backend users), and it creates no SDK so :godot:`DiscordActivityService.start() <DiscordActivityService#class_DiscordActivityService_method_start>` and :godot:`DiscordActivityService.authenticate() <DiscordActivityService#class_DiscordActivityService_method_authenticate>` no-op while the rendezvous still drives host-or-join.
+A :godot:`DiscordActivityService` that runs outside a browser as if inside the activity :ref:`fake_instance_id<class_NetwTestDiscordService_property_fake_instance_id>`.
 
 ::
 
-    var service := NetwTestDiscordService.new()
-    service.rendezvous = NakamaDiscordRendezvous.new()
-    service.fake_instance_id = "room1"
-    service.fake_device_id = "alice"
-    tree.add_child(service)
-    await service.connect_activity(payload)
+    var discord := NetwTestDiscordService.new()
+    discord.application_id = 42
+    discord.fake_instance_id = "i-1-gc-2-3"
+    discord.fake_worker = func(nonce: String) -> String: return sign(nonce)
+    tree.add_child(discord)
 
 .. rst-class:: classref-reftable-group
 
@@ -38,11 +30,11 @@ Properties
 .. table::
    :widths: auto
 
-   +-----------------+---------------------------------------------------------------------------------+--------+
-   | :godot:`String` | :ref:`fake_instance_id<class_NetwTestDiscordService_property_fake_instance_id>` | ``""`` |
-   +-----------------+---------------------------------------------------------------------------------+--------+
-   | :godot:`String` | :ref:`fake_device_id<class_NetwTestDiscordService_property_fake_device_id>`     | ``""`` |
-   +-----------------+---------------------------------------------------------------------------------+--------+
+   +-------------------+---------------------------------------------------------------------------------+
+   | :godot:`String`   | :ref:`fake_instance_id<class_NetwTestDiscordService_property_fake_instance_id>` |
+   +-------------------+---------------------------------------------------------------------------------+
+   | :godot:`Callable` | :ref:`fake_worker<class_NetwTestDiscordService_property_fake_worker>`           |
+   +-------------------+---------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -57,21 +49,25 @@ Property Descriptions
 
 .. rst-class:: classref-property
 
-:godot:`String` **fake_instance_id** = ``""`` :ref:`🔗<class_NetwTestDiscordService_property_fake_instance_id>`
+:godot:`String` **fake_instance_id** :ref:`🔗<class_NetwTestDiscordService_property_fake_instance_id>`
 
-Instance id this fixture reports, standing in for the browser query string.
+.. rst-class:: classref-property-setget
+
+- |void| **@fake_instance_id_setter**\ (\ value\: :godot:`String`\ )
+
+The activity instance this service reports as :godot:`DiscordActivityService.instance_id <DiscordActivityService#class_DiscordActivityService_property_instance_id>`.
 
 .. rst-class:: classref-item-separator
 
 ----
 
-.. _class_NetwTestDiscordService_property_fake_device_id:
+.. _class_NetwTestDiscordService_property_fake_worker:
 
 .. rst-class:: classref-property
 
-:godot:`String` **fake_device_id** = ``""`` :ref:`🔗<class_NetwTestDiscordService_property_fake_device_id>`
+:godot:`Callable` **fake_worker** :ref:`🔗<class_NetwTestDiscordService_property_fake_worker>`
 
-Device id this fixture reports, standing in for the authenticated Discord user id so two local instances are distinct backend users.
+Stands in for the token Worker. It takes the nonce and returns the token the Worker would sign.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`
