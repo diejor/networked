@@ -1027,9 +1027,8 @@ bool ConnectCore::claim_offer(const Ref<MultiplayerPeer> &p_peer) {
         asked->provider = nullptr;
         taken->bind_session(session);
         taken->adopt(p_peer);
-        const String address = asked->mode == PEER_MODE_CLIENT
-            ? asked->address
-            : String();
+        const String address
+            = asked->mode == PEER_MODE_CLIENT ? asked->address : String();
         const RID target = asked->mode == PEER_MODE_CLIENT
             ? rows.find(asked->transport, asked->address)
             : RID();
@@ -1391,15 +1390,15 @@ RID ConnectCore::invite(
     for (const ObjectID &directory : session->discovery_directories()) {
         if (DirectoryTransport::peer_class_of_directory(
                 gd::object_of(directory)
-            ) == named) {
+            )
+            == named) {
             source = directory;
             break;
         }
     }
     bool minted = false;
-    const RID target = rows.invite(
-        named, source, p_transport, p_address, minted
-    );
+    const RID target
+        = rows.invite(named, source, p_transport, p_address, minted);
     const bool already_there = live_online() && live->peer_class() == named
         && (p_address == endpoint_address() || p_address == join_address());
     if (already_there) {

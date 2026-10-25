@@ -19,7 +19,7 @@ Session coordinator for game integration tests that run every peer in one proces
 Description
 -----------
 
-:ref:`add_host()<class_NetwGameHarness_method_add_host>`, :ref:`add_client()<class_NetwGameHarness_method_add_client>`, and :ref:`sync_ticks()<class_NetwGameHarness_method_sync_ticks>` drive real game scenes through one :ref:`LocalLoopbackSession<class_LocalLoopbackSession>`. Per peer input lives on the returned :ref:`NetwSceneRunner<class_NetwSceneRunner>`.  Each peer runs in its own :ref:`MultiplayerViewport<class_MultiplayerViewport>`. A game scene may author that tree or carry none. When the instantiated scene holds no tree, :ref:`add_host()<class_NetwGameHarness_method_add_host>` and :ref:`add_client()<class_NetwGameHarness_method_add_client>` wrap it in one the harness builds, so a scene the game natively swaps needs no authored session node.
+:ref:`add_host()<class_NetwGameHarness_method_add_host>`, :ref:`add_client()<class_NetwGameHarness_method_add_client>`, and :ref:`sync_ticks()<class_NetwGameHarness_method_sync_ticks>` drive real game scenes through one :ref:`LocalLoopbackSession<class_LocalLoopbackSession>`. Per peer input lives on the returned :ref:`NetwSceneRunner<class_NetwSceneRunner>`.  Each peer runs in its own :ref:`MultiplayerViewport<class_MultiplayerViewport>`. A game scene may include that viewport or leave it out. When the scene has none, :ref:`add_host()<class_NetwGameHarness_method_add_host>` and :ref:`add_client()<class_NetwGameHarness_method_add_client>` wrap it in one, so a scene the game swaps in needs no session node of its own.
 
 .. rst-class:: classref-reftable-group
 

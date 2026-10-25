@@ -5,9 +5,9 @@
 #include "netw/api/admission_config.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/nodes/lobby_directory.hpp"
+#include "netw/auth_protocol.hpp"
 #include "netw/connect/directory_transport.hpp"
 #include "netw/log.hpp"
-#include "netw/auth_protocol.hpp"
 
 using namespace godot;
 
@@ -15,10 +15,7 @@ namespace netw {
 
 namespace {
 
-Ref<NetwPromise> result_of(
-    const Variant &p_value,
-    Variant &r_continuation
-) {
+Ref<NetwPromise> result_of(const Variant &p_value, Variant &r_continuation) {
     Object *object = gd::live_object(p_value);
     const Ref<NetwPromise> promise(Object::cast_to<NetwPromise>(object));
     if (promise.is_valid()) {
@@ -50,13 +47,10 @@ void add_transport_account(
     const Ref<NetwJoinRequest> &p_request
 ) {
     const int64_t peer = p_request->get_peer_id();
-    const String account = p_directory != nullptr
-        ? p_directory->account_of(peer)
-        : String();
+    const String account
+        = p_directory != nullptr ? p_directory->account_of(peer) : String();
     if (!account.is_empty()) {
-        p_request->add_vouched_account(
-            account, p_directory->member_name(peer)
-        );
+        p_request->add_vouched_account(account, p_directory->member_name(peer));
     }
     p_request->start_from_first_account();
 }
@@ -112,16 +106,16 @@ void NetwMultiplayer::session_await(
     waiting->result = result;
     const uint64_t promise = uint64_t(gd::instance_id(result.ptr()));
     result->when_settled(
-        p_proof
-            ? callable_mp(this, &NetwMultiplayer::session_proof_settled)
-                  .bind(p_peer, promise)
-            : callable_mp(this, &NetwMultiplayer::session_admission_settled)
-                  .bind(p_peer, promise)
+        p_proof ? callable_mp(this, &NetwMultiplayer::session_proof_settled)
+                      .bind(p_peer, promise)
+                : callable_mp(this, &NetwMultiplayer::session_admission_settled)
+                      .bind(p_peer, promise)
     );
 }
 
 String NetwMultiplayer::session_mint_challenge() {
-    const PackedByteArray bytes = gd::secure_random_bytes(auth::CHALLENGE_BYTES);
+    const PackedByteArray bytes
+        = gd::secure_random_bytes(auth::CHALLENGE_BYTES);
     NETW_ERR_COND_V(
         bytes.size() != auth::CHALLENGE_BYTES,
         String(),
@@ -144,11 +138,10 @@ LobbyDirectory *NetwMultiplayer::session_serving_directory() const {
         = dynamic_cast<const connect::DirectoryTransport *>(
             connect_core.live_transport()
         );
-    return transport != nullptr
-        ? Object::cast_to<LobbyDirectory>(gd::object_of(
-              transport->directory_id()
-          ))
-        : nullptr;
+    return transport != nullptr ? Object::cast_to<LobbyDirectory>(
+                                      gd::object_of(transport->directory_id())
+                                  )
+                                : nullptr;
 }
 
 String NetwMultiplayer::session_bind_challenge(
@@ -161,14 +154,12 @@ String NetwMultiplayer::session_bind_challenge(
         return p_challenge;
     }
     const connect::Transport *transport = connect_core.live_transport();
-    String identity = transport != nullptr
-        ? transport->server_identity(p_link)
-        : String();
+    String identity
+        = transport != nullptr ? transport->server_identity(p_link) : String();
     if (identity.is_empty()) {
         LobbyDirectory *directory = session_serving_directory();
-        identity = directory != nullptr
-            ? directory->account_of(SERVER_PEER)
-            : String();
+        identity = directory != nullptr ? directory->account_of(SERVER_PEER)
+                                        : String();
     }
     r_bound = !identity.is_empty();
     if (!r_bound && !challenge_unbound_logged) {
@@ -185,9 +176,8 @@ String NetwMultiplayer::session_bind_challenge(
 }
 
 bool NetwMultiplayer::session_requires_proof() {
-    const session_decl::Resolved declared = declaration_book().resolve(
-        this, session_decl::KIND_ADMISSION
-    );
+    const session_decl::Resolved declared
+        = declaration_book().resolve(this, session_decl::KIND_ADMISSION);
     if (declared.state == session_decl::ABSENT) {
         return false;
     }
@@ -207,9 +197,8 @@ void NetwMultiplayer::session_request_proof(
     int64_t p_peer,
     const String &p_challenge
 ) {
-    const session_decl::Resolved declared = declaration_book().resolve(
-        this, session_decl::KIND_ADMISSION
-    );
+    const session_decl::Resolved declared
+        = declaration_book().resolve(this, session_decl::KIND_ADMISSION);
     const Ref<NetwAdmissionConfig> config = declared.payload;
     const bool provable = declared.state == session_decl::READY
         && config.is_valid() && config->provider_count() > 0;
@@ -244,9 +233,8 @@ void NetwMultiplayer::session_prove_next(int64_t p_peer) {
     if (link == nullptr) {
         return;
     }
-    const session_decl::Resolved declared = declaration_book().resolve(
-        this, session_decl::KIND_ADMISSION
-    );
+    const session_decl::Resolved declared
+        = declaration_book().resolve(this, session_decl::KIND_ADMISSION);
     const Ref<NetwAdmissionConfig> config = declared.payload;
     if (declared.state != session_decl::READY || config.is_null()
         || declared.generation != link->proof.declaration) {
@@ -277,7 +265,8 @@ void NetwMultiplayer::session_prove_next(int64_t p_peer) {
 
 void NetwMultiplayer::session_proof_failed(int64_t p_peer, Error p_error) {
     session_report_join_failure(
-        p_error, "The admission proof could not be made."
+        p_error,
+        "The admission proof could not be made."
     );
     if (p_peer != get_unique_id()) {
         disconnect_peer(p_peer);
@@ -308,16 +297,21 @@ void NetwMultiplayer::session_start_admission(const JoinRequest &p_request) {
     if (pending_admissions.has(peer)) {
         return;
     }
-    const session_decl::Resolved declared = declaration_book().resolve(
-        this, session_decl::KIND_ADMISSION
-    );
+    const session_decl::Resolved declared
+        = declaration_book().resolve(this, session_decl::KIND_ADMISSION);
     if (declared.state != session_decl::READY
         && declared.state != session_decl::ABSENT) {
         declaration_book().report_unresolved(
-            this, session_decl::KIND_ADMISSION, declared.state, "a join"
+            this,
+            session_decl::KIND_ADMISSION,
+            declared.state,
+            "a join"
         );
-        session_fail_join(peer, ERR_UNAUTHORIZED,
-            "The admission handler is unavailable.");
+        session_fail_join(
+            peer,
+            ERR_UNAUTHORIZED,
+            "The admission handler is unavailable."
+        );
         return;
     }
     const LinkHandshake *link = link_handshakes.getptr(peer);
@@ -330,8 +324,11 @@ void NetwMultiplayer::session_start_admission(const JoinRequest &p_request) {
     Array proofs;
     if (accepted > 0) {
         if (challenge.is_empty() || p_request.proof_bytes.is_empty()) {
-            session_fail_join(peer, ERR_UNAUTHORIZED,
-                "The required admission proof is missing.");
+            session_fail_join(
+                peer,
+                ERR_UNAUTHORIZED,
+                "The required admission proof is missing."
+            );
             return;
         }
         const Variant decoded = gd::bytes_to_var(p_request.proof_bytes);
@@ -339,19 +336,28 @@ void NetwMultiplayer::session_start_admission(const JoinRequest &p_request) {
             proofs = decoded;
         }
         if (proofs.size() != accepted) {
-            session_fail_join(peer, ERR_UNAUTHORIZED, vformat(
-                "This server accepts %d accounts and the joining peer "
-                "proved %d. Call NetwAdmissionConfig.accept with the same "
-                "providers in the same order on both peers.",
-                accepted, int64_t(proofs.size())
-            ));
+            session_fail_join(
+                peer,
+                ERR_UNAUTHORIZED,
+                vformat(
+                    "This server accepts %d accounts and the joining peer "
+                    "proved %d. Call NetwAdmissionConfig.accept with the same "
+                    "providers in the same order on both peers.",
+                    accepted,
+                    int64_t(proofs.size())
+                )
+            );
             return;
         }
     }
     Ref<NetwJoinRequest> request;
     request.instantiate();
     request->bind_to(
-        peer, p_request.username, p_request.arg_values, challenge, bound
+        peer,
+        p_request.username,
+        p_request.arg_values,
+        challenge,
+        bound
     );
     request->bind_session(this);
     if (declared.state == session_decl::ABSENT) {
@@ -364,9 +370,7 @@ void NetwMultiplayer::session_start_admission(const JoinRequest &p_request) {
     opened.request = request;
     opened.proofs = proofs;
     pending_admissions.insert(peer, opened);
-    session_arm_deadline(
-        pending_admissions[peer].verdict, declared.generation
-    );
+    session_arm_deadline(pending_admissions[peer].verdict, declared.generation);
     session_verify_next(peer);
 }
 
@@ -375,23 +379,24 @@ void NetwMultiplayer::session_verify_next(int64_t p_peer) {
     if (pending == nullptr) {
         return;
     }
-    const session_decl::Resolved declared = declaration_book().resolve(
-        this, session_decl::KIND_ADMISSION
-    );
+    const session_decl::Resolved declared
+        = declaration_book().resolve(this, session_decl::KIND_ADMISSION);
     const Ref<NetwAdmissionConfig> config = declared.payload;
     if (declared.state != session_decl::READY || config.is_null()
         || declared.generation != pending->verdict.declaration) {
         pending_admissions.erase(p_peer);
-        session_fail_join(p_peer, ERR_UNAVAILABLE,
-            "The admission handler changed during the join.");
+        session_fail_join(
+            p_peer,
+            ERR_UNAVAILABLE,
+            "The admission handler changed during the join."
+        );
         return;
     }
     const Ref<NetwJoinRequest> request = pending->request;
     const int64_t next = pending->verified;
     if (next < config->provider_count()) {
-        const Variant proof = next < pending->proofs.size()
-            ? pending->proofs[next]
-            : Variant();
+        const Variant proof
+            = next < pending->proofs.size() ? pending->proofs[next] : Variant();
         pending->verified = next + 1;
         pending->verdict.result.unref();
         pending->verdict.continuation = Variant();
@@ -409,9 +414,8 @@ void NetwMultiplayer::session_ask_admission(int64_t p_peer) {
     if (pending == nullptr) {
         return;
     }
-    const session_decl::Resolved declared = declaration_book().resolve(
-        this, session_decl::KIND_ADMISSION
-    );
+    const session_decl::Resolved declared
+        = declaration_book().resolve(this, session_decl::KIND_ADMISSION);
     const Ref<NetwJoinRequest> request = pending->request;
     pending->asked = true;
     pending->verdict.result.unref();
@@ -420,13 +424,16 @@ void NetwMultiplayer::session_ask_admission(int64_t p_peer) {
     const Variant returned
         = gd::call_checked(declared.callable, Variant(request), called);
     session_await(
-        p_peer, false,
+        p_peer,
+        false,
         called ? returned
-               : Variant(NetwPromise::rejected(
-                     ERR_INVALID_DATA,
-                     "The admission handler could not be called. It must "
-                     "take one NetwJoinRequest."
-                 ))
+               : Variant(
+                     NetwPromise::rejected(
+                         ERR_INVALID_DATA,
+                         "The admission handler could not be called. It must "
+                         "take one NetwJoinRequest."
+                     )
+                 )
     );
 }
 
@@ -443,14 +450,16 @@ void NetwMultiplayer::session_admission_settled(
         pending_admissions.erase(p_peer);
     }
     const Ref<NetwPromise> result = answered.verdict.result;
-    const session_decl::Resolved declared = declaration_book().resolve(
-        this, session_decl::KIND_ADMISSION
-    );
+    const session_decl::Resolved declared
+        = declaration_book().resolve(this, session_decl::KIND_ADMISSION);
     if (declared.state != session_decl::READY
         || declared.generation != answered.verdict.declaration) {
         pending_admissions.erase(p_peer);
-        session_fail_join(p_peer, ERR_UNAVAILABLE,
-            "The admission handler changed during the join.");
+        session_fail_join(
+            p_peer,
+            ERR_UNAVAILABLE,
+            "The admission handler changed during the join."
+        );
         return;
     }
     if (result->get_is_failed()) {
@@ -463,24 +472,33 @@ void NetwMultiplayer::session_admission_settled(
         NETW_ERROR(
             sys::SESSION,
             "%s returned %s. Return OK or an Error.",
-            String(provider ? "NetwAccountProvider._verify"
-                            : "The admission handler"),
+            String(
+                provider ? "NetwAccountProvider._verify"
+                         : "The admission handler"
+            ),
             String(Variant::get_type_name(verdict.get_type()))
         );
         pending_admissions.erase(p_peer);
-        session_fail_join(p_peer, ERR_INVALID_DATA, provider
-            ? "An account provider did not return an Error."
-            : "The admission handler did not return an Error.");
+        session_fail_join(
+            p_peer,
+            ERR_INVALID_DATA,
+            provider ? "An account provider did not return an Error."
+                     : "The admission handler did not return an Error."
+        );
         return;
     }
     const Error refusal = Error(int64_t(verdict));
     if (refusal != OK) {
         pending_admissions.erase(p_peer);
-        session_fail_join(p_peer, refusal, vformat(
-            provider ? "An account provider refused the join (%s)"
-                     : "This server did not admit the join (%s)",
-            String(gd::error_name(refusal))
-        ));
+        session_fail_join(
+            p_peer,
+            refusal,
+            vformat(
+                provider ? "An account provider refused the join (%s)"
+                         : "This server did not admit the join (%s)",
+                String(gd::error_name(refusal))
+            )
+        );
         return;
     }
     if (provider) {
@@ -493,7 +511,8 @@ void NetwMultiplayer::session_admission_settled(
 void NetwMultiplayer::session_poll_admissions(int64_t p_now_msec) {
     player_expire_kept(p_now_msec);
     LocalVector<int64_t> expired;
-    for (const KeyValue<int64_t, PendingAdmission> &entry : pending_admissions) {
+    for (const KeyValue<int64_t, PendingAdmission> &entry :
+         pending_admissions) {
         const int64_t deadline = entry.value.verdict.deadline;
         if (deadline > 0 && deadline <= p_now_msec) {
             expired.push_back(entry.key);
@@ -512,8 +531,10 @@ void NetwMultiplayer::session_poll_admissions(int64_t p_now_msec) {
     }
     for (const int64_t peer : expired) {
         link_handshakes.erase(peer);
-        session_report_join_failure(ERR_TIMEOUT,
-            "The admission proof timed out.");
+        session_report_join_failure(
+            ERR_TIMEOUT,
+            "The admission proof timed out."
+        );
         if (peer != get_unique_id()) {
             disconnect_peer(peer);
         }

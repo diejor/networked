@@ -609,8 +609,7 @@ class ConnectLifecycleMatrix final : public netw_test::FrameScenario {
     }
 
     bool views_settled() const {
-        const bool hosting
-            = state_of(HOST) == netw::NetwSession::STATE_ONLINE;
+        const bool hosting = state_of(HOST) == netw::NetwSession::STATE_ONLINE;
         for (int at = 0; at < SIDES; at++) {
             if (at == HOST || !sides[at].connection->is_browsing()) {
                 continue;
@@ -1017,22 +1016,29 @@ LawVerdict law_current_endpoint(const ScenarioRecord &p_run) {
         const StepRecord &now = p_run.steps[at];
         for (int side = 0; side < SIDES; side++) {
             const SideRecord &held = now.sides[side];
-            const bool online
-                = held.state == netw::NetwSession::STATE_ONLINE;
+            const bool online = held.state == netw::NetwSession::STATE_ONLINE;
             if (held.has_current != online) {
-                return broken_at(now, at, vformat(
-                    "%s current endpoint disagrees with connection state",
-                    side_name(side)
-                ));
+                return broken_at(
+                    now,
+                    at,
+                    vformat(
+                        "%s current endpoint disagrees with connection state",
+                        side_name(side)
+                    )
+                );
             }
             const bool addressed = held.server_role
                 ? held.current.address == held.join_address
                 : !held.current.address.is_empty();
             if (online && !addressed) {
-                return broken_at(now, at, vformat(
-                    "%s current endpoint lost its address",
-                    side_name(side)
-                ));
+                return broken_at(
+                    now,
+                    at,
+                    vformat(
+                        "%s current endpoint lost its address",
+                        side_name(side)
+                    )
+                );
             }
         }
     }

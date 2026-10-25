@@ -41,9 +41,9 @@ Properties
    +-----------------+---------------------------------------------------------------------------------------+-----------------+
    | :godot:`float`  | :ref:`connect_timeout<class_NakamaLobbyDirectory_property_connect_timeout>`           | ``10.0``        |
    +-----------------+---------------------------------------------------------------------------------------+-----------------+
-   | :godot:`int`    | :ref:`max_clients<class_NakamaLobbyDirectory_property_max_clients>`                   | ``8``           |
+   | :godot:`int`    | :ref:`max_players<class_NakamaLobbyDirectory_property_max_players>`                   | ``8``           |
    +-----------------+---------------------------------------------------------------------------------------+-----------------+
-   | :godot:`String` | :ref:`browser_filter_uid<class_NakamaLobbyDirectory_property_browser_filter_uid>`     | ``"networked"`` |
+   | :godot:`String` | :ref:`browser_tag<class_NakamaLobbyDirectory_property_browser_tag>`                   | ``"networked"`` |
    +-----------------+---------------------------------------------------------------------------------------+-----------------+
    | :godot:`bool`   | :ref:`migrate_on_host_loss<class_NakamaLobbyDirectory_property_migrate_on_host_loss>` | ``false``       |
    +-----------------+---------------------------------------------------------------------------------------+-----------------+
@@ -81,11 +81,11 @@ Seconds to wait for a match to fully join before failing.
 
 ----
 
-.. _class_NakamaLobbyDirectory_property_max_clients:
+.. _class_NakamaLobbyDirectory_property_max_players:
 
 .. rst-class:: classref-property
 
-:godot:`int` **max_clients** = ``8`` :ref:`🔗<class_NakamaLobbyDirectory_property_max_clients>`
+:godot:`int` **max_players** = ``8`` :ref:`🔗<class_NakamaLobbyDirectory_property_max_players>`
 
 The player limit shown in the lobby list, when the host sets none.
 
@@ -93,11 +93,11 @@ The player limit shown in the lobby list, when the host sets none.
 
 ----
 
-.. _class_NakamaLobbyDirectory_property_browser_filter_uid:
+.. _class_NakamaLobbyDirectory_property_browser_tag:
 
 .. rst-class:: classref-property
 
-:godot:`String` **browser_filter_uid** = ``"networked"`` :ref:`🔗<class_NakamaLobbyDirectory_property_browser_filter_uid>`
+:godot:`String` **browser_tag** = ``"networked"`` :ref:`🔗<class_NakamaLobbyDirectory_property_browser_tag>`
 
 Only lobbies with the same tag are listed, so games sharing a Nakama server do not see each other's lobbies.
 

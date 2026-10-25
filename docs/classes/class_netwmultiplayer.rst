@@ -3231,11 +3231,7 @@ The clock synchronized with the server for the first time. It happens once. The 
 
 :ref:`Notification<enum_NetwMultiplayer_Notification>` **CLOCK_CONFIGURED** = ``15``
 
-The clock settings were applied. Emitted once with no arguments. Check
-
-\ :ref:`clock_is_configured()<class_NetwMultiplayer_method_clock_is_configured>` if it may have already happened. Peer assignment
-
-and :ref:`NetwAction.request()<class_NetwAction_method_request>` are refused during this callback.
+The clock settings were applied. Emitted once with no arguments. Check :ref:`clock_is_configured()<class_NetwMultiplayer_method_clock_is_configured>` if it may have already happened. Peer assignment and :ref:`NetwAction.request()<class_NetwAction_method_request>` are refused during this callback.
 
 .. _class_NetwMultiplayer_constant_CLOCK_TICKRATE_MISMATCH:
 

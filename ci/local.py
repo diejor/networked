@@ -81,7 +81,15 @@ PROFILES = {
         ["python3", "ci/build.py", "--profile", "local", "--strip"],
         ["python3", "ci/package.py", "--profile", "local"],
         ["python3", "ci/release.py", "--profile", "local", "--record", "dist/inventory.json"],
-        ["python3", "ci/test.py", "consumer", "--zip-glob", "dist/networked-*.zip"],
+        [
+            "python3",
+            "ci/test.py",
+            "consumer",
+            "--zip-glob",
+            "dist/networked-*.zip",
+            "--zip-glob",
+            "dist/networked_steam-*.zip",
+        ],
     ],
 }
 

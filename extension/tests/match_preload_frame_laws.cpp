@@ -112,8 +112,7 @@ class MatchScenario final : public netw_test::FrameScenario {
             seen.loads_completed = true;
             const Dictionary results = loads->get("results");
             seen.answers = int(results.size());
-            seen.client_answer
-                = results.get(stand->peer_id(0), Variant());
+            seen.client_answer = results.get(stand->peer_id(0), Variant());
         }
         Object *arena = netw::gd::live_object(host()->get("arena"));
         seen.opened = arena != nullptr && arena->is_class("Node");

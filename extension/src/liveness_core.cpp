@@ -458,8 +458,7 @@ void NetwLivenessCore::when_live(
     bool on_clock,
     const Callable &on_timeout
 ) {
-    if (route_state(route) == STATE_LIVE
-        && deferred_flushes.find(route) < 0) {
+    if (route_state(route) == STATE_LIVE && deferred_flushes.find(route) < 0) {
         callback.call();
         return;
     }

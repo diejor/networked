@@ -35,8 +35,9 @@ namespace Networked;
 /// <see cref="MultiplayerPeer"/> can promote a client by itself. ENet, WebRTC,
 /// Steam and <see cref="OfflineMultiplayerPeer"/> cannot, so losing the server
 /// ends them. On a peer that can, closing the server's window moves the server.
-/// <see cref="NetwSession.Leave"/> ends every client's session on any peer, so
-/// a server that wants the game to go on without it moves the server first.
+/// The server calling <see cref="NetwSession.Leave"/> ends every client's
+/// session, even on a peer that can promote a client, so a server that wants
+/// the game to go on without it moves the server first.
 /// <code>
 /// func hand_over(successor: NetwPlayer) -&gt; void:
 ///     if session.transfer_server(successor.peer_id) == OK:

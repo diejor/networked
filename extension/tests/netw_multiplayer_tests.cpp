@@ -2887,10 +2887,8 @@ TEST_CASE(
 
     SUBCASE("an entity under no declared scene answers no scene") {
         const Bound loose = bind_under(core, root, true, false);
-        CHECK(
-            core->entity_scene_facet(loose.record, loose.wrapper.ptr())
-                .is_null()
-        );
+        CHECK(core->entity_scene_facet(loose.record, loose.wrapper.ptr())
+                  .is_null());
     }
 
     memdelete(root);

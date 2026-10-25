@@ -68,7 +68,9 @@ void serve_accounts(
     } else {
         connection->join(
             connection->add(
-                StringName("StubLobbyPeer"), String("loopback"), String()
+                StringName("StubLobbyPeer"),
+                String("loopback"),
+                String()
             ),
             Dictionary()
         );
@@ -145,9 +147,9 @@ TEST_CASE(
         }
 
         REQUIRE(
-            int(host->get_session()->transfer_server(
-                successor->get_unique_id()
-            ))
+            int(
+                host->get_session()->transfer_server(successor->get_unique_id())
+            )
             == int(OK)
         );
         seated.rig.pump(SETTLE_PUMPS);
@@ -184,7 +186,9 @@ TEST_CASE(
     const Vector<Ref<NetwPlayer>> players = players_of(successor);
     NETW_CHECK_EQ(int(players.size()), CLIENTS);
     for (const Ref<NetwPlayer> &player : players) {
-        CHECK(bool(player->get_account() == account_for(player->get_peer_id())));
+        CHECK(
+            bool(player->get_account() == account_for(player->get_peer_id()))
+        );
     }
 }
 

@@ -26,7 +26,7 @@ namespace Networked;
 /// your own storage, override <c>_set_value</c>, <c>_get_value</c>,
 /// <c>_has_value</c> and <c>_get_property_names</c>. Override <c>_to_dict</c>
 /// and <c>_from_dict</c> to rename stored names. <see cref="DictionaryRecord"/>
-/// is the storage this addon ships.
+/// is the storage this addon provides.
 /// </para>
 /// </remarks>
 public class NetwRecord : Serde

@@ -150,8 +150,8 @@ public sealed class NetwIdToken : NetwAccountProvider
 
     /// <summary>
     /// The public key that checks every token, such as a <c>.pub</c> file
-    /// shipped with the game. It is used before
-    /// <see cref="NetwIdToken.KeysUrl"/>.
+    /// included with the game. When it is set,
+    /// <see cref="NetwIdToken.KeysUrl"/> is not used.
     /// </summary>
     public CryptoKey Key
     {
@@ -284,9 +284,9 @@ public sealed class NetwIdToken : NetwAccountProvider
 
     /// <summary>
     /// Gives the joining peer a <paramref name="token"/> for
-    /// <paramref name="issuer"/> whose nonce names the private
-    /// <paramref name="key"/>, used before asking the source set with
-    /// <see cref="NetwIdToken.Provide"/>.
+    /// <paramref name="issuer"/>. The token's nonce must name the private
+    /// <paramref name="key"/>. A held token is used before asking the source
+    /// set with <see cref="NetwIdToken.Provide"/>.
     /// </summary>
     public static void Hold(string issuer, string token, CryptoKey key)
     {

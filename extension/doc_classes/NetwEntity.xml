@@ -118,11 +118,8 @@
 	</methods>
 	<members>
 		<member name="authority" type="int" setter="set_authority" getter="get_authority" enum="NetwEntity.Authority">
-			Who holds Godot multiplayer authority for the root and its children. Set it
-			before tree entry. Later changes are refused.
-			At spawn, a non-server Godot authority on the root selects
-			[constant AUTHORITY_CONTROLLER] if neither [member controller] nor this
-			mode was explicitly assigned.
+			Who holds Godot multiplayer authority for the root and its children. Set it before tree entry. Later changes are refused.
+			At spawn, a non-server Godot authority on the root selects [constant AUTHORITY_CONTROLLER] if neither [member controller] nor this mode was explicitly assigned.
 		</member>
 		<member name="controller" type="NetwPlayer" setter="set_controller" getter="get_controller">
 			The player that steers this entity, or [code]null[/code] when the server controls it. It can differ from [member player], since a player can steer a server-owned entity.
@@ -175,8 +172,7 @@
 			The peer of [member player], or [code]0[/code] for an NPC or prop. The root appears in [member NetwPlayer.entities] and despawns when that peer disconnects, whoever its [member controller] is.
 		</member>
 		<member name="persistence" type="NetwPersistence" setter="" getter="get_persistence">
-			Loads and saves properties configured with
-			[method NetwPropertyConfig.persisted]. See [NetwPersistenceConfig].
+			Loads and saves properties configured with [method NetwPropertyConfig.persisted]. See [NetwPersistenceConfig].
 		</member>
 		<member name="player" type="NetwPlayer" setter="set_player" getter="get_player">
 			The player this entity represents, or [code]null[/code] for a server-owned entity. Write it in the spawn function. Writing it sets [member peer_id], and makes the player the [member controller] unless the function already wrote one, so the order of the two writes does not matter. [method Netw.spawn_player] writes it for you.
@@ -194,10 +190,7 @@
 			The entity's [NetwPrediction], holding its prediction settings and counters. Never [code]null[/code]. How the entity steps is on [member simulation].
 		</member>
 		<member name="replication_priority" type="float" setter="set_replication_priority" getter="get_replication_priority">
-			Relative priority when a peer's bandwidth cannot carry every property update.
-			[code]4.0[/code] sends about four times as often as [code]1.0[/code] when
-			both keep changing. Must be greater than zero. [member interest] determines
-			which peers receive updates.
+			Relative priority when a peer's bandwidth cannot carry every property update. [code]4.0[/code] sends about four times as often as [code]1.0[/code] when both keep changing. Must be greater than zero. [member interest] determines which peers receive updates.
 		</member>
 		<member name="rid" type="RID" setter="" getter="get_rid">
 			The [RID] that [NetwMultiplayer] methods take for this entity.

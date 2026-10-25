@@ -3,8 +3,8 @@
 #include <cstdint>
 
 #include "godot/local_vector.hpp"
-#include "godot/variant.hpp"
 #include "godot/ref_counted.hpp"
+#include "godot/variant.hpp"
 #include "netw/api/session.hpp"
 #include "netw/wire/describe.hpp"
 
@@ -63,17 +63,31 @@ public:
     void start_from_first_account();
     godot::String name_of(const godot::String &p_account) const;
     bool is_bound(const godot::String &p_account) const;
-    int64_t get_peer_id() const { return peer_id; }
-    godot::StringName get_username() const { return username; }
-    godot::Array get_args() const { return args.duplicate(true); }
-    godot::String get_challenge() const { return challenge; }
+    int64_t get_peer_id() const {
+        return peer_id;
+    }
+    godot::StringName get_username() const {
+        return username;
+    }
+    godot::Array get_args() const {
+        return args.duplicate(true);
+    }
+    godot::String get_challenge() const {
+        return challenge;
+    }
     godot::PackedStringArray get_accounts() const;
-    void set_account(const godot::String &p_account) { account = p_account; }
-    godot::String get_account() const { return account; }
+    void set_account(const godot::String &p_account) {
+        account = p_account;
+    }
+    godot::String get_account() const {
+        return account;
+    }
     void set_account_name(const godot::String &p_name) {
         account_name = p_name;
     }
-    godot::String get_account_name() const { return account_name; }
+    godot::String get_account_name() const {
+        return account_name;
+    }
 };
 
 struct JoinFrame {
@@ -96,7 +110,8 @@ struct JoinFrame {
             netw::wire::bytes_capped(4095)
         ),
         netw::wire::field<&JoinFrame::proof>(
-            "proof", netw::wire::bytes_capped(16383)
+            "proof",
+            netw::wire::bytes_capped(16383)
         ),
         netw::wire::field<&JoinFrame::schema_hash>(
             "schema_hash",

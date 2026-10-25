@@ -110,7 +110,7 @@ func adopt_tree(
 ## on entry actually means.
 ##
 ## A direct peer assignment is refused while a declaration is still being
-## authored, so this waits one frame for the deferred configuration to settle
+## applied, so this waits one frame for the deferred configuration to settle
 ## before assigning.
 func connect_tree(
 		tree: MultiplayerViewport,

@@ -6,8 +6,8 @@
 #include "godot/class_db.hpp"
 #include "godot/node.hpp"
 #include "godot/object.hpp"
-#include "godot/script.hpp"
 #include "godot/scene_tree.hpp"
+#include "godot/script.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/entity_record.hpp"
 #include "netw/api/netw_multiplayer.hpp"
@@ -412,21 +412,19 @@ TEST_CASE(
     "peer, whatever the order of the writes"
 ) {
     const SteeringRow rows[] = {
-        { "player then server", PLAYER_THEN_SERVER, false, true },
-        { "server then player", SERVER_THEN_PLAYER, false, true },
-        { "player then server, spawn_player", PLAYER_THEN_SERVER, true, true },
-        { "server then player, spawn_player", SERVER_THEN_PLAYER, true, true },
-        { "server only, spawn_player", SERVER_ONLY, true, true },
-        { "player then no player", PLAYER_THEN_NOBODY, false, false },
+        {"player then server", PLAYER_THEN_SERVER, false, true},
+        {"server then player", SERVER_THEN_PLAYER, false, true},
+        {"player then server, spawn_player", PLAYER_THEN_SERVER, true, true},
+        {"server then player, spawn_player", SERVER_THEN_PLAYER, true, true},
+        {"server only, spawn_player", SERVER_ONLY, true, true},
+        {"player then no player", PLAYER_THEN_NOBODY, false, false},
     };
     for (const SteeringRow &row : rows) {
         INFO(row.label);
         netw_test::LoopbackRig rig(1);
         rig.mount();
-        const Ref<NetwPlayer> player = seated(
-            Ref<NetwMultiplayer>(rig.server()),
-            rig.peer_id(0)
-        );
+        const Ref<NetwPlayer> player
+            = seated(Ref<NetwMultiplayer>(rig.server()), rig.peer_id(0));
         REQUIRE(rig.server()->player_holds(player));
         written_player = player.ptr();
         Array arg_types;

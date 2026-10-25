@@ -37,8 +37,10 @@ TEST_CASE(
     rig.mount();
     Node *gate = Object::cast_to<Node>(shape->call("new"));
     rig.branch(-1)->add_child(gate);
-    REQUIRE(netw::Netw::configure_admission(Callable(gate, StringName("admit")))
-                .is_valid());
+    REQUIRE(
+        netw::Netw::configure_admission(Callable(gate, StringName("admit")))
+            .is_valid()
+    );
     rig.join(-1, StringName("host"));
     rig.join(0, StringName("ana"));
     rig.join(1, StringName("bo"));

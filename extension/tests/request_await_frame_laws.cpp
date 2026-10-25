@@ -177,7 +177,8 @@ class AwaitScenario final : public netw_test::FrameScenario {
     }
 
 public:
-    explicit AwaitScenario(bool p_transfers) : transfers(p_transfers) {}
+    explicit AwaitScenario(bool p_transfers) : transfers(p_transfers) {
+    }
 
     bool advance() override {
         if (netw::gd::scene_root() == nullptr || done) {

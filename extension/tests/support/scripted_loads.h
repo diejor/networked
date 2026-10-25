@@ -28,9 +28,7 @@ class ScriptedLoads {
         return loads->fails ? netw::gd::LOAD_FAILED : netw::gd::LOAD_LOADED;
     }
 
-    static godot::Ref<godot::PackedScene> collect(
-        const godot::String &p_path
-    ) {
+    static godot::Ref<godot::PackedScene> collect(const godot::String &p_path) {
         return installed()->fails ? godot::Ref<godot::PackedScene>()
                                   : netw::gd::load_scene(p_path);
     }

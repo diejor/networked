@@ -1645,8 +1645,7 @@ void NetwEntity::revert_to_server(int64_t p_departed) {
     reassign(
         0,
         0,
-        controller == p_departed ? int64_t(entity::Control::SERVER)
-                                 : controller
+        controller == p_departed ? int64_t(entity::Control::SERVER) : controller
     );
 }
 
@@ -2107,10 +2106,7 @@ void NetwEntity::despawn(const Ref<NetwDespawnOpts> &p_opts) {
             api->get_bindings()->find(owner),
             opts->get_flush_save()
         );
-        api->scene_root_despawning(
-            this,
-            api->is_host() && !opts->get_linger()
-        );
+        api->scene_root_despawning(this, api->is_host() && !opts->get_linger());
     }
     if (owner->get_multiplayer_authority() != 1) {
         owner->set_multiplayer_authority(1);

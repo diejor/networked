@@ -182,9 +182,10 @@ Node *account_gate(Node *p_branch) {
     );
     REQUIRE(gate != nullptr);
     p_branch->add_child(gate);
-    REQUIRE(netw::Netw::configure_admission(
-        Callable(gate, StringName("admit"))
-    ).is_valid());
+    REQUIRE(
+        netw::Netw::configure_admission(Callable(gate, StringName("admit")))
+            .is_valid()
+    );
     return gate;
 }
 

@@ -78,7 +78,7 @@ func join() -> NetwJoinRequest:
 	assert_object(client.api.local_player).is_not_null()
 	assert_int(host_gate.requests.size()).is_equal(1)
 	return host_gate.requests.back() if not host_gate.requests.is_empty() \
-			else null
+	else null
 
 
 func test_a_signed_in_player_joins_as_their_nakama_account(

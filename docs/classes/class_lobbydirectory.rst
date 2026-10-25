@@ -69,27 +69,27 @@ Properties
 .. table::
    :widths: auto
 
-   +-----------------+-----------------------------------------------------------------------------------+
-   | :godot:`String` | :ref:`display_name<class_LobbyDirectory_property_display_name>`                   |
-   +-----------------+-----------------------------------------------------------------------------------+
-   | :godot:`String` | :ref:`address_label<class_LobbyDirectory_property_address_label>`                 |
-   +-----------------+-----------------------------------------------------------------------------------+
-   | :godot:`String` | :ref:`address_placeholder<class_LobbyDirectory_property_address_placeholder>`     |
-   +-----------------+-----------------------------------------------------------------------------------+
-   | :godot:`String` | :ref:`address_help<class_LobbyDirectory_property_address_help>`                   |
-   +-----------------+-----------------------------------------------------------------------------------+
-   | :godot:`bool`   | :ref:`accepts_empty_address<class_LobbyDirectory_property_accepts_empty_address>` |
-   +-----------------+-----------------------------------------------------------------------------------+
-   | :godot:`bool`   | :ref:`can_host_here<class_LobbyDirectory_property_can_host_here>`                 |
-   +-----------------+-----------------------------------------------------------------------------------+
-   | :godot:`bool`   | :ref:`can_probe<class_LobbyDirectory_property_can_probe>`                         |
-   +-----------------+-----------------------------------------------------------------------------------+
-   | :godot:`float`  | :ref:`timeout_hint<class_LobbyDirectory_property_timeout_hint>`                   |
-   +-----------------+-----------------------------------------------------------------------------------+
-   | :godot:`float`  | :ref:`list_interval<class_LobbyDirectory_property_list_interval>`                 |
-   +-----------------+-----------------------------------------------------------------------------------+
-   | :godot:`int`    | :ref:`capabilities<class_LobbyDirectory_property_capabilities>`                   |
-   +-----------------+-----------------------------------------------------------------------------------+
+   +-----------------+-----------------------------------------------------------------------------------+-------------+
+   | :godot:`bool`   | :ref:`accepts_empty_address<class_LobbyDirectory_property_accepts_empty_address>` | ``false``   |
+   +-----------------+-----------------------------------------------------------------------------------+-------------+
+   | :godot:`String` | :ref:`address_help<class_LobbyDirectory_property_address_help>`                   | ``""``      |
+   +-----------------+-----------------------------------------------------------------------------------+-------------+
+   | :godot:`String` | :ref:`address_label<class_LobbyDirectory_property_address_label>`                 | ``"Lobby"`` |
+   +-----------------+-----------------------------------------------------------------------------------+-------------+
+   | :godot:`String` | :ref:`address_placeholder<class_LobbyDirectory_property_address_placeholder>`     | ``""``      |
+   +-----------------+-----------------------------------------------------------------------------------+-------------+
+   | :godot:`bool`   | :ref:`can_host_here<class_LobbyDirectory_property_can_host_here>`                 | ``true``    |
+   +-----------------+-----------------------------------------------------------------------------------+-------------+
+   | :godot:`bool`   | :ref:`can_probe<class_LobbyDirectory_property_can_probe>`                         | ``false``   |
+   +-----------------+-----------------------------------------------------------------------------------+-------------+
+   | :godot:`int`    | :ref:`capabilities<class_LobbyDirectory_property_capabilities>`                   | ``0``       |
+   +-----------------+-----------------------------------------------------------------------------------+-------------+
+   | :godot:`String` | :ref:`display_name<class_LobbyDirectory_property_display_name>`                   | ``""``      |
+   +-----------------+-----------------------------------------------------------------------------------+-------------+
+   | :godot:`float`  | :ref:`list_interval<class_LobbyDirectory_property_list_interval>`                 | ``0.0``     |
+   +-----------------+-----------------------------------------------------------------------------------+-------------+
+   | :godot:`float`  | :ref:`timeout_hint<class_LobbyDirectory_property_timeout_hint>`                   | ``20.0``    |
+   +-----------------+-----------------------------------------------------------------------------------+-------------+
 
 .. rst-class:: classref-reftable-group
 
@@ -250,18 +250,35 @@ The directory calls :ref:`invite()<class_LobbyDirectory_method_invite>` when the
 Property Descriptions
 ---------------------
 
-.. _class_LobbyDirectory_property_display_name:
+.. _class_LobbyDirectory_property_accepts_empty_address:
 
 .. rst-class:: classref-property
 
-:godot:`String` **display_name** :ref:`🔗<class_LobbyDirectory_property_display_name>`
+:godot:`bool` **accepts_empty_address** = ``false`` :ref:`🔗<class_LobbyDirectory_property_accepts_empty_address>`
 
 .. rst-class:: classref-property-setget
 
-- |void| **set_display_name**\ (\ value\: :godot:`String`\ )
-- :godot:`String` **get_display_name**\ (\ )
+- |void| **set_accepts_empty_address**\ (\ value\: :godot:`bool`\ )
+- :godot:`bool` **get_accepts_empty_address**\ (\ )
 
-The name shown in the server browser. An empty value uses :ref:`_peer_class()<class_LobbyDirectory_private_method__peer_class>`.
+Whether joining accepts an empty address.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_LobbyDirectory_property_address_help:
+
+.. rst-class:: classref-property
+
+:godot:`String` **address_help** = ``""`` :ref:`🔗<class_LobbyDirectory_property_address_help>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_address_help**\ (\ value\: :godot:`String`\ )
+- :godot:`String` **get_address_help**\ (\ )
+
+Help shown under the address input.
 
 .. rst-class:: classref-item-separator
 
@@ -271,7 +288,7 @@ The name shown in the server browser. An empty value uses :ref:`_peer_class()<cl
 
 .. rst-class:: classref-property
 
-:godot:`String` **address_label** :ref:`🔗<class_LobbyDirectory_property_address_label>`
+:godot:`String` **address_label** = ``"Lobby"`` :ref:`🔗<class_LobbyDirectory_property_address_label>`
 
 .. rst-class:: classref-property-setget
 
@@ -288,7 +305,7 @@ The label of the address input.
 
 .. rst-class:: classref-property
 
-:godot:`String` **address_placeholder** :ref:`🔗<class_LobbyDirectory_property_address_placeholder>`
+:godot:`String` **address_placeholder** = ``""`` :ref:`🔗<class_LobbyDirectory_property_address_placeholder>`
 
 .. rst-class:: classref-property-setget
 
@@ -301,45 +318,11 @@ The placeholder of the address input.
 
 ----
 
-.. _class_LobbyDirectory_property_address_help:
-
-.. rst-class:: classref-property
-
-:godot:`String` **address_help** :ref:`🔗<class_LobbyDirectory_property_address_help>`
-
-.. rst-class:: classref-property-setget
-
-- |void| **set_address_help**\ (\ value\: :godot:`String`\ )
-- :godot:`String` **get_address_help**\ (\ )
-
-Help shown under the address input.
-
-.. rst-class:: classref-item-separator
-
-----
-
-.. _class_LobbyDirectory_property_accepts_empty_address:
-
-.. rst-class:: classref-property
-
-:godot:`bool` **accepts_empty_address** :ref:`🔗<class_LobbyDirectory_property_accepts_empty_address>`
-
-.. rst-class:: classref-property-setget
-
-- |void| **set_accepts_empty_address**\ (\ value\: :godot:`bool`\ )
-- :godot:`bool` **get_accepts_empty_address**\ (\ )
-
-Whether joining accepts an empty address.
-
-.. rst-class:: classref-item-separator
-
-----
-
 .. _class_LobbyDirectory_property_can_host_here:
 
 .. rst-class:: classref-property
 
-:godot:`bool` **can_host_here** :ref:`🔗<class_LobbyDirectory_property_can_host_here>`
+:godot:`bool` **can_host_here** = ``true`` :ref:`🔗<class_LobbyDirectory_property_can_host_here>`
 
 .. rst-class:: classref-property-setget
 
@@ -356,7 +339,7 @@ Whether this build can host lobbies.
 
 .. rst-class:: classref-property
 
-:godot:`bool` **can_probe** :ref:`🔗<class_LobbyDirectory_property_can_probe>`
+:godot:`bool` **can_probe** = ``false`` :ref:`🔗<class_LobbyDirectory_property_can_probe>`
 
 .. rst-class:: classref-property-setget
 
@@ -369,18 +352,35 @@ Whether a lobby can be checked without joining it.
 
 ----
 
-.. _class_LobbyDirectory_property_timeout_hint:
+.. _class_LobbyDirectory_property_capabilities:
 
 .. rst-class:: classref-property
 
-:godot:`float` **timeout_hint** :ref:`🔗<class_LobbyDirectory_property_timeout_hint>`
+:godot:`int` **capabilities** = ``0`` :ref:`🔗<class_LobbyDirectory_property_capabilities>`
 
 .. rst-class:: classref-property-setget
 
-- |void| **set_timeout_hint**\ (\ value\: :godot:`float`\ )
-- :godot:`float` **get_timeout_hint**\ (\ )
+- |void| **set_capabilities**\ (\ value\: :godot:`int`\ )
+- :godot:`int` **get_capabilities**\ (\ )
 
-Seconds before a host or join request fails with :godot:`@GlobalScope.ERR_TIMEOUT <@GlobalScope#class_@GlobalScope_constant_ERR_TIMEOUT>`.
+The :ref:`Capability<enum_LobbyDirectory_Capability>` flags this directory supports.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_LobbyDirectory_property_display_name:
+
+.. rst-class:: classref-property
+
+:godot:`String` **display_name** = ``""`` :ref:`🔗<class_LobbyDirectory_property_display_name>`
+
+.. rst-class:: classref-property-setget
+
+- |void| **set_display_name**\ (\ value\: :godot:`String`\ )
+- :godot:`String` **get_display_name**\ (\ )
+
+The name shown in the server browser. An empty value uses :ref:`_peer_class()<class_LobbyDirectory_private_method__peer_class>`.
 
 .. rst-class:: classref-item-separator
 
@@ -390,7 +390,7 @@ Seconds before a host or join request fails with :godot:`@GlobalScope.ERR_TIMEOU
 
 .. rst-class:: classref-property
 
-:godot:`float` **list_interval** :ref:`🔗<class_LobbyDirectory_property_list_interval>`
+:godot:`float` **list_interval** = ``0.0`` :ref:`🔗<class_LobbyDirectory_property_list_interval>`
 
 .. rst-class:: classref-property-setget
 
@@ -403,18 +403,18 @@ Seconds between :ref:`_list_lobbies()<class_LobbyDirectory_private_method__list_
 
 ----
 
-.. _class_LobbyDirectory_property_capabilities:
+.. _class_LobbyDirectory_property_timeout_hint:
 
 .. rst-class:: classref-property
 
-:godot:`int` **capabilities** :ref:`🔗<class_LobbyDirectory_property_capabilities>`
+:godot:`float` **timeout_hint** = ``20.0`` :ref:`🔗<class_LobbyDirectory_property_timeout_hint>`
 
 .. rst-class:: classref-property-setget
 
-- |void| **set_capabilities**\ (\ value\: :godot:`int`\ )
-- :godot:`int` **get_capabilities**\ (\ )
+- |void| **set_timeout_hint**\ (\ value\: :godot:`float`\ )
+- :godot:`float` **get_timeout_hint**\ (\ )
 
-The :ref:`Capability<enum_LobbyDirectory_Capability>` flags this directory supports.
+Seconds before a host or join request fails with :godot:`@GlobalScope.ERR_TIMEOUT <@GlobalScope#class_@GlobalScope_constant_ERR_TIMEOUT>`.
 
 .. rst-class:: classref-section-separator
 

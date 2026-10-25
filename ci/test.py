@@ -110,17 +110,10 @@ func _init() -> void:
 \tfor name in wanted:
 \t\tif not ClassDB.class_exists(name):
 \t\t\tmissing.append(name)
-\tfor path: String in [
-\t\t"res://addons/godotsteam/godotsteam.gdextension",
-\t\t"res://addons/webrtc/webrtc.gdextension",
-\t]:
+\tfor path: String in [%s]:
 \t\tvar manifest := ConfigFile.new()
 \t\tif manifest.load(path) != OK:
 \t\t\tmissing.append(path)
-\tvar connection := WebRTCPeerConnection.new()
-\tif connection.initialize({"iceServers": []}) != OK:
-\t\tmissing.append("WebRTC initialization")
-\tconnection.close()
 \tvar made: Object = null
 \tif missing.is_empty():
 \t\tmade = ClassDB.instantiate("NetwBitStream")
@@ -258,28 +251,30 @@ def lane_classes(godot: str, *, timeout: float) -> int:
     return 0
 
 
-def lane_consumer(godot: str, *, archive: Path, workspace: Path, timeout: float) -> int:
-    """Install the release zip into an empty project and load what it published."""
-    archive = archive.resolve()
+def lane_consumer(godot: str, *, archives: list[Path], workspace: Path, timeout: float) -> int:
+    """Install the release zips into an empty project and load what they published."""
     workspace = workspace.resolve()
-    if not archive.is_file():
-        raise fail("no release archive at %s" % archive)
     if workspace.exists():
         shutil.rmtree(workspace)
     workspace.mkdir(parents=True)
-    shutil.unpack_archive(str(archive), str(workspace))
-    addon = workspace / "addons" / "networked"
-    if not addon.is_dir():
-        raise fail("%s unpacked no addons/networked" % archive.name)
+    for archive in archives:
+        archive = archive.resolve()
+        if not archive.is_file():
+            raise fail("no release archive at %s" % archive)
+        shutil.unpack_archive(str(archive), str(workspace))
+    if not (workspace / "addons" / "networked").is_dir():
+        raise fail("no archive unpacked addons/networked")
     (workspace / "project.godot").write_text(CONSUMER_PROJECT, encoding="utf-8")
 
-    classes = (
-        *PROBE_CLASSES, "NetwBitStream", "Steam", "SteamMultiplayerPeer",
-        "WebRTCLibPeerConnection",
-    )
+    classes = [*PROBE_CLASSES, "NetwBitStream"]
+    manifests = []
+    if (workspace / "addons" / "godotsteam").is_dir():
+        classes += ["Steam", "SteamMultiplayerPeer"]
+        manifests.append("res://addons/godotsteam/godotsteam.gdextension")
     names = ", ".join('"%s"' % name for name in classes)
+    paths = ", ".join('"%s"' % path for path in manifests)
     probe = workspace / "probe.gd"
-    probe.write_text(CONSUMER_PROBE % names, encoding="utf-8")
+    probe.write_text(CONSUMER_PROBE % (names, paths), encoding="utf-8")
 
     _godot(
         godot,
@@ -471,8 +466,14 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("classes")
 
     consumer = sub.add_parser("consumer")
-    consumer.add_argument("--zip", dest="archive", type=Path)
-    consumer.add_argument("--zip-glob", dest="archive_glob", help="Resolve the archive by pattern, newest first.")
+    consumer.add_argument("--zip", dest="archives", type=Path, action="append", default=[])
+    consumer.add_argument(
+        "--zip-glob",
+        dest="archive_globs",
+        action="append",
+        default=[],
+        help="Resolve an archive by pattern, newest first.",
+    )
     consumer.add_argument("--workspace", type=Path, default=ROOT / "dist" / "consumer")
 
     sharp = sub.add_parser("csharp")
@@ -504,17 +505,17 @@ def run_cli(argv: list[str] | None = None) -> int:
     if args.lane == "classes":
         return lane_classes(args.godot, timeout=args.timeout)
     if args.lane == "consumer":
-        archive = args.archive
-        if archive is None:
-            if not args.archive_glob:
-                raise fail("pass --zip or --zip-glob")
-            found = sorted(ROOT.glob(args.archive_glob), key=lambda p: p.stat().st_mtime, reverse=True)
+        archives = list(args.archives)
+        for pattern in args.archive_globs:
+            found = sorted(ROOT.glob(pattern), key=lambda p: p.stat().st_mtime, reverse=True)
             if not found:
-                raise fail("no archive matched %s" % args.archive_glob)
-            archive = found[0]
+                raise fail("no archive matched %s" % pattern)
+            archives.append(found[0])
+        if not archives:
+            raise fail("pass --zip or --zip-glob")
         return lane_consumer(
             args.godot,
-            archive=archive,
+            archives=archives,
             workspace=args.workspace,
             timeout=args.timeout,
         )

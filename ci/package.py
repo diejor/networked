@@ -36,6 +36,16 @@ DISCORD = Path("addons") / "discord_social_sdk"
 DISCORD_TEMPLATE = DISCORD / "lib" / "discord.gdextension.template"
 DISCORD_MANIFEST = DISCORD / "lib" / "discord.gdextension"
 
+PACKAGES = {
+    "networked": {"addons": [ADDON], "vendors": []},
+    "networked_steam": {"addons": [Path("addons") / "networked_steam"], "vendors": ["godotsteam"]},
+    "networked_discord": {"addons": [Path("addons") / "networked_discord", DISCORD], "vendors": []},
+    "networked_nakama": {
+        "addons": [Path("addons") / "networked_nakama", Path("addons") / "com.heroiclabs.nakama"],
+        "vendors": [],
+    },
+}
+
 
 def refuse_discord_library(paths: list[str]) -> None:
     """Discord's terms let only a game ship Discord's own library, and the
@@ -45,23 +55,24 @@ def refuse_discord_library(paths: list[str]) -> None:
             raise fail("the package would ship Discord's library %s, which only a game may ship" % path)
         if path == DISCORD_MANIFEST.as_posix():
             raise fail("the package would ship %s, which fails to load without Discord's library" % path)
-    if DISCORD_TEMPLATE.as_posix() not in paths:
+    carries_binding = any(path.startswith(DISCORD.as_posix() + "/") for path in paths)
+    if carries_binding and DISCORD_TEMPLATE.as_posix() not in paths:
         raise fail("the package is missing %s" % DISCORD_TEMPLATE.as_posix())
 
 
-def tracked_payload() -> list[Path]:
+def tracked_payload(addons: list[Path] | None = None) -> list[Path]:
     """Every addon file the repository actually carries, as a closed list."""
+    if addons is None:
+        addons = [addon for package in PACKAGES.values() for addon in package["addons"]]
     completed = run(
-        [
-            "git", "ls-files", "-z", "--", str(ADDON),
-            "addons/networked_steam", "addons/networked_discord", str(DISCORD),
-            "addons/networked_nakama", "addons/com.heroiclabs.nakama",        ],
+        ["git", "ls-files", "-z", "--", *[str(addon) for addon in addons]],
         capture=True,
         timeout=120,
     )
     paths = [Path(entry) for entry in completed.stdout.split("\0") if entry]
-    if not paths:
-        raise fail("git lists no files under %s" % ADDON)
+    for addon in addons:
+        if not any(addon in path.parents for path in paths):
+            raise fail("git lists no files under %s" % addon)
     refuse_discord_library([path.as_posix() for path in paths])
     return paths
 
@@ -234,19 +245,22 @@ def assemble(
     if stage_root.exists():
         shutil.rmtree(stage_root)
     gdignore(stage_root.parent)
-    addon_root = stage_root / ADDON
+    core_root = stage_root / "networked"
+    addon_root = core_root / ADDON
     (addon_root / "bin").mkdir(parents=True)
 
-    payload: dict[str, dict] = {}
-    for relative in tracked_payload():
-        source = ROOT / relative
-        target = stage_root / relative
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, target)
-        payload[str(relative)] = {
-            "sha256": digest_of(target),
-            "bytes": target.stat().st_size,
-        }
+    payloads: dict[str, dict[str, dict]] = {name: {} for name in PACKAGES}
+    for name, package in PACKAGES.items():
+        for relative in tracked_payload(package["addons"]):
+            source = ROOT / relative
+            target = stage_root / name / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, target)
+            payloads[name][str(relative)] = {
+                "sha256": digest_of(target),
+                "bytes": target.stat().st_size,
+            }
+    payload = payloads["networked"]
 
     (addon_root / MANIFEST_NAME).write_text(shipped_manifest(), encoding="utf-8")
 
@@ -287,17 +301,22 @@ def assemble(
         "bytes": shipped.stat().st_size,
     }
 
-    vendors = vendor_extensions.place(stage_root, stage_root.parent / "vendor-cache")
-    for directory in ("addons/godotsteam", "addons/webrtc"):
-        for entry in sorted((stage_root / directory).rglob("*")):
-            if entry.is_file():
-                payload[entry.relative_to(stage_root).as_posix()] = {
+    vendors: dict = {}
+    for name, package in PACKAGES.items():
+        if not package["vendors"]:
+            continue
+        package_root = stage_root / name
+        before = {entry for entry in package_root.rglob("*") if entry.is_file()}
+        vendors.update(vendor_extensions.place(package_root, stage_root.parent / "vendor-cache", package["vendors"]))
+        for entry in sorted(entry for entry in package_root.rglob("*") if entry.is_file()):
+            if entry not in before:
+                payloads[name][entry.relative_to(package_root).as_posix()] = {
                     "sha256": digest_of(entry),
                     "bytes": entry.stat().st_size,
                 }
     return {
         "records": records,
-        "payload": payload,
+        "payloads": payloads,
         "libraries": sorted(libraries),
         "vendors": vendors,
     }
@@ -351,7 +370,13 @@ def release_manifest(
         ],
         "libraries": assembled["libraries"],
         "vendors": assembled["vendors"],
-        "payload": assembled["payload"],
+        "packages": {
+            name: {
+                "archive": "%s.zip" % release_stem(version, name),
+                "payload": assembled["payloads"][name],
+            }
+            for name in PACKAGES
+        },
         "unqualified": unqualified,
     }
 
@@ -361,6 +386,8 @@ def write_zip(stage_root: Path, archive: Path) -> None:
     if archive.exists():
         archive.unlink()
     files = sorted(p for p in stage_root.rglob("*") if p.is_file())
+    if not files:
+        raise fail("%s would be empty" % archive.name)
     refuse_discord_library([path.relative_to(stage_root).as_posix() for path in files])
     with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as bundle:
         for path in files:
@@ -412,8 +439,11 @@ def run_cli(argv: list[str] | None = None) -> int:
     stage_root = args.out / "stage"
     assembled = assemble(cells, args.staging, stage_root, expect_sha=sha)
 
-    archive = args.out / ("%s.zip" % release_stem(version))
-    write_zip(stage_root, archive)
+    archives = []
+    for name in PACKAGES:
+        archive = args.out / ("%s.zip" % release_stem(version, name))
+        write_zip(stage_root / name, archive)
+        archives.append(archive)
     manifest_path = args.out / ("%s.manifest.json" % release_stem(version))
     write_json(
         manifest_path,
@@ -425,9 +455,9 @@ def run_cli(argv: list[str] | None = None) -> int:
             unqualified=parse_list(args.unqualified),
         ),
     )
-    write_sums([archive, manifest_path], args.out / "SHA256SUMS.txt")
+    write_sums([*archives, manifest_path], args.out / "SHA256SUMS.txt")
 
-    print("packaged %s over %d cells" % (archive.name, len(cells)))
+    print("packaged %s over %d cells" % (", ".join(archive.name for archive in archives), len(cells)))
     print(json.dumps(assembled["libraries"], indent=2))
     return 0
 

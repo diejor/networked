@@ -157,11 +157,13 @@ class ConnectAttemptScenario final : public netw_test::FrameScenario {
                 = client->get_connection();
             invited = connection->invite(
                 StringName("ENetMultiplayerPeer"),
-                String("127.0.0.1:") + itos(p_port), String("Ada")
+                String("127.0.0.1:") + itos(p_port),
+                String("Ada")
             );
             other = connection->invite(
                 StringName("ENetMultiplayerPeer"),
-                String("127.0.0.1:") + itos(p_port + 1), String("Bo")
+                String("127.0.0.1:") + itos(p_port + 1),
+                String("Bo")
             );
             connection->join(invited, Dictionary());
             return;

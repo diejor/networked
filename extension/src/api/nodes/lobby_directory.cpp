@@ -49,9 +49,7 @@ void LobbyDirectory::invite(
         );
         return;
     }
-    session->get_connection()->invite(
-        peer_class(), p_address, p_from_name
-    );
+    session->get_connection()->invite(peer_class(), p_address, p_from_name);
 }
 
 void LobbyDirectory::watched_by(NetwMultiplayer *p_session) {
@@ -69,9 +67,8 @@ bool LobbyDirectory::supports(Capability p_capability) {
 }
 
 String LobbyDirectory::get_display_name() {
-    return display_name_value.is_empty()
-        ? String(peer_class())
-        : display_name_value;
+    return display_name_value.is_empty() ? String(peer_class())
+                                         : display_name_value;
 }
 
 StringName LobbyDirectory::peer_class() {

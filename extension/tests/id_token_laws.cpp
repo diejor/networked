@@ -78,7 +78,7 @@ String signed_token(
         = encoded_json(p_header) + String(".") + encoded_json(p_claims);
     return part + String(".")
         + id_token::encode_base64url(
-            netw::gd::rs256_sign(part.sha256_buffer(), p_signer)
+               netw::gd::rs256_sign(part.sha256_buffer(), p_signer)
         );
 }
 
@@ -172,7 +172,8 @@ TEST_CASE(
     const Ref<CryptoKey> other = private_key(netw_test::OTHER_RSA_KEY);
     const Ref<CryptoKey> proof_key = private_key(netw_test::PROOF_RSA_KEY);
     const Dictionary header = with({
-        {"alg", String("RS256")}, {"kid", String("fixture-rsa")},
+        {"alg", String("RS256")},
+        {"kid", String("fixture-rsa")},
     });
     const Dictionary claims = discord_claims(proof_key);
     struct Row {
@@ -187,57 +188,166 @@ TEST_CASE(
     const Dictionary none;
     const std::vector<Row> rows = {
         {"valid", none, none, PLAIN, "", true, ""},
-        {"name", none, with({{"name", String("Fixture Player")}}), PLAIN, "",
-         true, "Fixture Player"},
-        {"nonce", none, with({{"nonce", String("another-host")}}), PLAIN, "",
-         false, ""},
-        {"audience", none, with({{"aud", String("another-application")}}),
-         PLAIN, "", false, ""},
-        {"audience type", none, with({{"aud", int64_t(1561065725962092666)}}),
-         PLAIN, "", false, ""},
-        {"audience listed alone", none,
-         with({{"aud", listing({String(APP)})}}), PLAIN, "", true, ""},
-        {"audience listed with another", none,
-         with({{"aud", listing({String(APP), String("another-application")})},
-               {"azp", String(APP)}}),
-         PLAIN, "", false, ""},
-        {"authorized party", none,
-         with({{"azp", String("another-application")}}), PLAIN, "", false,
+        {"name",
+         none,
+         with({{"name", String("Fixture Player")}}),
+         PLAIN,
+         "",
+         true,
+         "Fixture Player"},
+        {"nonce",
+         none,
+         with({{"nonce", String("another-host")}}),
+         PLAIN,
+         "",
+         false,
          ""},
-        {"issuer", none, with({{"iss", String("https://discord.com/")}}),
-         PLAIN, "", false, ""},
-        {"subject empty", none, with({{"sub", String("")}}), PLAIN, "", false,
+        {"audience",
+         none,
+         with({{"aud", String("another-application")}}),
+         PLAIN,
+         "",
+         false,
          ""},
-        {"name not text", none, with({{"name", int64_t(5)}}), PLAIN, "",
-         false, ""},
+        {"audience type",
+         none,
+         with({{"aud", int64_t(1561065725962092666)}}),
+         PLAIN,
+         "",
+         false,
+         ""},
+        {"audience listed alone",
+         none,
+         with({{"aud", listing({String(APP)})}}),
+         PLAIN,
+         "",
+         true,
+         ""},
+        {"audience listed with another",
+         none,
+         with(
+             {{"aud", listing({String(APP), String("another-application")})},
+              {"azp", String(APP)}}
+         ),
+         PLAIN,
+         "",
+         false,
+         ""},
+        {"authorized party",
+         none,
+         with({{"azp", String("another-application")}}),
+         PLAIN,
+         "",
+         false,
+         ""},
+        {"issuer",
+         none,
+         with({{"iss", String("https://discord.com/")}}),
+         PLAIN,
+         "",
+         false,
+         ""},
+        {"subject empty",
+         none,
+         with({{"sub", String("")}}),
+         PLAIN,
+         "",
+         false,
+         ""},
+        {"name not text",
+         none,
+         with({{"name", int64_t(5)}}),
+         PLAIN,
+         "",
+         false,
+         ""},
         {"missing exp", none, none, DROP_EXP, "", false, ""},
-        {"algorithm", with({{"alg", String("HS256")}}), none, PLAIN, "", false,
+        {"algorithm",
+         with({{"alg", String("HS256")}}),
+         none,
+         PLAIN,
+         "",
+         false,
          ""},
-        {"unsigned", with({{"alg", String("none")}}), none, PLAIN, "", false,
+        {"unsigned",
+         with({{"alg", String("none")}}),
+         none,
+         PLAIN,
+         "",
+         false,
          ""},
-        {"unknown key", with({{"kid", String("rotated-key")}}), none, PLAIN,
-         "", false, ""},
-        {"key id not text", with({{"kid", int64_t(7)}}), none, PLAIN, "",
-         false, ""},
-        {"critical", with({{"crit", listing({String("extension")})}}), none,
-         PLAIN, "", false, ""},
-        {"unencoded payload", with({{"b64", false}}), none, PLAIN, "", false,
+        {"unknown key",
+         with({{"kid", String("rotated-key")}}),
+         none,
+         PLAIN,
+         "",
+         false,
+         ""},
+        {"key id not text",
+         with({{"kid", int64_t(7)}}),
+         none,
+         PLAIN,
+         "",
+         false,
+         ""},
+        {"critical",
+         with({{"crit", listing({String("extension")})}}),
+         none,
+         PLAIN,
+         "",
+         false,
+         ""},
+        {"unencoded payload",
+         with({{"b64", false}}),
+         none,
+         PLAIN,
+         "",
+         false,
          ""},
         {"signature", none, none, OTHER_SIGNER, "", false, ""},
         {"tampered", none, none, TAMPERED, "", false, ""},
         {"malformed json", none, none, MALFORMED_JSON, "", false, ""},
-        {"issued inside skew", none, with({{"iat", NOW + 30}}), PLAIN, "",
-         true, ""},
-        {"not before inside skew", none, with({{"nbf", NOW + 30}}), PLAIN, "",
-         true, ""},
-        {"expired inside skew", none,
-         with({{"iat", NOW - 600}, {"exp", NOW - 30}}), PLAIN, "", true, ""},
-        {"issued past skew", none, with({{"iat", NOW + 120}}), PLAIN, "",
-         false, ""},
-        {"not before past skew", none, with({{"nbf", NOW + 120}}), PLAIN, "",
-         false, ""},
-        {"expired past skew", none,
-         with({{"iat", NOW - 600}, {"exp", NOW - 120}}), PLAIN, "", false,
+        {"issued inside skew",
+         none,
+         with({{"iat", NOW + 30}}),
+         PLAIN,
+         "",
+         true,
+         ""},
+        {"not before inside skew",
+         none,
+         with({{"nbf", NOW + 30}}),
+         PLAIN,
+         "",
+         true,
+         ""},
+        {"expired inside skew",
+         none,
+         with({{"iat", NOW - 600}, {"exp", NOW - 30}}),
+         PLAIN,
+         "",
+         true,
+         ""},
+        {"issued past skew",
+         none,
+         with({{"iat", NOW + 120}}),
+         PLAIN,
+         "",
+         false,
+         ""},
+        {"not before past skew",
+         none,
+         with({{"nbf", NOW + 120}}),
+         PLAIN,
+         "",
+         false,
+         ""},
+        {"expired past skew",
+         none,
+         with({{"iat", NOW - 600}, {"exp", NOW - 120}}),
+         PLAIN,
+         "",
+         false,
          ""},
         {"empty", none, none, RAW, "", false, ""},
         {"two parts", none, none, RAW, "a.b", false, ""},
@@ -247,8 +357,10 @@ TEST_CASE(
     };
     const Ref<netw::NetwIdToken> token = discord_token();
     token->keys_answered(
-        id_token::KEYS_RESULT_SUCCESS, 200,
-        jwks_of(listing({jwk_of("fixture-rsa", modulus_of(issuer))})), 0
+        id_token::KEYS_RESULT_SUCCESS,
+        200,
+        jwks_of(listing({jwk_of("fixture-rsa", modulus_of(issuer))})),
+        0
     );
     for (const Row &row : rows) {
         NETW_FORMAT_TEXT(label, row.label);
@@ -258,7 +370,8 @@ TEST_CASE(
             row_claims.erase(String("exp"));
         }
         const String made = signed_token(
-            merged(header, row.header), row_claims,
+            merged(header, row.header),
+            row_claims,
             row.twist == OTHER_SIGNER ? other : issuer
         );
         const PackedStringArray parts = made.split(".");
@@ -276,11 +389,14 @@ TEST_CASE(
             text = String(row.raw);
         }
         const Variant proof = row.twist == NOT_AN_ARRAY
-            ? Variant(netw::gd::var_to_bytes(
-                  proof_of(text, proof_key, String(CHALLENGE))
-              ))
+            ? Variant(
+                  netw::gd::var_to_bytes(
+                      proof_of(text, proof_key, String(CHALLENGE))
+                  )
+              )
             : Variant(proof_of(
-                  text, proof_key,
+                  text,
+                  proof_key,
                   String(row.twist == ANOTHER_CHALLENGE ? "another" : CHALLENGE)
               ));
         const Ref<netw::NetwJoinRequest> request
@@ -312,12 +428,20 @@ TEST_CASE(
         const char *instance;
     };
     const Shape nakama = {
-        "netw-nakama", "my-game", "nakama",
-        "2ca95571-c4b7-4258-8ff2-f49734f40b38", "ana", "",
+        "netw-nakama",
+        "my-game",
+        "nakama",
+        "2ca95571-c4b7-4258-8ff2-f49734f40b38",
+        "ana",
+        "",
     };
     const Shape worker = {
-        "https://1561065725962092666.discordsays.com", APP, "discord",
-        SUBJECT, "Ana", "i-1520000000000000000-gc-1-2",
+        "https://1561065725962092666.discordsays.com",
+        APP,
+        "discord",
+        SUBJECT,
+        "Ana",
+        "i-1520000000000000000-gc-1-2",
     };
     struct Row {
         const char *label;
@@ -332,9 +456,17 @@ TEST_CASE(
         {"fixed key ignores a key id", &nakama, true, "unlisted", true, true},
         {"fixed key, another signer", &nakama, true, "", false, false},
         {"no fixed key, no key id", &nakama, false, "", true, false},
-        {"activity worker token, instance claim unread", &worker, true, "",
-         true, true},
-        {"activity worker token, another signer", &worker, true, "", false,
+        {"activity worker token, instance claim unread",
+         &worker,
+         true,
+         "",
+         true,
+         true},
+        {"activity worker token, another signer",
+         &worker,
+         true,
+         "",
+         false,
          false},
     };
     for (const Row &row : rows) {
@@ -359,36 +491,50 @@ TEST_CASE(
         token->set_audience(shape.aud);
         token->set_prefix(shape.prefix);
         token->keys_answered(
-            id_token::KEYS_RESULT_SUCCESS, 200,
-            jwks_of(listing({jwk_of("listed", modulus_of(issuer))})), 0
+            id_token::KEYS_RESULT_SUCCESS,
+            200,
+            jwks_of(listing({jwk_of("listed", modulus_of(issuer))})),
+            0
         );
         if (row.fixed_key) {
             token->set_key(public_key(issuer));
         }
         Dictionary header = with({
-            {"alg", String("RS256")}, {"typ", String("JWT")},
+            {"alg", String("RS256")},
+            {"typ", String("JWT")},
         });
         if (String(row.kid).length() > 0) {
             header["kid"] = String(row.kid);
         }
         const String made = signed_token(
-            header, claims, row.signed_by_issuer ? issuer : other
+            header,
+            claims,
+            row.signed_by_issuer ? issuer : other
         );
         const Ref<netw::NetwJoinRequest> request
             = request_for(String(CHALLENGE));
 
         CHECK(answered_ok(token->verify_at(
-            request, proof_of(made, proof_key, String(CHALLENGE)), NOW, 1
+            request,
+            proof_of(made, proof_key, String(CHALLENGE)),
+            NOW,
+            1
         )));
         CHECK(request->get_accounts().size() == (row.proves ? 1 : 0));
         if (row.proves && request->get_accounts().size() == 1) {
-            CHECK(bool(
-                request->get_accounts()[0]
-                == String(shape.prefix) + String(":") + String(shape.sub)
-            ));
+            CHECK(
+                bool(
+                    request->get_accounts()[0]
+                    == String(shape.prefix) + String(":") + String(shape.sub)
+                )
+            );
             CHECK(bool(request->get_account_name() == String()));
-            CHECK(bool(request->name_of(request->get_accounts()[0])
-                       == String(shape.name)));
+            CHECK(
+                bool(
+                    request->name_of(request->get_accounts()[0])
+                    == String(shape.name)
+                )
+            );
         }
     }
 }
@@ -417,42 +563,69 @@ TEST_CASE(
         PackedByteArray body;
         bool holds;
     };
-    const auto one = [](const Dictionary &p_jwk) {
-        return jwks_of(listing({p_jwk}));
-    };
+    const auto one
+        = [](const Dictionary &p_jwk) { return jwks_of(listing({p_jwk})); };
     const String filler = String("x").repeat(id_token::MAX_KEYS_BYTES);
     const std::vector<Row> rows = {
         {"valid", 0, 200, one(jwk), true},
         {"defaults for alg, use and key_ops", 0, 200, one(bare), true},
-        {"not RSA", 0, 200, one(merged(jwk, with({{"kty", String("EC")}}))),
+        {"not RSA",
+         0,
+         200,
+         one(merged(jwk, with({{"kty", String("EC")}}))),
          false},
-        {"another algorithm", 0, 200,
-         one(merged(jwk, with({{"alg", String("HS256")}}))), false},
-        {"encryption key", 0, 200,
-         one(merged(jwk, with({{"use", String("enc")}}))), false},
-        {"signing operation", 0, 200,
+        {"another algorithm",
+         0,
+         200,
+         one(merged(jwk, with({{"alg", String("HS256")}}))),
+         false},
+        {"encryption key",
+         0,
+         200,
+         one(merged(jwk, with({{"use", String("enc")}}))),
+         false},
+        {"signing operation",
+         0,
+         200,
          one(merged(jwk, with({{"key_ops", listing({String("sign")})}}))),
          false},
-        {"another exponent", 0, 200,
-         one(merged(jwk, with({{"e", String("AAEAAQ")}}))), false},
-        {"key id not text", 0, 200,
-         one(merged(jwk, with({{"kid", int64_t(3)}}))), false},
-        {"modulus padded", 0, 200,
-         one(merged(jwk, with({{"n", String("AQAB==")}}))), false},
+        {"another exponent",
+         0,
+         200,
+         one(merged(jwk, with({{"e", String("AAEAAQ")}}))),
+         false},
+        {"key id not text",
+         0,
+         200,
+         one(merged(jwk, with({{"kid", int64_t(3)}}))),
+         false},
+        {"modulus padded",
+         0,
+         200,
+         one(merged(jwk, with({{"n", String("AQAB==")}}))),
+         false},
         {"modulus too short", 0, 200, one(jwk_of("k", small)), false},
         {"modulus leading bit clear", 0, 200, one(jwk_of("k", low)), false},
         {"modulus even", 0, 200, one(jwk_of("k", even)), false},
-        {"other entries skipped", 0, 200,
-         jwks_of(listing({String("junk"), jwk})), true},
+        {"other entries skipped",
+         0,
+         200,
+         jwks_of(listing({String("junk"), jwk})),
+         true},
         {"duplicate key id", 0, 200, jwks_of(listing({jwk, jwk})), false},
-        {"no keys array", 0, 200,
+        {"no keys array",
+         0,
+         200,
          JSON::stringify(with({{"key", listing({jwk})}})).to_utf8_buffer(),
          false},
         {"server error", 0, 500, one(jwk), false},
         {"not received", 2, 0, one(jwk), false},
-        {"over the size limit", 0, 200,
-         JSON::stringify(with({{"keys", listing({jwk})}, {"pad", filler}}))
-             .to_utf8_buffer(),
+        {"over the size limit",
+         0,
+         200,
+         JSON::stringify(
+             with({{"keys", listing({jwk})}, {"pad", filler}})
+         ).to_utf8_buffer(),
          false},
     };
     for (const Row &row : rows) {
@@ -508,9 +681,11 @@ TEST_CASE(
         return proof_of(
             signed_token(
                 with({{"alg", String("RS256")}, {"kid", String(p_kid)}}),
-                discord_claims(proof_key), other
+                discord_claims(proof_key),
+                other
             ),
-            proof_key, String(CHALLENGE)
+            proof_key,
+            String(CHALLENGE)
         );
     };
 
@@ -546,7 +721,9 @@ TEST_CASE(
     NETW_CHECK_EQ(cooling->get_accounts().size(), 0);
 
     const Ref<netw::NetwPromise> later = promise_in(token->verify_at(
-        request_for(String(CHALLENGE)), proof_by("unknown-key"), NOW,
+        request_for(String(CHALLENGE)),
+        proof_by("unknown-key"),
+        NOW,
         ticks() + id_token::FETCH_COOLDOWN_MSEC + 1000
     ));
     CHECK(later.is_valid());
@@ -583,10 +760,14 @@ TEST_CASE(
     const Ref<netw::NetwJoinRequest> request = request_for(String(CHALLENGE));
     const String made = signed_token(
         with({{"alg", String("RS256")}, {"kid", String("fixture-rsa")}}),
-        discord_claims(proof_key), issuer
+        discord_claims(proof_key),
+        issuer
     );
     CHECK(answered_ok(token->verify_at(
-        request, proof_of(made, proof_key, String(CHALLENGE)), NOW, 1
+        request,
+        proof_of(made, proof_key, String(CHALLENGE)),
+        NOW,
+        1
     )));
     NETW_CHECK_EQ(request->get_accounts().size(), 1);
     NETW_CHECK_EQ(token->downloads, 0);
@@ -659,7 +840,8 @@ Ref<TokenDesk> desk_for(const char *p_issuer, TokenDesk::Mode p_mode) {
     desk->signer = private_key(netw_test::ISSUER_RSA_KEY);
     desk->expires = double(NOW + 3600);
     netw::NetwIdToken::provide(
-        String(p_issuer), callable_mp(desk.ptr(), &TokenDesk::fetch)
+        String(p_issuer),
+        callable_mp(desk.ptr(), &TokenDesk::fetch)
     );
     return desk;
 }
@@ -716,8 +898,7 @@ TEST_CASE(
     "key whose hash was the token's nonce, and that key's signature of the "
     "challenge, and a server with the issuer's key proves its account"
 ) {
-    const Ref<TokenDesk> desk
-        = desk_for("https://game.test", TokenDesk::MINT);
+    const Ref<TokenDesk> desk = desk_for("https://game.test", TokenDesk::MINT);
     const Variant proof = settled(
         client_of("https://game.test")->prove_at(String(CHALLENGE), NOW)
     );
@@ -733,9 +914,13 @@ TEST_CASE(
     CHECK(bool(desk->nonces[0] == pem.sha256_text()));
     Ref<CryptoKey> proving = netw::gd::new_crypto_key();
     CHECK(proving->load_from_string(pem, true) == OK);
-    CHECK(netw::gd::rs256_verify(
-        String(CHALLENGE).sha256_buffer(), parts[2], proving
-    ));
+    CHECK(
+        netw::gd::rs256_verify(
+            String(CHALLENGE).sha256_buffer(),
+            parts[2],
+            proving
+        )
+    );
 
     Ref<netw::NetwIdToken> server;
     server.instantiate();
@@ -745,16 +930,16 @@ TEST_CASE(
     server->set_key(public_key(desk->signer));
     const Ref<netw::NetwJoinRequest> request = request_for(String(CHALLENGE));
     CHECK(answered_ok(server->verify_at(request, proof, NOW, 1)));
-    CHECK(bool(request->get_accounts()
-               == PackedStringArray({"game:desk-player"})));
+    CHECK(
+        bool(request->get_accounts() == PackedStringArray({"game:desk-player"}))
+    );
 }
 
 TEST_CASE(
     "[Networked][IdToken][Hosted] prove reuses its token and key while more "
     "than five minutes of the token remain, and renews both after that"
 ) {
-    const Ref<TokenDesk> desk
-        = desk_for("https://reuse.test", TokenDesk::MINT);
+    const Ref<TokenDesk> desk = desk_for("https://reuse.test", TokenDesk::MINT);
     const Ref<netw::NetwIdToken> client = client_of("https://reuse.test");
     const int64_t expires = NOW + 3600;
     struct Row {
@@ -837,9 +1022,9 @@ TEST_CASE(
         const String held
             = desk->mint(held_pem.sha256_text(), double(NOW + row.left));
         netw::NetwIdToken::hold(
-            String(row.issuer), held,
-            row.matching_key ? proof_key
-                             : private_key(netw_test::OTHER_RSA_KEY)
+            String(row.issuer),
+            held,
+            row.matching_key ? proof_key : private_key(netw_test::OTHER_RSA_KEY)
         );
 
         const Variant proof
@@ -876,7 +1061,8 @@ TEST_CASE(
                               ->prove_at(String(CHALLENGE), NOW);
     netw::NetwIdToken::hold(
         String("https://stray-held.test"),
-        later->mint(held_pem.sha256_text(), double(NOW + 3600)), proof_key
+        later->mint(held_pem.sha256_text(), double(NOW + 3600)),
+        proof_key
     );
     CHECK(later->waiting.is_valid());
     if (later->waiting.is_valid()) {

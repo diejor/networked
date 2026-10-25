@@ -139,8 +139,8 @@ TEST_CASE(
 ) {
     netw_test::FaultWatch expected_faults;
     expected_faults.expect_warning(
-        "[warn][spawn] A spawn for route * was dropped, because its"
-        " MultiplayerSpawner never appeared on this peer.",
+        "[warn][spawn] A spawn was dropped, because its MultiplayerSpawner"
+        " never appeared on this peer.",
         1
     );
 

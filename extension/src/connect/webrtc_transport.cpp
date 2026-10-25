@@ -549,9 +549,8 @@ Dictionary WebRTCTransport::diagnostics(int64_t p_peer_id) const {
 }
 
 String WebRTCTransport::server_identity(int64_t p_peer_id) const {
-    return session_core != nullptr
-        ? session_core->server_fingerprint(p_peer_id)
-        : String();
+    return session_core != nullptr ? session_core->server_fingerprint(p_peer_id)
+                                   : String();
 }
 
 void WebRTCTransport::close() {

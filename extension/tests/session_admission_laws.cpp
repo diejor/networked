@@ -1,8 +1,8 @@
-#include "support/fault_log.h"
-#include "support/netw_test.h"
-#include "support/frame_drive.h"
 #include "support/directory_stubs.h"
+#include "support/fault_log.h"
+#include "support/frame_drive.h"
 #include "support/netw_call_log.h"
+#include "support/netw_test.h"
 
 #include "godot/class_db.hpp"
 #include "godot/multiplayer.hpp"
@@ -144,10 +144,11 @@ public:
         if (!account.is_empty() && p_proof.get_type() == Variant::STRING
             && String(p_proof) == answer_to(p_request->get_challenge())) {
             p_request->add_account(
-                by_username ? account + String(":")
-                        + String(p_request->get_username())
-                            : account,
-                name, answers_challenge
+                by_username
+                    ? account + String(":") + String(p_request->get_username())
+                    : account,
+                name,
+                answers_challenge
             );
         }
         return hold_verify ? Variant(hold()) : Variant(int64_t(verdict));
@@ -262,9 +263,8 @@ Array proofs_for(
     Array proofs;
     for (const TestAccount *row : p_rows) {
         proofs.push_back(
-            row->account.is_empty() ? Variant() : Variant(row->answer_to(
-                p_challenge
-            ))
+            row->account.is_empty() ? Variant()
+                                    : Variant(row->answer_to(p_challenge))
         );
     }
     return proofs;
@@ -454,7 +454,9 @@ TEST_CASE(
                 join_as(host, "ana", 9);
             } else if (row.awaited == AWAIT_VERIFY) {
                 join_proving(
-                    host, 9, proofs_for({held.ptr()}, String(CHALLENGE))
+                    host,
+                    9,
+                    proofs_for({held.ptr()}, String(CHALLENGE))
                 );
             } else {
                 host->session_submit_join(StringName("host"), Array());
@@ -533,15 +535,20 @@ TEST_CASE(
     const Ref<TestAccount> second = account_row("second", "second:2");
     first->events = &events;
     second->events = &events;
-    admit_through(gate)->accept(as_provider(first))->accept(
-        as_provider(second)
-    );
+    admit_through(gate)
+        ->accept(as_provider(first))
+        ->accept(as_provider(second));
 
     host->session_submit_join(StringName("host"), Array());
 
-    CHECK(bool(events == PackedStringArray({
-        "prove first", "prove second", "verify first", "verify second"
-    })));
+    CHECK(
+        bool(
+            events
+            == PackedStringArray(
+                {"prove first", "prove second", "verify first", "verify second"}
+            )
+        )
+    );
     const Ref<netw::NetwJoinRequest> request = gate->get("request");
     REQUIRE(request.is_valid());
     REQUIRE(first->heard.size() == 1);
@@ -601,16 +608,18 @@ TEST_CASE(
         Node *gate = gate_on(branch, ASYNC_GATE);
         const Ref<TestAccount> first = account_row("first", "first:1");
         const Ref<TestAccount> second = account_row("second", "second:2");
-        admit_through(gate)->accept(as_provider(first))->accept(
-            as_provider(second)
-        );
+        admit_through(gate)
+            ->accept(as_provider(first))
+            ->accept(as_provider(second));
         Array sent;
         for (int at = 0; at < row.sent; ++at) {
             sent.push_back(first->answer_to(String(CHALLENGE)));
         }
 
         join_proving(
-            host, 9, row.array ? Variant(sent) : Variant(String("forged"))
+            host,
+            9,
+            row.array ? Variant(sent) : Variant(String("forged"))
         );
 
         CHECK(host->peer_get_player(9).is_null());
@@ -634,12 +643,13 @@ TEST_CASE(
     const Ref<TestAccount> first = account_row("first", "first:1");
     const Ref<TestAccount> second = account_row("second", "second:2");
     first->verdict = ERR_UNAUTHORIZED;
-    admit_through(gate)->accept(as_provider(first))->accept(
-        as_provider(second)
-    );
+    admit_through(gate)
+        ->accept(as_provider(first))
+        ->accept(as_provider(second));
 
     join_proving(
-        host, 9,
+        host,
+        9,
         proofs_for({first.ptr(), second.ptr()}, String(CHALLENGE))
     );
 
@@ -728,24 +738,48 @@ TEST_CASE(
         bool first_bound;
     };
     const Row rows[] = {
-        {"bound challenge", true, {{"x:1", "X", true, false}},
-         {"x:1"}, "X", true},
-        {"unbound challenge", false, {{"x:1", "X", true, false}},
-         {"x:1"}, "X", false},
-        {"answers no challenge", true, {{"x:1", "X", false, false}},
-         {"x:1"}, "X", false},
-        {"vouched later", false,
+        {"bound challenge",
+         true,
+         {{"x:1", "X", true, false}},
+         {"x:1"},
+         "X",
+         true},
+        {"unbound challenge",
+         false,
+         {{"x:1", "X", true, false}},
+         {"x:1"},
+         "X",
+         false},
+        {"answers no challenge",
+         true,
+         {{"x:1", "X", false, false}},
+         {"x:1"},
+         "X",
+         false},
+        {"vouched later",
+         false,
          {{"x:1", "", false, false}, {"x:1", "V", false, true}},
-         {"x:1"}, "V", true},
-        {"first name kept", true,
+         {"x:1"},
+         "V",
+         true},
+        {"first name kept",
+         true,
          {{"x:1", "First", true, false}, {"x:1", "Second", true, false}},
-         {"x:1"}, "First", true},
-        {"empty name filled", false,
+         {"x:1"},
+         "First",
+         true},
+        {"empty name filled",
+         false,
          {{"x:1", "", true, false}, {"x:1", "Second", true, false}},
-         {"x:1"}, "Second", false},
-        {"two accounts in order", true,
+         {"x:1"},
+         "Second",
+         false},
+        {"two accounts in order",
+         true,
          {{"y:2", "Y", true, false}, {"x:1", "X", false, false}},
-         {"y:2", "x:1"}, "Y", true},
+         {"y:2", "x:1"},
+         "Y",
+         true},
     };
     for (const Row &row : rows) {
         NETW_FORMAT_TEXT(label, row.label);
@@ -753,17 +787,22 @@ TEST_CASE(
         Ref<netw::NetwJoinRequest> request;
         request.instantiate();
         request->bind_to(
-            9, StringName("ana"), Array(), String(CHALLENGE),
+            9,
+            StringName("ana"),
+            Array(),
+            String(CHALLENGE),
             row.challenge_bound
         );
         for (const Add &add : row.adds) {
             if (add.vouched) {
                 request->add_vouched_account(
-                    String(add.account), String(add.name)
+                    String(add.account),
+                    String(add.name)
                 );
             } else {
                 request->add_account(
-                    String(add.account), String(add.name),
+                    String(add.account),
+                    String(add.name),
                     add.answers_challenge
                 );
             }
@@ -841,9 +880,15 @@ TEST_CASE(
         const String made
             = hosted.host->session_bind_challenge(String(CHALLENGE), 9, bound);
         CHECK(bound == directory);
-        CHECK(bool(made == netw::auth::bind_challenge(
-            String(CHALLENGE), directory ? String("test:host") : String()
-        )));
+        CHECK(
+            bool(
+                made
+                == netw::auth::bind_challenge(
+                    String(CHALLENGE),
+                    directory ? String("test:host") : String()
+                )
+            )
+        );
     }
 }
 
@@ -858,20 +903,24 @@ TEST_CASE(
     IdentityDirectory *directory = memnew(IdentityDirectory);
     client->service_register(directory, nullptr);
     const Ref<netw::NetwConnection> connection = client->get_connection();
-    const Ref<netw::NetwEndpoint> endpoint = connection->add(
-        StringName("StubLobbyPeer"), String("77"), String()
-    );
+    const Ref<netw::NetwEndpoint> endpoint
+        = connection->add(StringName("StubLobbyPeer"), String("77"), String());
     connection->join(endpoint, Dictionary());
     client->connect_plane().on_poll(0.0);
 
     bool bound = false;
-    const String made = client->session_bind_challenge(
-        String(CHALLENGE), 1, bound
-    );
+    const String made
+        = client->session_bind_challenge(String(CHALLENGE), 1, bound);
     CHECK(bound);
-    CHECK(bool(made == netw::auth::bind_challenge(
-        String(CHALLENGE), String("test:host")
-    )));
+    CHECK(
+        bool(
+            made
+            == netw::auth::bind_challenge(
+                String(CHALLENGE),
+                String("test:host")
+            )
+        )
+    );
 
     client->NETW_API_VIRTUAL(set_multiplayer_peer)(Ref<MultiplayerPeer>());
     client->service_unregister(directory, nullptr);
@@ -931,22 +980,32 @@ TEST_CASE(
         bool first_bound;
     };
     const Row rows[] = {
-        {"two providers over ENet", false,
+        {"two providers over ENet",
+         false,
          {{"a", "a:1", "Ann", true}, {"b", "b:2", "Bea", true}},
-         {"a:1", "b:2"}, "Ann", false},
-        {"a provider with no account", false,
+         {"a:1", "b:2"},
+         "Ann",
+         false},
+        {"a provider with no account",
+         false,
          {{"a", "", "", true}, {"b", "b:2", "Bea", true}},
-         {"b:2"}, "Bea", false},
-        {"providers before the transport", true,
+         {"b:2"},
+         "Bea",
+         false},
+        {"providers before the transport",
+         true,
          {{"a", "a:1", "Ann", true}},
-         {"a:1", "test:9"}, "Ann", true},
-        {"the transport vouches a provider's account", true,
+         {"a:1", "test:9"},
+         "Ann",
+         true},
+        {"the transport vouches a provider's account",
+         true,
          {{"t", "test:9", "", false}},
-         {"test:9"}, "Verified Name", true},
-        {"the transport alone", true, {},
-         {"test:9"}, "Verified Name", true},
-        {"nothing proven", false, {},
-         {}, "", false},
+         {"test:9"},
+         "Verified Name",
+         true},
+        {"the transport alone", true, {}, {"test:9"}, "Verified Name", true},
+        {"nothing proven", false, {}, {}, "", false},
     };
     for (const Row &row : rows) {
         NETW_FORMAT_TEXT(label, row.label);
@@ -961,9 +1020,8 @@ TEST_CASE(
             row.directory ? String("test:host") : String()
         );
         for (const Provider &provider : row.providers) {
-            const Ref<TestAccount> account = account_row(
-                provider.label, provider.account, provider.name
-            );
+            const Ref<TestAccount> account
+                = account_row(provider.label, provider.account, provider.name);
             account->answers_challenge = provider.answers_challenge;
             config->accept(as_provider(account));
             proofs.push_back(
@@ -989,9 +1047,8 @@ TEST_CASE(
             CHECK(account->account_during_verify.is_empty());
             proven_before += account->account.is_empty() ? 0 : 1;
         }
-        const String first = row.accounts.is_empty()
-            ? String()
-            : row.accounts[0];
+        const String first
+            = row.accounts.is_empty() ? String() : row.accounts[0];
         CHECK(bool(String(gate->get("account_seen")) == first));
         CHECK(bool(String(gate->get("name_seen")) == String(row.first_name)));
         CHECK(request->is_bound(first) == row.first_bound);
@@ -1123,14 +1180,17 @@ public:
             client_account->hold_prove = true;
             netw::Netw::configure_admission(
                 Callable(host_gate, StringName("admit"))
-            )->accept(as_provider(host_account));
+            )
+                ->accept(as_provider(host_account));
             netw::Netw::configure_admission(
                 Callable(client_gate, StringName("admit"))
-            )->accept(as_provider(client_account));
+            )
+                ->accept(as_provider(client_account));
             host->session_prepare_join(StringName("host"), Array());
             client->session_prepare_join(StringName("client"), Array());
             hosting = host->get_connection()->host(
-                StringName(peer_class), settings()
+                StringName(peer_class),
+                settings()
             );
             phase = 1;
             return true;
@@ -1157,9 +1217,8 @@ public:
                 const Ref<netw::NetwEndpoint> endpoint
                     = client->get_connection()->add(
                         StringName(peer_class),
-                        signaler.is_valid()
-                            ? address
-                            : String("127.0.0.1:")
+                        signaler.is_valid() ? address
+                                            : String("127.0.0.1:")
                                 + address.get_slice(String(":"), 1),
                         String()
                     );
@@ -1198,11 +1257,8 @@ public:
                 if (int(host_gate->get("calls")) < 2) {
                     break;
                 }
-                evidence.waited_for_admission
-                    = client->player_local().is_null()
-                    && host->peer_get_player(
-                        client->get_unique_id()
-                    ).is_null();
+                evidence.waited_for_admission = client->player_local().is_null()
+                    && host->peer_get_player(client->get_unique_id()).is_null();
                 const Ref<netw::NetwJoinRequest> request
                     = host_gate->get("request");
                 evidence.account_bound = request.is_valid()
@@ -1225,9 +1281,8 @@ public:
                 if (client->player_local().is_null()) {
                     break;
                 }
-                evidence.admitted = host->peer_get_player(
-                    client->get_unique_id()
-                ).is_valid();
+                evidence.admitted
+                    = host->peer_get_player(client->get_unique_id()).is_valid();
                 phase = 5;
                 break;
             }
@@ -1259,15 +1314,23 @@ public:
 };
 
 NETW_FRAME_SCENARIO(
-    ProofScenario, proof_scenario, &proof_evidence, "ENetMultiplayerPeer"
+    ProofScenario,
+    proof_scenario,
+    &proof_evidence,
+    "ENetMultiplayerPeer"
 );
 NETW_FRAME_SCENARIO(
-    ProofScenario, webrtc_proof_scenario, &webrtc_proof_evidence,
+    ProofScenario,
+    webrtc_proof_scenario,
+    &webrtc_proof_evidence,
     "WebRTCMultiplayerPeer"
 );
 NETW_FRAME_SCENARIO(
-    ProofScenario, abandoned_proof_scenario, &abandoned_proof_evidence,
-    "ENetMultiplayerPeer", true
+    ProofScenario,
+    abandoned_proof_scenario,
+    &abandoned_proof_evidence,
+    "ENetMultiplayerPeer",
+    true
 );
 
 TEST_CASE(
@@ -1396,25 +1459,32 @@ TEST_CASE(
         const Ref<netw::NetwPlayer> second = host->peer_get_player(11);
         CHECK(second.is_valid() == row.replaced);
         CHECK(first->get_is_active() == !row.replaced);
-        CHECK(bool(host->player_find_account("test:ana")
-                   == (row.replaced ? second : first)));
+        CHECK(
+            bool(
+                host->player_find_account("test:ana")
+                == (row.replaced ? second : first)
+            )
+        );
         NETW_CHECK_EQ(
             int(gate->get(StringName("seats"))),
             row.replaced ? 2 : 1
         );
         if (!row.replaced) {
-            CHECK(String(host->session_refusal(11)).contains("already playing"));
+            CHECK(
+                String(host->session_refusal(11)).contains("already playing")
+            );
             NETW_CHECK_EQ(heard.count(StringName("left")), 0);
             release_branch(host, branch);
             continue;
         }
         NETW_REQUIRE_EQ(heard.count(StringName("left")), 1);
-        CHECK(bool(Ref<netw::NetwPlayer>(heard.args(StringName("left"))[0])
-                   == first));
-        NETW_CHECK_EQ(
-            int(heard.args(StringName("left"))[1]),
-            row.left_reason
+        CHECK(
+            bool(
+                Ref<netw::NetwPlayer>(heard.args(StringName("left"))[0])
+                == first
+            )
         );
+        NETW_CHECK_EQ(int(heard.args(StringName("left"))[1]), row.left_reason);
         const Vector<StringName> order = heard.order();
         NETW_REQUIRE_EQ(int(order.size()), 3);
         CHECK(bool(order[1] == StringName("left")));

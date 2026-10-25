@@ -274,8 +274,7 @@ TEST_CASE(
     const Ref<NetwPromise> grab
         = claimant->claim_control(Control::HOLD_EXCLUSIVE);
     grab->then(log.callable("grab"));
-    const Ref<NetwPromise> toss
-        = claimant->claim_control(Control::HOLD_SOFT);
+    const Ref<NetwPromise> toss = claimant->claim_control(Control::HOLD_SOFT);
     toss->then(log.callable("throw"));
     CHECK_FALSE(toss->get_is_settled());
     CHECK(claimant->get_is_controlled_locally());

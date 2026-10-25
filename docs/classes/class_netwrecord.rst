@@ -33,7 +33,7 @@ Description
 
 \ A stored name can also be used as a property, so ``row.health`` calls :ref:`get_value()<class_NetwRecord_method_get_value>` and assigning to it calls :ref:`set_value()<class_NetwRecord_method_set_value>`. The record's own properties, such as ``resource_name`` or ``script``, keep their normal meaning.
 
-To supply your own storage, override :ref:`_set_value()<class_NetwRecord_private_method__set_value>`, :ref:`_get_value()<class_NetwRecord_private_method__get_value>`, :ref:`_has_value()<class_NetwRecord_private_method__has_value>` and :ref:`_get_property_names()<class_NetwRecord_private_method__get_property_names>`. Override :ref:`_to_dict()<class_NetwRecord_private_method__to_dict>` and :ref:`_from_dict()<class_NetwRecord_private_method__from_dict>` to rename stored names. :ref:`DictionaryRecord<class_DictionaryRecord>` is the storage this addon ships.
+To supply your own storage, override :ref:`_set_value()<class_NetwRecord_private_method__set_value>`, :ref:`_get_value()<class_NetwRecord_private_method__get_value>`, :ref:`_has_value()<class_NetwRecord_private_method__has_value>` and :ref:`_get_property_names()<class_NetwRecord_private_method__get_property_names>`. Override :ref:`_to_dict()<class_NetwRecord_private_method__to_dict>` and :ref:`_from_dict()<class_NetwRecord_private_method__from_dict>` to rename stored names. :ref:`DictionaryRecord<class_DictionaryRecord>` is the storage this addon provides.
 
 .. rst-class:: classref-reftable-group
 

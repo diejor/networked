@@ -10,11 +10,9 @@ namespace Networked;
 /// </summary>
 /// <remarks>
 /// <b>Levels</b> A level is spawned like any other node, with
-/// <see cref="Netw.ConfigureScene"/> in its root. A player receives the level
-/// while one of their <see cref="NetwPlayer.Entities"/> is in it, so spawn
-/// players into it with <see cref="Netw.SpawnPlayer"/>, here and in the
-/// <see cref="Netw.ConfigureJoin"/> handler. <see cref="NetwScene"/> covers the
-/// rest.
+/// <see cref="Netw.ConfigureScene"/> in its root. Spawn a player into it with
+/// <see cref="Netw.SpawnPlayer"/> and that player's peer receives the level.
+/// <see cref="NetwScene"/> covers the rest.
 /// <code>
 /// # arena.gd
 /// func _init() -&gt; void:
@@ -38,21 +36,6 @@ namespace Networked;
 ///     for player: NetwPlayer in Netw.session(self).players:
 ///         arena.add_child(Netw.spawn_player(player, make_car))
 /// </code>
-/// <para>
-/// <b>Accounts</b> <see cref="Netw.ConfigureAdmission"/> decides who joins.
-/// Each <see cref="NetwAccountProvider"/> added with
-/// <see cref="NetwAdmissionConfig.Accept"/> proves an account before the
-/// handler runs, and the player keeps it as <see cref="NetwPlayer.Account"/>.
-/// <see cref="NetwIdToken"/> proves one with a token signed by a backend the
-/// server trusts. The Steam, Nakama and Discord addons each ship a provider.
-/// <code>
-/// func _init() -&gt; void:
-///     Netw.configure_admission(admit).accept(id_token)
-///
-/// func admit(request: NetwJoinRequest) -&gt; Error:
-///     return OK if request.account else ERR_UNAUTHORIZED
-/// </code>
-/// </para>
 /// </remarks>
 public sealed class Netw : NetwRefCounted
 {
@@ -274,14 +257,21 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "configure_admission", 2472650386UL);
 
     /// <summary>
-    /// Declares the session's admission handler and returns its
-    /// <see cref="NetwAdmissionConfig"/>. The server calls
-    /// <paramref name="handler"/> with each <see cref="NetwJoinRequest"/> once
-    /// every <see cref="NetwAccountProvider"/> accepted with
-    /// <see cref="NetwAdmissionConfig.Accept"/> has verified, and admits the
-    /// peer when it returns <c>@GlobalScope.OK</c>. Verifying and the handler
-    /// together may <c>await</c> for up to
+    /// Declares who may join the session.
+    /// <code>
+    /// func _init() -&gt; void:
+    ///     Netw.configure_admission(admit).accept(id_token)
+    ///
+    /// func admit(request: NetwJoinRequest) -&gt; Error:
+    ///     return OK if request.account else ERR_UNAUTHORIZED
+    /// </code>
+    /// <para>
+    /// A peer joins when <paramref name="handler"/> returns
+    /// <c>@GlobalScope.OK</c>. Each <see cref="NetwAccountProvider"/> passed to
+    /// <see cref="NetwAdmissionConfig.Accept"/> proves its account before
+    /// <paramref name="handler"/> runs, and both may <c>await</c> within
     /// <see cref="NetwMultiplayer.AuthTimeout"/>.
+    /// </para>
     /// </summary>
     public static NetwAdmissionConfig ConfigureAdmission(Callable handler)
     {
@@ -578,12 +568,8 @@ public sealed class Netw : NetwRefCounted
         NetwApi.MethodBind("Netw", "configure_entity", 1743742259UL);
 
     /// <summary>
-    /// Declares <paramref name="node"/> as a root before it enters the tree. A
-    /// node placed in a scene that every peer opens needs no
-    /// <see cref="Netw.Spawn"/>. Every peer finds it by its path from
-    /// <see cref="NetwSession.Root"/>, and a peer that does not have it reports
-    /// it by name and path. <see cref="NetwEntity.Of"/> finds an existing
-    /// <see cref="NetwEntity"/>.
+    /// Declares <paramref name="node"/> as a root before it enters the tree.
+    /// <see cref="NetwEntity.Of"/> finds an existing <see cref="NetwEntity"/>.
     /// </summary>
     public static NetwEntity ConfigureEntity(Node node)
     {
@@ -946,13 +932,11 @@ public sealed class Netw : NetwRefCounted
     /// Calls <paramref name="callable"/> on every peer that can see the node,
     /// and returns a <see cref="NetwGroupPromise"/> with each return value. The
     /// promise fails at once when the node is not part of a spawned
-    /// <see cref="NetwEntity"/>. A method declared with
-    /// <see cref="NetwMemberConfig.CallLocal"/> or a <c>call_local</c>
-    /// [annotation @GDScript.@rpc] also runs on this peer, and its value joins
-    /// <see cref="NetwGroupPromise.Results"/> under this peer's id. Otherwise
-    /// this peer is not asked. The method may <c>await</c>, as for
-    /// <see cref="Netw.Request"/>. A method that takes longer than 5 seconds
-    /// declares its own deadline with <see cref="NetwMemberConfig.Timeout"/>.
+    /// <see cref="NetwEntity"/>. This peer is asked too when the method is
+    /// <c>call_local</c>, set through [annotation @GDScript.@rpc] or
+    /// <see cref="NetwMemberConfig.CallLocal"/>. The method may <c>await</c>
+    /// for 5 seconds, and <see cref="NetwMemberConfig.Timeout"/> sets a longer
+    /// deadline.
     /// <code>
     /// public partial class SceneManager : Node
     /// {
@@ -1502,13 +1486,11 @@ public sealed class Netw : NetwRefCounted
     /// <see cref="NetwPlayer.Scene"/> when it moves. For a level made with
     /// <see cref="NetwSceneConfig.Isolated"/>, pass the node
     /// <see cref="Netw.Spawn"/> returned or the level's root, and the node
-    /// <see cref="Netw.Spawn"/> returned moves. Unlike
-    /// <see cref="Node.Reparent"/>, it does not fire <see cref="Area3D"/> and
-    /// <see cref="Area2D"/> enter and exit signals during the move, which works
-    /// around this issue. An overlap that really changed during the move is
-    /// reported after it with the body and area enter and exit signals, and the
-    /// shape signals are not sent for it. Otherwise <see cref="Node.Reparent"/>
-    /// works fine. The promise fails with
+    /// <see cref="Netw.Spawn"/> returned moves. <see cref="Area3D"/> and
+    /// <see cref="Area2D"/> do not fire enter and exit signals during the move
+    /// (Godot issue 14578). An overlap that really changed during the move is
+    /// reported after it with the body and area enter and exit signals, without
+    /// the shape signals. The promise fails with
     /// <c>@GlobalScope.ERR_DOES_NOT_EXIST</c> when <paramref name="node"/> has
     /// no entity, and <c>@GlobalScope.ERR_UNAVAILABLE</c> outside a session. A
     /// client can call it when its player is the

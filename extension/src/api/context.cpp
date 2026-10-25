@@ -471,9 +471,13 @@ Ref<NetwAdmissionConfig> Netw::configure_admission(const Callable &p_handler) {
     Ref<NetwAdmissionConfig> config;
     config.instantiate();
     if (session_decl::declare(
-            scope, session_decl::KIND_ADMISSION, p_handler, config,
+            scope,
+            session_decl::KIND_ADMISSION,
+            p_handler,
+            config,
             "configure_admission"
-        ) != OK) {
+        )
+        != OK) {
         return Ref<NetwAdmissionConfig>();
     }
     return config;
@@ -926,11 +930,8 @@ Ref<NetwPromise> Netw::spawn_async(const Callable &p_fn, const Array &p_args) {
         NETW_ERROR(sys::SPAWN, "%s", refusal);
         return NetwPromise::refused(ERR_UNCONFIGURED, refusal);
     }
-    return plane->get_spawn_pipeline()->spawn_async(
-        p_fn,
-        p_args,
-        Ref<NetwPlayer>()
-    );
+    return plane->get_spawn_pipeline()
+        ->spawn_async(p_fn, p_args, Ref<NetwPlayer>());
 }
 
 Error Netw::despawn(Node *p_node, const Ref<NetwDespawnOpts> &p_opts) {

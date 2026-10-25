@@ -39,7 +39,7 @@
 			<param index="1" name="token" type="String" />
 			<param index="2" name="key" type="CryptoKey" />
 			<description>
-				Gives the joining peer a [param token] for [param issuer] whose nonce names the private [param key], used before asking the source set with [method provide].
+				Gives the joining peer a [param token] for [param issuer]. The token's nonce must name the private [param key]. A held token is used before asking the source set with [method provide].
 			</description>
 		</method>
 		<method name="provide" qualifiers="static">
@@ -59,7 +59,7 @@
 			The token's [code]iss[/code] must equal this.
 		</member>
 		<member name="key" type="CryptoKey" setter="set_key" getter="get_key">
-			The public key that checks every token, such as a [code].pub[/code] file shipped with the game. It is used before [member keys_url].
+			The public key that checks every token, such as a [code].pub[/code] file included with the game. When it is set, [member keys_url] is not used.
 		</member>
 		<member name="keys_url" type="String" setter="set_keys_url" getter="get_keys_url" default="&quot;&quot;">
 			The address of the issuer's JWKS key set. A token checked against it must name its key with [code]kid[/code].

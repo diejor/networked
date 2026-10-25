@@ -33,11 +33,15 @@ Properties
 .. table::
    :widths: auto
 
-   +----------------------------+-----------------------------------------------------------------------------+-------------------------+
-   | :godot:`float`             | :ref:`list_interval<class_WebTorrentLobbyDirectory_property_list_interval>` | ``10.0``                |
-   +----------------------------+-----------------------------------------------------------------------------+-------------------------+
-   | :godot:`PackedStringArray` | :ref:`trackers<class_WebTorrentLobbyDirectory_property_trackers>`           | ``PackedStringArray()`` |
-   +----------------------------+-----------------------------------------------------------------------------+-------------------------+
+   +----------------------------+-------------------------------------------------------------------+------------------------------------------------------------------------------------------------+
+   | :godot:`int`               | capabilities                                                      | ``1`` (overrides :ref:`LobbyDirectory<class_LobbyDirectory_property_capabilities>`)            |
+   +----------------------------+-------------------------------------------------------------------+------------------------------------------------------------------------------------------------+
+   | :godot:`String`            | display_name                                                      | ``"WebTorrent"`` (overrides :ref:`LobbyDirectory<class_LobbyDirectory_property_display_name>`) |
+   +----------------------------+-------------------------------------------------------------------+------------------------------------------------------------------------------------------------+
+   | :godot:`float`             | list_interval                                                     | ``10.0`` (overrides :ref:`LobbyDirectory<class_LobbyDirectory_property_list_interval>`)        |
+   +----------------------------+-------------------------------------------------------------------+------------------------------------------------------------------------------------------------+
+   | :godot:`PackedStringArray` | :ref:`trackers<class_WebTorrentLobbyDirectory_property_trackers>` | ``PackedStringArray()``                                                                        |
+   +----------------------------+-------------------------------------------------------------------+------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -47,23 +51,6 @@ Properties
 
 Property Descriptions
 ---------------------
-
-.. _class_WebTorrentLobbyDirectory_property_list_interval:
-
-.. rst-class:: classref-property
-
-:godot:`float` **list_interval** = ``10.0`` :ref:`🔗<class_WebTorrentLobbyDirectory_property_list_interval>`
-
-.. rst-class:: classref-property-setget
-
-- |void| **set_list_interval**\ (\ value\: :godot:`float`\ )
-- :godot:`float` **get_list_interval**\ (\ )
-
-Seconds between searches while :ref:`NetwConnection.browsing<class_NetwConnection_property_browsing>` is ``true``.
-
-.. rst-class:: classref-item-separator
-
-----
 
 .. _class_WebTorrentLobbyDirectory_property_trackers:
 

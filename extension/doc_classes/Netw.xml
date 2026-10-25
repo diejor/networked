@@ -5,7 +5,7 @@
 	</brief_description>
 	<description>
 		[b]Levels[/b]
-		A level is spawned like any other node, with [method configure_scene] in its root. A player receives the level while one of their [member NetwPlayer.entities] is in it, so spawn players into it with [method spawn_player], here and in the [method configure_join] handler. [NetwScene] covers the rest.
+		A level is spawned like any other node, with [method configure_scene] in its root. Spawn a player into it with [method spawn_player] and that player's peer receives the level. [NetwScene] covers the rest.
 		[codeblock]
 		# arena.gd
 		func _init() -&gt; void:
@@ -28,15 +28,6 @@
 		    add_child(arena)
 		    for player: NetwPlayer in Netw.session(self).players:
 		        arena.add_child(Netw.spawn_player(player, make_car))
-		[/codeblock]
-		[b]Accounts[/b]
-		[method configure_admission] decides who joins. Each [NetwAccountProvider] added with [method NetwAdmissionConfig.accept] proves an account before the handler runs, and the player keeps it as [member NetwPlayer.account]. [NetwIdToken] proves one with a token signed by a backend the server trusts. The Steam, Nakama and Discord addons each ship a provider.
-		[codeblock]
-		func _init() -&gt; void:
-		    Netw.configure_admission(admit).accept(id_token)
-
-		func admit(request: NetwJoinRequest) -&gt; Error:
-		    return OK if request.account else ERR_UNAUTHORIZED
 		[/codeblock]
 	</description>
 	<tutorials>
@@ -67,7 +58,15 @@
 			<return type="NetwAdmissionConfig" />
 			<param index="0" name="handler" type="Callable" />
 			<description>
-				Declares the session's admission handler and returns its [NetwAdmissionConfig]. The server calls [param handler] with each [NetwJoinRequest] once every [NetwAccountProvider] accepted with [method NetwAdmissionConfig.accept] has verified, and admits the peer when it returns [constant @GlobalScope.OK]. Verifying and the handler together may [code]await[/code] for up to [member NetwMultiplayer.auth_timeout].
+				Declares who may join the session.
+				[codeblock]
+				func _init() -&gt; void:
+				    Netw.configure_admission(admit).accept(id_token)
+
+				func admit(request: NetwJoinRequest) -&gt; Error:
+				    return OK if request.account else ERR_UNAUTHORIZED
+				[/codeblock]
+				A peer joins when [param handler] returns [constant @GlobalScope.OK]. Each [NetwAccountProvider] passed to [method NetwAdmissionConfig.accept] proves its account before [param handler] runs, and both may [code]await[/code] within [member NetwMultiplayer.auth_timeout].
 			</description>
 		</method>
 		<method name="configure_clock" qualifiers="static">
@@ -114,9 +113,7 @@
 			<return type="NetwEntity" />
 			<param index="0" name="node" type="Node" />
 			<description>
-				Declares [param node] as a root before it enters the tree.
-				A node placed in a scene that every peer opens needs no [method spawn]. Every peer finds it by its path from [member NetwSession.root], and a peer that does not have it reports it by name and path.
-				[method NetwEntity.of] finds an existing [NetwEntity].
+				Declares [param node] as a root before it enters the tree. [method NetwEntity.of] finds an existing [NetwEntity].
 			</description>
 		</method>
 		<method name="configure_join" qualifiers="static">
@@ -353,7 +350,7 @@
 				await Netw.reparent(avatar, level2.get_node(^"Players")).wait()
 				[/codeblock]
 				A level keeps its [NetwScene], its viewers and every [member NetwPlayer.scene] when it moves. For a level made with [method NetwSceneConfig.isolated], pass the node [method spawn] returned or the level's root, and the node [method spawn] returned moves.
-				Unlike [method Node.reparent], it does not fire [Area3D] and [Area2D] enter and exit signals during the move, which works around [url=https://github.com/godotengine/godot/issues/14578]this issue[/url]. An overlap that really changed during the move is reported after it with the body and area enter and exit signals, and the shape signals are not sent for it. Otherwise [method Node.reparent] works fine.
+				[Area3D] and [Area2D] do not fire enter and exit signals during the move ([url=https://github.com/godotengine/godot/issues/14578]Godot issue 14578[/url]). An overlap that really changed during the move is reported after it with the body and area enter and exit signals, without the shape signals.
 				The promise fails with [constant @GlobalScope.ERR_DOES_NOT_EXIST] when [param node] has no entity, and [constant @GlobalScope.ERR_UNAVAILABLE] outside a session.
 				A client can call it when its player is the [member NetwEntity.controller] and [member NetwEntity.lifecycle] is [constant NetwEntity.LIFECYCLE_CONTROLLER]. The node moves on that client at once, and moves back if the server refuses.
 			</description>
@@ -391,7 +388,7 @@
 			<param index="0" name="callable" type="Callable" />
 			<description>
 				Calls [param callable] on every peer that can see the node, and returns a [NetwGroupPromise] with each return value. The promise fails at once when the node is not part of a spawned [NetwEntity].
-				A method declared with [method NetwMemberConfig.call_local] or a [code]call_local[/code] [annotation @GDScript.@rpc] also runs on this peer, and its value joins [member NetwGroupPromise.results] under this peer's id. Otherwise this peer is not asked. The method may [code]await[/code], as for [method request]. A method that takes longer than 5 seconds declares its own deadline with [method NetwMemberConfig.timeout].
+				This peer is asked too when the method is [code]call_local[/code], set through [annotation @GDScript.@rpc] or [method NetwMemberConfig.call_local]. The method may [code]await[/code] for 5 seconds, and [method NetwMemberConfig.timeout] sets a longer deadline.
 				[codeblocks]
 				[gdscript]
 				extends Node

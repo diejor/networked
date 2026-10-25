@@ -15,7 +15,8 @@ var levels: Dictionary = { }
 
 
 func _init() -> void:
-	Netw.configure_session(self).app(&"netw-example-multiple-levels").return_window(60.0)
+	Netw.configure_session(self).app(&"netw-example-multiple-levels") \
+			.return_window(60.0)
 	Netw.configure_clock(self)
 	Netw.configure_database(self, &"saves").backend(
 		preload("res://examples/multiple_levels/game/save_database.tres"),

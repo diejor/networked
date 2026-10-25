@@ -117,7 +117,7 @@ The host's :ref:`NetwSessionConfig.app_id<class_NetwSessionConfig_property_app_i
 
 :godot:`String` **uid** = ``""`` :ref:`🔗<class_NakamaLobbyDirectory_LobbyCard_property_uid>`
 
-Game tag, matching :ref:`NakamaLobbyDirectory.browser_filter_uid<class_NakamaLobbyDirectory_property_browser_filter_uid>`.
+Game tag, matching :ref:`NakamaLobbyDirectory.browser_tag<class_NakamaLobbyDirectory_property_browser_tag>`.
 
 .. rst-class:: classref-item-separator
 

@@ -496,15 +496,9 @@ Property Descriptions
 - |void| **set_authority**\ (\ value\: :ref:`Authority<enum_NetwEntity_Authority>`\ )
 - :ref:`Authority<enum_NetwEntity_Authority>` **get_authority**\ (\ )
 
-Who holds Godot multiplayer authority for the root and its children. Set it
+Who holds Godot multiplayer authority for the root and its children. Set it before tree entry. Later changes are refused.
 
-before tree entry. Later changes are refused.
-
-At spawn, a non-server Godot authority on the root selects
-
-\ :ref:`AUTHORITY_CONTROLLER<class_NetwEntity_constant_AUTHORITY_CONTROLLER>` if neither :ref:`controller<class_NetwEntity_property_controller>` nor this
-
-mode was explicitly assigned.
+At spawn, a non-server Godot authority on the root selects :ref:`AUTHORITY_CONTROLLER<class_NetwEntity_constant_AUTHORITY_CONTROLLER>` if neither :ref:`controller<class_NetwEntity_property_controller>` nor this mode was explicitly assigned.
 
 .. rst-class:: classref-item-separator
 
@@ -725,9 +719,7 @@ The peer of :ref:`player<class_NetwEntity_property_player>`, or ``0`` for an NPC
 
 - :ref:`NetwPersistence<class_NetwPersistence>` **get_persistence**\ (\ )
 
-Loads and saves properties configured with
-
-\ :ref:`NetwPropertyConfig.persisted()<class_NetwPropertyConfig_method_persisted>`. See :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>`.
+Loads and saves properties configured with :ref:`NetwPropertyConfig.persisted()<class_NetwPropertyConfig_method_persisted>`. See :ref:`NetwPersistenceConfig<class_NetwPersistenceConfig>`.
 
 .. rst-class:: classref-item-separator
 
@@ -788,13 +780,7 @@ The entity's :ref:`NetwPrediction<class_NetwPrediction>`, holding its prediction
 - |void| **set_replication_priority**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_replication_priority**\ (\ )
 
-Relative priority when a peer's bandwidth cannot carry every property update.
-
-\ ``4.0`` sends about four times as often as ``1.0`` when
-
-both keep changing. Must be greater than zero. :ref:`interest<class_NetwEntity_property_interest>` determines
-
-which peers receive updates.
+Relative priority when a peer's bandwidth cannot carry every property update. ``4.0`` sends about four times as often as ``1.0`` when both keep changing. Must be greater than zero. :ref:`interest<class_NetwEntity_property_interest>` determines which peers receive updates.
 
 .. rst-class:: classref-item-separator
 

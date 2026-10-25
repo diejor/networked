@@ -5,10 +5,10 @@
 ## game scenes through one [LocalLoopbackSession]. Per peer input lives on the
 ## returned [NetwSceneRunner].
 ##
-## Each peer runs in its own [MultiplayerViewport]. A game scene may author that
-## tree or carry none. When the instantiated scene holds no tree,
-## [method add_host] and [method add_client] wrap it in one the harness builds,
-## so a scene the game natively swaps needs no authored session node.
+## Each peer runs in its own [MultiplayerViewport]. A game scene may include
+## that viewport or leave it out. When the scene has none, [method add_host]
+## and [method add_client] wrap it in one, so a scene the game swaps in needs
+## no session node of its own.
 class_name NetwGameHarness
 extends Node
 
@@ -402,7 +402,7 @@ func _find_single_multiplayer_viewport(scene: Node) -> MultiplayerViewport:
 		if node is MultiplayerViewport:
 			found.append(node)
 	# Zero is the tree-less on-ramp: the caller wraps the scene in a
-	# harness-constructed tree. More than one is always an authoring error.
+	# harness-constructed tree. More than one is always a mistake in the scene.
 	assert(
 		found.size() <= 1,
 		"NetwGameHarness: expected at most one MultiplayerViewport. Found %d." %

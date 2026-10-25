@@ -2099,7 +2099,11 @@ void NetwMultiplayer::session_accept_join(
         return;
     }
     if (!session_decode_join_args(requested)) {
-        session_fail_join(p_sender, ERR_INVALID_DATA, "Invalid join arguments.");
+        session_fail_join(
+            p_sender,
+            ERR_INVALID_DATA,
+            "Invalid join arguments."
+        );
         return;
     }
     session_start_admission(requested);
@@ -2236,7 +2240,8 @@ void NetwMultiplayer::session_receive_accept(
     }
     if (accepted.peer_id == get_unique_id()) {
         connect_core.advertise(
-            accepted.join_address, int64_t(accepted.max_players)
+            accepted.join_address,
+            int64_t(accepted.max_players)
         );
     }
     session_admit(accepted);
@@ -2445,7 +2450,8 @@ PackedByteArray NetwMultiplayer::session_accept_bytes(
         return PackedByteArray();
     }
     return session_accept_payload(
-        join_roster.accepted_join(p_peer), p_destination
+        join_roster.accepted_join(p_peer),
+        p_destination
     );
 }
 
@@ -2835,7 +2841,8 @@ void NetwMultiplayer::auth_send_hello(int64_t p_peer) {
         auth::encode_client_hello(
             uint64_t(auth_app_tag),
             p_peer == SERVER_PEER && session_requires_proof()
-                ? auth::HELLO_PROOF_CAPABLE : 0
+                ? auth::HELLO_PROOF_CAPABLE
+                : 0
         )
     );
     if (sent != OK) {
@@ -2937,16 +2944,21 @@ void NetwMultiplayer::auth_receive_hello(
             disconnect_peer(p_peer);
             return;
         }
-        session_request_proof(p_peer, String::utf8(
-            reinterpret_cast<const char *>(p_data.ptr())
-                + auth::HELLO_HEADER_LEN, auth::CHALLENGE_LENGTH
-        ));
+        session_request_proof(
+            p_peer,
+            String::utf8(
+                reinterpret_cast<const char *>(p_data.ptr())
+                    + auth::HELLO_HEADER_LEN,
+                auth::CHALLENGE_LENGTH
+            )
+        );
         return;
     }
     const bool required = session_requires_proof();
     if (required || (decoded.flags & auth::HELLO_PROOF_CAPABLE) != 0) {
         PackedByteArray reply = auth::encode_client_hello(
-            uint64_t(auth_app_tag), required ? auth::HELLO_PROOF_CHALLENGE : 0
+            uint64_t(auth_app_tag),
+            required ? auth::HELLO_PROOF_CHALLENGE : 0
         );
         if (required) {
             LinkHandshake &link = link_handshakes[p_peer];
@@ -3487,9 +3499,7 @@ Error NetwMultiplayer::NETW_API_VIRTUAL(poll)() {
     }
     const double frame_delta
         = poll_delta(Time::get_singleton()->get_ticks_usec());
-    session_poll_admissions(
-        int64_t(Time::get_singleton()->get_ticks_msec())
-    );
+    session_poll_admissions(int64_t(Time::get_singleton()->get_ticks_msec()));
     connect_core.on_poll(frame_delta);
     const Error err = embed_poll_transport();
     session_poll_shutdown();
@@ -5245,11 +5255,11 @@ void NetwMultiplayer::session_submit_request(const JoinRequest &p_request) {
     }
     const int64_t proven = is_host() ? mine : int64_t(SERVER_PEER);
     if (session_has_proof(proven)) {
-        sending.proof_bytes
-            = gd::var_to_bytes(link_handshakes[proven].proofs);
+        sending.proof_bytes = gd::var_to_bytes(link_handshakes[proven].proofs);
         if (sending.proof_bytes.size() > 16383) {
             session_report_join_failure(
-                ERR_INVALID_DATA, "The admission proof exceeds 16383 bytes."
+                ERR_INVALID_DATA,
+                "The admission proof exceeds 16383 bytes."
             );
             return;
         }
@@ -5975,15 +5985,15 @@ bool NetwMultiplayer::is_waiting(const Variant &p_value) {
 void NetwMultiplayer::free_when_returned(const Variant &p_waiting) {
     Object *waiting = gd::live_object(p_waiting);
     if (NetwPromise *promise = Object::cast_to<NetwPromise>(waiting)) {
-        promise->then(callable_mp_static(&NetwMultiplayer::free_returned)
-                          .bind(p_waiting));
+        promise->then(
+            callable_mp_static(&NetwMultiplayer::free_returned).bind(p_waiting)
+        );
         return;
     }
     if (is_coroutine(p_waiting)) {
         waiting->connect(
             StringName("completed"),
-            callable_mp_static(&NetwMultiplayer::free_returned)
-                .bind(p_waiting),
+            callable_mp_static(&NetwMultiplayer::free_returned).bind(p_waiting),
             Object::CONNECT_ONE_SHOT
         );
     }

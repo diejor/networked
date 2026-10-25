@@ -655,10 +655,7 @@ const Deadline DEADLINES[] = {
      "hasty",
      135,
      false},
-    {"RT2 no timeout declared, ERR_TIMEOUT at 5.5 seconds",
-     "hasty",
-     165,
-     true},
+    {"RT2 no timeout declared, ERR_TIMEOUT at 5.5 seconds", "hasty", 165, true},
 };
 
 TEST_CASE(

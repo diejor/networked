@@ -21,7 +21,7 @@ Reads and writes the records of one open slot.
 Description
 -----------
 
-Subclass it, together with a :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` whose :ref:`NetwDatabaseBackend._open()<class_NetwDatabaseBackend_private_method__open>` returns it, to store records somewhere the shipped backends do not.
+Subclass it, together with a :ref:`NetwDatabaseBackend<class_NetwDatabaseBackend>` whose :ref:`NetwDatabaseBackend._open()<class_NetwDatabaseBackend_private_method__open>` returns it, to store records somewhere the built-in backends do not.
 
 Implement :ref:`_read()<class_NetwDatabaseConnection_private_method__read>`, :ref:`_scan()<class_NetwDatabaseConnection_private_method__scan>`, :ref:`_write_batch()<class_NetwDatabaseConnection_private_method__write_batch>` and :ref:`_close()<class_NetwDatabaseConnection_private_method__close>`. :ref:`NetwDatabase<class_NetwDatabase>` builds every other operation from these. Each returns a :ref:`NetwPromise<class_NetwPromise>`, and a method left unimplemented rejects with :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>`.
 

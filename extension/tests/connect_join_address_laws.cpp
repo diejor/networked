@@ -51,7 +51,9 @@ void join_through_directory(
     const Ref<netw::NetwConnection> connection = p_api->get_connection();
     connection->join(
         connection->add(
-            StringName("StubLobbyPeer"), String("matched:ticket"), String()
+            StringName("StubLobbyPeer"),
+            String("matched:ticket"),
+            String()
         ),
         Dictionary()
     );
@@ -76,7 +78,8 @@ struct Seated {
     LoopbackRig rig;
 
     explicit Seated(const String &p_address)
-        : directories(p_address), rig(1, false, false, &join_through_directory) {
+        : directories(p_address),
+          rig(1, false, false, &join_through_directory) {
         rig.mount();
         rig.join(-1, StringName("host"));
         rig.join(0, StringName("guest"));
@@ -112,8 +115,7 @@ TEST_CASE(
     netw_test::FaultWatch watch;
     watch.expect_error(String("*joined without it*"), 1);
     watch.expect_error(String("*got an address*"), 1);
-    const String long_address
-        = String("m").repeat(netw::wire::STRING_CAP + 1);
+    const String long_address = String("m").repeat(netw::wire::STRING_CAP + 1);
     Seated seated(long_address);
 
     NETW_CHECK_EQ(seated.players_at(0), int64_t(2));

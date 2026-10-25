@@ -1271,7 +1271,7 @@ TEST_CASE(
     CHECK_FALSE(seen->get_is_controlled_locally());
     NETW_CHECK_EQ(seen->get_controller(), int64_t(1));
     if (keep) {
-        for (const int at : { successor, survivor }) {
+        for (const int at : {successor, survivor}) {
             NETW_FORMAT_INT(seat_text, at);
             CAPTURE(seat_text);
             NETW_CHECK_EQ(
@@ -1903,10 +1903,7 @@ TEST_CASE(
     );
     table.rig.pump(SETTLE_PUMPS);
 
-    NETW_CHECK_EQ(
-        held->get_stage(),
-        int64_t(netw::entity::Stage::DESPAWNING)
-    );
+    NETW_CHECK_EQ(held->get_stage(), int64_t(netw::entity::Stage::DESPAWNING));
 }
 
 TEST_CASE(

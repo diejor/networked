@@ -101,10 +101,7 @@ struct World {
         Ref<netw::NetwSessionConfig> config;
         config.instantiate();
         config->return_window(p_window);
-        NETW_REQUIRE_EQ(
-            int(rig.server()->session_initialize(config)),
-            int(OK)
-        );
+        NETW_REQUIRE_EQ(int(rig.server()->session_initialize(config)), int(OK));
         rig.mount();
         arena = rig.declare_scene(StringName("Arena"));
         Node *level = rig.node_of(arena);
@@ -114,13 +111,13 @@ struct World {
         rig.enter_scene(StringName("Arena"));
         Node *gate = Object::cast_to<Node>(gate_shape->call("new"));
         rig.branch(-1)->add_child(gate);
-        REQUIRE(netw::Netw::configure_admission(
-                    Callable(gate, StringName("admit"))
-        )
-                    .is_valid());
+        REQUIRE(
+            netw::Netw::configure_admission(Callable(gate, StringName("admit")))
+                .is_valid()
+        );
         teach(-1);
         rig.join(-1, StringName("host"));
-        const char *names[] = { "ada", "bob", "cy" };
+        const char *names[] = {"ada", "bob", "cy"};
         for (int seat_at = 0; seat_at < p_clients; ++seat_at) {
             seat(seat_at, names[seat_at]);
         }
@@ -274,10 +271,10 @@ TEST_CASE(
     "or is kicked loses them"
 ) {
     const ExitRow rows[] = {
-        { "drop", EXIT_DROP, true },
-        { "step away", EXIT_STEP_AWAY, true },
-        { "quit", EXIT_QUIT, false },
-        { "kick", EXIT_KICK, false },
+        {"drop", EXIT_DROP, true},
+        {"step away", EXIT_STEP_AWAY, true},
+        {"quit", EXIT_QUIT, false},
+        {"kick", EXIT_KICK, false},
     };
     for (const ExitRow &row : rows) {
         NETW_FORMAT_TEXT(row_text, row.label);
@@ -290,12 +287,12 @@ TEST_CASE(
 
         leave(world, row.exit);
 
-        for (const int route : { first, second }) {
+        for (const int route : {first, second}) {
             NETW_CHECK_EQ(world.live(route, -1), row.keeps);
             if (!row.keeps) {
                 continue;
             }
-            for (const int seat_at : { -1, 1 }) {
+            for (const int seat_at : {-1, 1}) {
                 CAPTURE(seat_at);
                 REQUIRE(world.live(route, seat_at));
                 const Ref<NetwEntity> kept = world.entity(route, seat_at);
@@ -326,7 +323,7 @@ TEST_CASE(
     world.rig.drop_client(0);
     world.rig.pump(SETTLE * 3);
 
-    for (const int seat_at : { -1, 1 }) {
+    for (const int seat_at : {-1, 1}) {
         CAPTURE(seat_at);
         REQUIRE(world.live(car, seat_at));
         const Ref<NetwEntity> driven = world.entity(car, seat_at);
@@ -369,14 +366,13 @@ TEST_CASE(
     "counted in wall time through a session pause, a kept entity the player "
     "owned despawns and one it only drove stays with its owner"
 ) {
-    for (const bool paused : { false, true }) {
+    for (const bool paused : {false, true}) {
         CAPTURE(paused);
         World world(0.2, 2);
         const int route = world.avatar(0, "Ada");
         const int car = world.avatar(1, "BobCar");
         REQUIRE(
-            world.entity(car, -1)->transfer_control(world.rig.peer_id(0))
-            == OK
+            world.entity(car, -1)->transfer_control(world.rig.peer_id(0)) == OK
         );
         world.rig.pump(SETTLE);
         world.rig.drop_client(0);
@@ -390,14 +386,11 @@ TEST_CASE(
         world.wait_msec(400);
 
         CHECK_FALSE(world.live(route, -1));
-        for (const int seat_at : { -1, 1 }) {
+        for (const int seat_at : {-1, 1}) {
             CAPTURE(seat_at);
             REQUIRE(world.live(car, seat_at));
             const Ref<NetwEntity> driven = world.entity(car, seat_at);
-            NETW_CHECK_EQ(
-                driven->get_peer_id(),
-                int64_t(world.rig.peer_id(1))
-            );
+            NETW_CHECK_EQ(driven->get_peer_id(), int64_t(world.rig.peer_id(1)));
             NETW_CHECK_EQ(driven->get_controller(), SERVER);
         }
         if (paused) {
@@ -438,8 +431,8 @@ TEST_CASE(
     "return window runs out or the driver quits"
 ) {
     const ExitRow rows[] = {
-        { "drop", EXIT_DROP, true },
-        { "quit", EXIT_QUIT, false },
+        {"drop", EXIT_DROP, true},
+        {"quit", EXIT_QUIT, false},
     };
     for (const ExitRow &row : rows) {
         NETW_FORMAT_TEXT(row_text, row.label);
@@ -450,8 +443,7 @@ TEST_CASE(
             NetwEntity::DISCONNECT_DESPAWN
         );
         REQUIRE(
-            world.entity(car, -1)->transfer_control(world.rig.peer_id(0))
-            == OK
+            world.entity(car, -1)->transfer_control(world.rig.peer_id(0)) == OK
         );
         world.rig.pump(SETTLE);
 
@@ -472,12 +464,8 @@ TEST_CASE(
     "drops is discarded and not kept"
 ) {
     World world(60.0, 2);
-    const int route = world.spawn(
-        StringName(AVATAR_ID),
-        "Ada",
-        world.rig.player(0),
-        false
-    );
+    const int route
+        = world.spawn(StringName(AVATAR_ID), "Ada", world.rig.player(0), false);
     world.rig.drop_client(0);
     world.rig.pump(SETTLE * 3);
 
@@ -554,11 +542,11 @@ TEST_CASE(
     "or not, so a game that spawns only when the list is empty spawns nothing"
 ) {
     const ReturnRow rows[] = {
-        { "drop", RETURN_AFTER_DROP, false },
-        { "step away", RETURN_AFTER_STEP_AWAY, false },
-        { "second login", RETURN_BY_SECOND_LOGIN, false },
-        { "drop outside any scene", RETURN_AFTER_DROP, true },
-        { "second login outside any scene", RETURN_BY_SECOND_LOGIN, true },
+        {"drop", RETURN_AFTER_DROP, false},
+        {"step away", RETURN_AFTER_STEP_AWAY, false},
+        {"second login", RETURN_BY_SECOND_LOGIN, false},
+        {"drop outside any scene", RETURN_AFTER_DROP, true},
+        {"second login outside any scene", RETURN_BY_SECOND_LOGIN, true},
     };
     for (const ReturnRow &row : rows) {
         NETW_FORMAT_TEXT(row_text, row.label);
@@ -617,7 +605,7 @@ TEST_CASE(
     REQUIRE(world.live(route, 1));
     CHECK(netw::gd::instance_id(world.rig.route_node(route, 1)) == stayed);
     const int cy = world.late("cy");
-    for (const int seat_at : { -1, 1, back, cy }) {
+    for (const int seat_at : {-1, 1, back, cy}) {
         CAPTURE(seat_at);
         REQUIRE(world.live(route, seat_at));
         const Ref<NetwEntity> held = world.entity(route, seat_at);
@@ -630,11 +618,9 @@ TEST_CASE(
     );
     CHECK(world.entity(route, back)->get_is_controlled_locally());
     REQUIRE(returned->get_scene().is_valid());
-    CHECK(
-        world.rig.server()
-            ->scene_get_player_entities(world.arena)
-            .has(world.entity(route, -1))
-    );
+    CHECK(world.rig.server()
+              ->scene_get_player_entities(world.arena)
+              .has(world.entity(route, -1)));
 }
 
 TEST_CASE(
@@ -652,7 +638,7 @@ TEST_CASE(
 
     const int back = world.late("ada");
 
-    for (const int seat_at : { -1, 1, back }) {
+    for (const int seat_at : {-1, 1, back}) {
         CAPTURE(seat_at);
         REQUIRE(world.live(car, seat_at));
         const Ref<NetwEntity> driven = world.entity(car, seat_at);
@@ -681,7 +667,7 @@ TEST_CASE(
 
     const int back = world.late("ada");
 
-    for (const int seat_at : { -1, 1, back }) {
+    for (const int seat_at : {-1, 1, back}) {
         CAPTURE(seat_at);
         REQUIRE(world.live(route, seat_at));
         const Ref<NetwEntity> held = world.entity(route, seat_at);
@@ -807,7 +793,7 @@ public:
     }
 
     void join(int p_seat) {
-        const char *names[SEAT_COUNT] = { "host", "ada", "bob", "cy", "dee" };
+        const char *names[SEAT_COUNT] = {"host", "ada", "bob", "cy", "dee"};
         apis[p_seat]->session_submit_join(StringName(names[p_seat]), Array());
         pump(4);
     }
@@ -864,11 +850,9 @@ public:
     Node *spawn(const char *p_name, NetwPlayer *p_owner) {
         Array args;
         args.push_back(String(p_name));
-        const RID made = at(SEAT_SERVER)->spawn_registered(
-            StringName(AVATAR_ID),
-            args,
-            p_owner
-        );
+        const RID made
+            = at(SEAT_SERVER)
+                  ->spawn_registered(StringName(AVATAR_ID), args, p_owner);
         Node *node = at(SEAT_SERVER)->entity_get_node(made);
         if (node != nullptr) {
             arenas[SEAT_SERVER]->add_child(node);
@@ -913,9 +897,8 @@ class KeptTransferScenario final : public netw_test::FrameScenario {
             seen.kept_before = seen.kept_before && stand->shows(seat_at, "ada")
                 && stand->shows(seat_at, "Crate");
         }
-        seen.moved = server->get_session()->transfer_server(
-                         stand->peer_id(successor)
-                     )
+        seen.moved
+            = server->get_session()->transfer_server(stand->peer_id(successor))
             == OK;
     }
 
@@ -931,7 +914,8 @@ class KeptTransferScenario final : public netw_test::FrameScenario {
     }
 
 public:
-    explicit KeptTransferScenario(int p_successor) : successor(p_successor) {}
+    explicit KeptTransferScenario(int p_successor) : successor(p_successor) {
+    }
 
     bool advance() override {
         if (netw::gd::scene_root() == nullptr || frame > TRANSFER_FRAMES) {
@@ -962,7 +946,7 @@ TEST_CASE(
     "after, no peer shows an entity kept for the departed player, and a "
     "server entity with no player stays on every peer"
 ) {
-    for (const int successor : { int(SEAT_SUCCESSOR), int(SEAT_LATE) }) {
+    for (const int successor : {int(SEAT_SUCCESSOR), int(SEAT_LATE)}) {
         CAPTURE(successor);
         const TransferEvidence &seen = transfer_evidence(successor);
         REQUIRE(seen.driven);
@@ -990,24 +974,22 @@ struct MoveArm {
 };
 
 constexpr MoveArm MOVE_ARMS[] = {
-    { "despawn, rejoin", MOVE_DESPAWN, netw::NetwSession::TRANSFER_REJOIN },
-    { "despawn, continue",
-      MOVE_DESPAWN,
-      netw::NetwSession::TRANSFER_CONTINUE },
-    { "despawn after the call, settled before the server moves, rejoin",
-      MOVE_DESPAWN_AFTER,
-      netw::NetwSession::TRANSFER_REJOIN },
-    { "despawn after the call, settled before the server moves, continue",
-      MOVE_DESPAWN_AFTER,
-      netw::NetwSession::TRANSFER_CONTINUE },
-    { "despawn committed before the call in the same frame, rejoin",
-      MOVE_DESPAWN_SETTLED,
-      netw::NetwSession::TRANSFER_REJOIN },
-    { "despawn committed before the call in the same frame, continue",
-      MOVE_DESPAWN_SETTLED,
-      netw::NetwSession::TRANSFER_CONTINUE },
-    { "spawn, rejoin", MOVE_SPAWN, netw::NetwSession::TRANSFER_REJOIN },
-    { "spawn, continue", MOVE_SPAWN, netw::NetwSession::TRANSFER_CONTINUE },
+    {"despawn, rejoin", MOVE_DESPAWN, netw::NetwSession::TRANSFER_REJOIN},
+    {"despawn, continue", MOVE_DESPAWN, netw::NetwSession::TRANSFER_CONTINUE},
+    {"despawn after the call, settled before the server moves, rejoin",
+     MOVE_DESPAWN_AFTER,
+     netw::NetwSession::TRANSFER_REJOIN},
+    {"despawn after the call, settled before the server moves, continue",
+     MOVE_DESPAWN_AFTER,
+     netw::NetwSession::TRANSFER_CONTINUE},
+    {"despawn committed before the call in the same frame, rejoin",
+     MOVE_DESPAWN_SETTLED,
+     netw::NetwSession::TRANSFER_REJOIN},
+    {"despawn committed before the call in the same frame, continue",
+     MOVE_DESPAWN_SETTLED,
+     netw::NetwSession::TRANSFER_CONTINUE},
+    {"spawn, rejoin", MOVE_SPAWN, netw::NetwSession::TRANSFER_REJOIN},
+    {"spawn, continue", MOVE_SPAWN, netw::NetwSession::TRANSFER_CONTINUE},
 };
 
 constexpr int MOVE_ARM_COUNT = sizeof(MOVE_ARMS) / sizeof(MOVE_ARMS[0]);
@@ -1039,9 +1021,9 @@ class MoveScenario final : public netw_test::FrameScenario {
     TransferStand *stand = nullptr;
 
     bool move() {
-        return stand->at(SEAT_SERVER)->get_session()->transfer_server(
-                   stand->peer_id(SEAT_SUCCESSOR)
-               )
+        return stand->at(SEAT_SERVER)
+                   ->get_session()
+                   ->transfer_server(stand->peer_id(SEAT_SUCCESSOR))
             == OK;
     }
 
@@ -1081,8 +1063,8 @@ class MoveScenario final : public netw_test::FrameScenario {
                 seen.moved = move();
                 break;
             case MOVE_SPAWN:
-                seen.moved = stand->spawn("Crate", nullptr) != nullptr
-                    && move();
+                seen.moved
+                    = stand->spawn("Crate", nullptr) != nullptr && move();
                 break;
         }
     }
@@ -1099,7 +1081,8 @@ class MoveScenario final : public netw_test::FrameScenario {
     }
 
 public:
-    explicit MoveScenario(int p_arm) : arm(p_arm) {}
+    explicit MoveScenario(int p_arm) : arm(p_arm) {
+    }
 
     bool advance() override {
         if (netw::gd::scene_root() == nullptr || frame > FRAMES) {

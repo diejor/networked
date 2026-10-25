@@ -343,22 +343,22 @@ TEST_CASE(
         const char *want;
     };
     const Row rows[] = {
-        { "a docker bridge listed first",
-          { { "br-154da2f92302 ", "172.20.0.1" },
-            { "docker0 ", "172.17.0.1" },
-            { "wlp4s0 ", "192.168.1.85" } },
-          "192.168.1.85" },
-        { "a private network over a public or tailnet one",
-          { { "tailscale0 ", "100.92.190.5" }, { "eth0 ", "10.0.0.7" } },
-          "10.0.0.7" },
-        { "a Windows virtual adapter by its friendly name",
-          { { "{4D36E972} vEthernet (WSL)", "172.29.0.1" },
-            { "{6B29FC40} Wi-Fi", "192.168.0.20" } },
-          "192.168.0.20" },
-        { "loopback and IPv6 only",
-          { { "lo ", "127.0.0.1" }, { "wlp4s0 ", "fe80::1" } },
-          "127.0.0.1" },
-        { "only a bridge", { { "docker0 ", "172.17.0.1" } }, "172.17.0.1" },
+        {"a docker bridge listed first",
+         {{"br-154da2f92302 ", "172.20.0.1"},
+          {"docker0 ", "172.17.0.1"},
+          {"wlp4s0 ", "192.168.1.85"}},
+         "192.168.1.85"},
+        {"a private network over a public or tailnet one",
+         {{"tailscale0 ", "100.92.190.5"}, {"eth0 ", "10.0.0.7"}},
+         "10.0.0.7"},
+        {"a Windows virtual adapter by its friendly name",
+         {{"{4D36E972} vEthernet (WSL)", "172.29.0.1"},
+          {"{6B29FC40} Wi-Fi", "192.168.0.20"}},
+         "192.168.0.20"},
+        {"loopback and IPv6 only",
+         {{"lo ", "127.0.0.1"}, {"wlp4s0 ", "fe80::1"}},
+         "127.0.0.1"},
+        {"only a bridge", {{"docker0 ", "172.17.0.1"}}, "172.17.0.1"},
     };
     for (const Row &row : rows) {
         const String picked = netw::connect::pick_lan_address(row.found);

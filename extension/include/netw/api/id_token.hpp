@@ -59,22 +59,42 @@ protected:
     virtual godot::Error request_keys();
 
 public:
-    void set_issuer(const godot::String &p_issuer) { issuer = p_issuer; }
-    godot::String get_issuer() const { return issuer; }
+    void set_issuer(const godot::String &p_issuer) {
+        issuer = p_issuer;
+    }
+    godot::String get_issuer() const {
+        return issuer;
+    }
     void set_audience(const godot::String &p_audience) {
         audience = p_audience;
     }
-    godot::String get_audience() const { return audience; }
-    void set_keys_url(const godot::String &p_url) { keys_url = p_url; }
-    godot::String get_keys_url() const { return keys_url; }
-    void set_key(const godot::Ref<godot::CryptoKey> &p_key) { key = p_key; }
-    godot::Ref<godot::CryptoKey> get_key() const { return key; }
-    void set_prefix(const godot::String &p_prefix) { prefix = p_prefix; }
-    godot::String get_prefix() const { return prefix; }
+    godot::String get_audience() const {
+        return audience;
+    }
+    void set_keys_url(const godot::String &p_url) {
+        keys_url = p_url;
+    }
+    godot::String get_keys_url() const {
+        return keys_url;
+    }
+    void set_key(const godot::Ref<godot::CryptoKey> &p_key) {
+        key = p_key;
+    }
+    godot::Ref<godot::CryptoKey> get_key() const {
+        return key;
+    }
+    void set_prefix(const godot::String &p_prefix) {
+        prefix = p_prefix;
+    }
+    godot::String get_prefix() const {
+        return prefix;
+    }
     void set_name_claim(const godot::String &p_claim) {
         name_claim = p_claim;
     }
-    godot::String get_name_claim() const { return name_claim; }
+    godot::String get_name_claim() const {
+        return name_claim;
+    }
 
     godot::Variant prove(
         const godot::String &p_challenge,

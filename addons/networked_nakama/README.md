@@ -5,8 +5,9 @@ needs no open port, so a web export can host.
 
 ## Install
 
-Copy `addons/networked_nakama` and `addons/com.heroiclabs.nakama` from the
-Networked release. The second is the
+Unzip `networked_nakama` from the Networked release into your project's root,
+beside `networked`. It holds `addons/networked_nakama` and
+`addons/com.heroiclabs.nakama`. The second is the
 [Nakama Godot SDK](https://github.com/heroiclabs/nakama-godot). Run a Nakama
 server, such as `tests/nakama/docker-compose.yml` in the Networked repository.
 

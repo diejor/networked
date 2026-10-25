@@ -1,4 +1,4 @@
-## The transport a [NetwTransferContract] judges, subclassed by its author.
+## The transport a [NetwTransferContract] judges, subclassed once per transport.
 ##
 ## Every endpoint declares
 ## [code]server_relabelled(successor_was: int, former_now: int)[/code] and

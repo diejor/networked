@@ -11,7 +11,7 @@ namespace Networked;
 /// <remarks>
 /// Subclass it, together with a <see cref="NetwDatabaseBackend"/> whose
 /// <c>NetwDatabaseBackend._open</c> returns it, to store records somewhere the
-/// shipped backends do not. Implement <c>_read</c>, <c>_scan</c>,
+/// built-in backends do not. Implement <c>_read</c>, <c>_scan</c>,
 /// <c>_write_batch</c> and <c>_close</c>. <see cref="NetwDatabase"/> builds
 /// every other operation from these. Each returns a <see cref="NetwPromise"/>,
 /// and a method left unimplemented rejects with

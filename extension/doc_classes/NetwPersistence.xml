@@ -68,10 +68,7 @@
 			The id this record is stored under. Supplied by [method NetwPersistenceConfig.record_id].
 		</member>
 		<member name="schema" type="NetwSchema" setter="" getter="get_schema">
-			The read-only saved property definition for [method NetwDatabase.read]
-			and [method NetwDatabase.write]. [code]null[/code] until persistence is
-			ready on the server. Direct database calls do not update the root's
-			properties or [member dirty].
+			The read-only saved property definition for [method NetwDatabase.read] and [method NetwDatabase.write]. [code]null[/code] until persistence is ready on the server. Direct database calls do not update the root's properties or [member dirty].
 		</member>
 	</members>
 	<signals>

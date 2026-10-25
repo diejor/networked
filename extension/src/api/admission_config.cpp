@@ -22,7 +22,8 @@ Ref<NetwAdmissionConfig> NetwAdmissionConfig::accept(
 
 void NetwAdmissionConfig::_bind_methods() {
     ClassDB::bind_method(
-        D_METHOD("accept", "provider"), &NetwAdmissionConfig::accept
+        D_METHOD("accept", "provider"),
+        &NetwAdmissionConfig::accept
     );
 }
 

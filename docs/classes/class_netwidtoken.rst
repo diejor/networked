@@ -134,7 +134,7 @@ The token's ``iss`` must equal this.
 - |void| **set_key**\ (\ value\: :godot:`CryptoKey`\ )
 - :godot:`CryptoKey` **get_key**\ (\ )
 
-The public key that checks every token, such as a ``.pub`` file shipped with the game. It is used before :ref:`keys_url<class_NetwIdToken_property_keys_url>`.
+The public key that checks every token, such as a ``.pub`` file included with the game. When it is set, :ref:`keys_url<class_NetwIdToken_property_keys_url>` is not used.
 
 .. rst-class:: classref-item-separator
 
@@ -214,7 +214,7 @@ Downloads the signing keys from :ref:`keys_url<class_NetwIdToken_property_keys_u
 
 |void| **hold**\ (\ issuer\: :godot:`String`, token\: :godot:`String`, key\: :godot:`CryptoKey`\ ) |static| :ref:`🔗<class_NetwIdToken_method_hold>`
 
-Gives the joining peer a ``token`` for ``issuer`` whose nonce names the private ``key``, used before asking the source set with :ref:`provide()<class_NetwIdToken_method_provide>`.
+Gives the joining peer a ``token`` for ``issuer``. The token's nonce must name the private ``key``. A held token is used before asking the source set with :ref:`provide()<class_NetwIdToken_method_provide>`.
 
 .. rst-class:: classref-item-separator
 

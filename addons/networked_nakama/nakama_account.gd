@@ -173,7 +173,7 @@ static func _static_init() -> void:
 		push_warning(
 			"The Nakama SDK in addons/com.heroiclabs.nakama has no %s. "
 			% ", ".join(missing)
-			+ "Install the SDK that ships with networked_nakama.",
+			+ "Install the SDK from the networked_nakama release zip.",
 		)
 
 

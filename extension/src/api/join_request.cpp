@@ -1,7 +1,7 @@
 #include "netw/api/join_request.hpp"
 
-#include "godot/utility.hpp"
 #include "godot/class_db.hpp"
+#include "godot/utility.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/log.hpp"
 #include "netw/session/frames.hpp"
@@ -112,17 +112,22 @@ PackedStringArray NetwJoinRequest::get_accounts() const {
 
 void NetwJoinRequest::_bind_methods() {
     ClassDB::bind_method(
-        D_METHOD("get_peer_id"), &NetwJoinRequest::get_peer_id
+        D_METHOD("get_peer_id"),
+        &NetwJoinRequest::get_peer_id
     );
     ADD_PROPERTY(PropertyInfo(Variant::INT, "peer_id"), "", "get_peer_id");
     ClassDB::bind_method(
-        D_METHOD("get_username"), &NetwJoinRequest::get_username
+        D_METHOD("get_username"),
+        &NetwJoinRequest::get_username
     );
     ADD_PROPERTY(
-        PropertyInfo(Variant::STRING_NAME, "username"), "", "get_username"
+        PropertyInfo(Variant::STRING_NAME, "username"),
+        "",
+        "get_username"
     );
     ClassDB::bind_method(
-        D_METHOD("get_session"), &NetwJoinRequest::get_session
+        D_METHOD("get_session"),
+        &NetwJoinRequest::get_session
     );
     ADD_PROPERTY(
         PropertyInfo(
@@ -132,22 +137,28 @@ void NetwJoinRequest::_bind_methods() {
             "NetwSession",
             PROPERTY_USAGE_NONE
         ),
-        "", "get_session"
+        "",
+        "get_session"
     );
     ClassDB::bind_method(D_METHOD("get_args"), &NetwJoinRequest::get_args);
     ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "args"), "", "get_args");
     ClassDB::bind_method(
-        D_METHOD("get_challenge"), &NetwJoinRequest::get_challenge
+        D_METHOD("get_challenge"),
+        &NetwJoinRequest::get_challenge
     );
     ADD_PROPERTY(
-        PropertyInfo(Variant::STRING, "challenge"), "", "get_challenge"
+        PropertyInfo(Variant::STRING, "challenge"),
+        "",
+        "get_challenge"
     );
     ClassDB::bind_method(
-        D_METHOD("get_accounts"), &NetwJoinRequest::get_accounts
+        D_METHOD("get_accounts"),
+        &NetwJoinRequest::get_accounts
     );
     ADD_PROPERTY(
         PropertyInfo(Variant::PACKED_STRING_ARRAY, "accounts"),
-        "", "get_accounts"
+        "",
+        "get_accounts"
     );
     ClassDB::bind_method(
         D_METHOD("add_account", "account", "name", "answers_challenge"),
@@ -155,28 +166,38 @@ void NetwJoinRequest::_bind_methods() {
         DEFVAL(true)
     );
     ClassDB::bind_method(
-        D_METHOD("name_of", "account"), &NetwJoinRequest::name_of
+        D_METHOD("name_of", "account"),
+        &NetwJoinRequest::name_of
     );
     ClassDB::bind_method(
-        D_METHOD("is_bound", "account"), &NetwJoinRequest::is_bound
+        D_METHOD("is_bound", "account"),
+        &NetwJoinRequest::is_bound
     );
     ClassDB::bind_method(
-        D_METHOD("set_account", "account"), &NetwJoinRequest::set_account
+        D_METHOD("set_account", "account"),
+        &NetwJoinRequest::set_account
     );
-    ClassDB::bind_method(D_METHOD("get_account"), &NetwJoinRequest::get_account);
+    ClassDB::bind_method(
+        D_METHOD("get_account"),
+        &NetwJoinRequest::get_account
+    );
     ADD_PROPERTY(
-        PropertyInfo(Variant::STRING, "account"), "set_account", "get_account"
+        PropertyInfo(Variant::STRING, "account"),
+        "set_account",
+        "get_account"
     );
     ClassDB::bind_method(
         D_METHOD("set_account_name", "name"),
         &NetwJoinRequest::set_account_name
     );
     ClassDB::bind_method(
-        D_METHOD("get_account_name"), &NetwJoinRequest::get_account_name
+        D_METHOD("get_account_name"),
+        &NetwJoinRequest::get_account_name
     );
     ADD_PROPERTY(
         PropertyInfo(Variant::STRING, "account_name"),
-        "set_account_name", "get_account_name"
+        "set_account_name",
+        "get_account_name"
     );
 }
 

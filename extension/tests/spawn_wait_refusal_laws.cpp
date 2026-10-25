@@ -110,13 +110,13 @@ const Row ROWS[] = {
      A,
      COROUTINE,
      false,
-     "Spawn function 'make' waited, so route"},
+     "Spawn function 'make' waited, so the spawn"},
     {"server promise", SERVER, PROMISE, true, "Spawn function 'make' waited."},
     {"client promise",
      A,
      PROMISE,
      false,
-     "Spawn function 'make' waited, so route"},
+     "Spawn function 'make' waited, so the spawn"},
     {"server registry",
      SERVER,
      REGISTRY,
@@ -126,7 +126,7 @@ const Row ROWS[] = {
      A,
      REGISTRY,
      false,
-     "Spawn constructor 'waiting' waited, so route"},
+     "Spawn constructor 'waiting' waited, so the spawn"},
 };
 
 void register_waiting(NetwMultiplayer *p_api, Node *p_host) {

@@ -734,9 +734,8 @@ TEST_CASE(
         REQUIRE(host_route > 0);
         NETW_CHECK_EQ(seat_route, host_route);
         CHECK(seat_name == host_name);
-        const Dictionary counted = Dictionary(
-            pair.apis[1]->spawn_plane()->counters()
-        );
+        const Dictionary counted
+            = Dictionary(pair.apis[1]->spawn_plane()->counters());
         NETW_CHECK_EQ(
             int64_t(counted[StringName("drops_spawn_duplicate")]),
             int64_t(0)
@@ -856,8 +855,7 @@ LevelSeat read_level_seat(
     }
     seen.bound = route_of(p_level) == route_of(p_hosted);
     const Ref<netw::NetwScene> scene = netw::Netw::scene(crate_in(p_level));
-    seen.same_scene = scene.is_valid()
-        && scene == netw::Netw::scene(p_level)
+    seen.same_scene = scene.is_valid() && scene == netw::Netw::scene(p_level)
         && p_api->scene_list().size() == 1
         && RID(p_api->scene_list()[0]) == p_api->entity_of(p_level);
     seen.crate_bound = route_of(crate_in(p_level)) > 0

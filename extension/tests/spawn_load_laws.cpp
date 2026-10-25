@@ -187,10 +187,7 @@ TEST_CASE(
 
         CHECK(stand.received(loading.root_route) == nullptr);
         CHECK(stand.received(loading.child_route) == nullptr);
-        NETW_CHECK_EQ(
-            int(stand.book_status()),
-            int(SceneLoads::STATUS_NONE)
-        );
+        NETW_CHECK_EQ(int(stand.book_status()), int(SceneLoads::STATUS_NONE));
     }
 }
 

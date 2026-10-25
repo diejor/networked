@@ -387,7 +387,9 @@ TEST_CASE(
     connection->connect(StringName("invited"), callable_mp_static(&on_invited));
     const StringName transport("ENetMultiplayerPeer");
     const Ref<netw::NetwEndpoint> first = connection->invite(
-        transport, String("127.0.0.1:7000"), String("Ada")
+        transport,
+        String("127.0.0.1:7000"),
+        String("Ada")
     );
     REQUIRE(first.is_valid());
     NETW_CHECK_EQ(invites().calls, 1);
@@ -397,8 +399,12 @@ TEST_CASE(
     CHECK(first->get_is_listed());
     CHECK(first->get_is_invited());
     CHECK(bool(first->get_invited_by() == String("Ada")));
-    CHECK(bool(connection->invite(transport, first->get_address(), String())
-        == first));
+    CHECK(
+        bool(
+            connection->invite(transport, first->get_address(), String())
+            == first
+        )
+    );
     NETW_CHECK_EQ(invites().calls, 2);
     CHECK(invites().name_when_emitted.is_empty());
     CHECK(first->get_is_invited());
@@ -406,7 +412,7 @@ TEST_CASE(
     NETW_CHECK_EQ(int(connection->endpoints().size()), 1);
     CHECK(connection->invite(transport, String(), String()).is_null());
     CHECK(connection->invite(StringName("Missing"), String("1"), String())
-        .is_null());
+              .is_null());
     NETW_CHECK_EQ(invites().calls, 2);
     NETW_CHECK_EQ(int(connection->remove(first)), int(OK));
     invites() = InviteLog();

@@ -30,11 +30,11 @@ const _ROOM := "room:"
 @export_range(1.0, 30.0, 0.5, "suffix:s") var connect_timeout: float = 10.0
 
 ## The player limit shown in the lobby list, when the host sets none.
-@export_range(1, 250, 1, "or_greater", "suffix:players") var max_clients: int = 8
+@export_range(1, 250, 1, "or_greater", "suffix:players") var max_players: int = 8
 
 ## Only lobbies with the same tag are listed, so games sharing a Nakama server
 ## do not see each other's lobbies.
-@export var browser_filter_uid: String = "networked"
+@export var browser_tag: String = "networked"
 
 ## When the host is lost or closes its window, the players left choose a new
 ## server among themselves and keep the match. [method NetwSession.leave]
@@ -63,7 +63,7 @@ class LobbyCard:
 	## The host's [member NetwSessionConfig.app_id].
 	@export var app_id: String = ""
 
-	## Game tag, matching [member NakamaLobbyDirectory.browser_filter_uid].
+	## Game tag, matching [member NakamaLobbyDirectory.browser_tag].
 	@export var uid: String = ""
 
 	## Maximum member count.
@@ -118,6 +118,7 @@ var _hosted_match_id: String = ""
 var _room: String = ""
 var _names: Dictionary[String, String]
 var _warned_unconfigured := false
+var _refusal: String = ""
 
 
 func _init() -> void:
@@ -141,13 +142,19 @@ func _service_exiting(_session: NetwSession) -> void:
 ## only be joined by its match id.
 func _host_lobby(settings: Dictionary) -> void:
 	if not await _signed_in():
-		fail(ERR_UNAVAILABLE, "the Nakama server is unreachable.")
+		fail(ERR_UNAVAILABLE, _refusal)
 		return
 	_new_bridge()
 	_bridge.create_match()
-	var peer := await _await_match("_host_lobby")
+	var peer := await _await_match()
 	if peer == null:
-		fail(ERR_CANT_CREATE, "the relay produced no match peer.")
+		fail(
+			ERR_CANT_CREATE,
+			(
+					"Could not create the Nakama match (%s). Check the server, "
+					+ "or raise connect_timeout."
+			) % _refusal,
+		)
 		return
 
 	var visibility := int(
@@ -164,9 +171,9 @@ func _host_lobby(settings: Dictionary) -> void:
 		card.lobby_name = String(settings.get("name", ""))
 		card.host = _account.display_name
 		card.app_id = String(Netw.session(self).config.app_id)
-		card.uid = browser_filter_uid
+		card.uid = browser_tag
 		var wanted := int(settings.get("max_players", 0))
-		card.max_players = wanted if wanted > 0 else max_clients
+		card.max_players = wanted if wanted > 0 else max_players
 		card.visibility = visibility
 		var written = await _account.client.write_storage_objects_async(
 			_account.session,
@@ -193,10 +200,10 @@ func _host_lobby(settings: Dictionary) -> void:
 
 func _join_lobby(address: String) -> void:
 	if address.is_empty():
-		fail(ERR_INVALID_PARAMETER, "the match id is empty.")
+		fail(ERR_INVALID_PARAMETER, "Enter the match ID shared by the host.")
 		return
 	if not await _signed_in():
-		fail(ERR_UNAVAILABLE, "the Nakama server is unreachable.")
+		fail(ERR_UNAVAILABLE, _refusal)
 		return
 	var users: Array = []
 	var matched: NakamaRTAPI.MatchmakerMatched = null
@@ -225,7 +232,7 @@ func _join_lobby(address: String) -> void:
 				},
 			)
 	if address.begins_with(_MATCHED) and matched == null:
-		fail(ERR_INVALID_PARAMETER, "the matchmaker address is damaged.")
+		fail(ERR_INVALID_PARAMETER, "The matchmaker address could not be read.")
 		return
 
 	_new_bridge()
@@ -236,9 +243,15 @@ func _join_lobby(address: String) -> void:
 		_bridge.join_match(address)
 	else:
 		_bridge.join_matched(matched)
-	var peer := await _await_match("_join_lobby")
+	var peer := await _await_match()
 	if peer == null:
-		fail(ERR_CANT_CONNECT, "the relay produced no match peer.")
+		fail(
+			ERR_CANT_CONNECT,
+			(
+					"Could not join the Nakama match (%s). Check the match ID, "
+					+ "or raise connect_timeout."
+			) % _refusal,
+		)
 		return
 	deliver(peer)
 
@@ -278,7 +291,7 @@ func _list_lobbies() -> void:
 		if not live_sizes.has(object.key) or not stored is Dictionary:
 			continue
 		var card := LobbyCard.from_dict(object.key, stored)
-		if card.uid != browser_filter_uid:
+		if card.uid != browser_tag:
 			continue
 		addresses.append(card.match_id)
 		names.append(card.lobby_name)
@@ -333,14 +346,15 @@ func _signed_in() -> bool:
 				+ "Add a NakamaAccount node to the session.",
 			)
 			_warned_unconfigured = true
-		provider_unavailable.emit("The session has no NakamaAccount.")
+		_refusal = "The session has no NakamaAccount."
+		provider_unavailable.emit(_refusal)
 		return false
 
 	var signing_in := _account.sign_in()
 	await signing_in.wait()
 	if signing_in.is_failed:
-		push_warning(signing_in.detail)
-		provider_unavailable.emit(signing_in.detail)
+		_refusal = signing_in.detail
+		provider_unavailable.emit(_refusal)
 		return false
 	return true
 
@@ -358,7 +372,8 @@ func _new_bridge() -> void:
 		)
 
 
-func _await_match(op: String) -> MultiplayerPeer:
+func _await_match() -> MultiplayerPeer:
+	_refusal = "timed out"
 	var timer := get_tree().create_timer(connect_timeout)
 	var outcome := await _Async.timeout_or_failure(
 		_bridge.match_joined,
@@ -366,12 +381,6 @@ func _await_match(op: String) -> MultiplayerPeer:
 		timer,
 	)
 	if outcome.result != "success":
-		push_error(
-			(
-					"NakamaLobbyDirectory.%s did not join a match (%s). Check the "
-					+ "server, or raise connect_timeout."
-			) % [op, outcome.result],
-		)
 		_leave_match()
 		return null
 	return _bridge.multiplayer_peer
@@ -398,10 +407,7 @@ func _delete_card() -> void:
 
 
 func _on_match_join_error(exception: Variant) -> void:
-	push_warning(
-		"Joining the Nakama match failed (%s)."
-		% (exception.message if exception != null else "no reason given"),
-	)
+	_refusal = exception.message if exception != null else "no reason given"
 
 
 func _on_received_match_presence(event: Variant) -> void:

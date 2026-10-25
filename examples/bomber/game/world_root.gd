@@ -12,7 +12,8 @@ func spawn_player(username: StringName, peer_id: int, slot: int) -> Node:
 	var player := PLAYER_SCENE.instantiate()
 	player.position = spawn_position(slot)
 	(player.get_node("%label") as Label).text = String(username)
-	get_node(^"Score").add_player(Netw.session(self).player_of(peer_id), String(username))
+	var seat: NetwPlayer = Netw.session(self).player_of(peer_id)
+	get_node(^"Score").add_player(seat, String(username))
 	return player
 
 

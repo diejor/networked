@@ -20,7 +20,7 @@
 		Connecting is done as you would normally do with [SceneMultiplayer], by assigning [member MultiplayerAPI.multiplayer_peer]. [member connection] finds servers and joins or hosts one, and [method Netw.prepare_join] names the player who joins.
 		[b]Moving the server[/b]
 		[method transfer_server] makes another peer the server, and [signal server_transferred] reports it on every peer. The session also survives the server leaving when its [MultiplayerPeer] can promote a client by itself. ENet, WebRTC, Steam and [OfflineMultiplayerPeer] cannot, so losing the server ends them.
-		On a peer that can, closing the server's window moves the server. [method leave] ends every client's session on any peer, so a server that wants the game to go on without it moves the server first.
+		On a peer that can, closing the server's window moves the server. The server calling [method leave] ends every client's session, even on a peer that can promote a client, so a server that wants the game to go on without it moves the server first.
 		[codeblock]
 		func hand_over(successor: NetwPlayer) -&gt; void:
 		    if session.transfer_server(successor.peer_id) == OK:

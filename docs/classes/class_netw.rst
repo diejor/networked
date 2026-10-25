@@ -21,7 +21,7 @@ Description
 
 **Levels**\ 
 
-A level is spawned like any other node, with :ref:`configure_scene()<class_Netw_method_configure_scene>` in its root. A player receives the level while one of their :ref:`NetwPlayer.entities<class_NetwPlayer_property_entities>` is in it, so spawn players into it with :ref:`spawn_player()<class_Netw_method_spawn_player>`, here and in the :ref:`configure_join()<class_Netw_method_configure_join>` handler. :ref:`NetwScene<class_NetwScene>` covers the rest.
+A level is spawned like any other node, with :ref:`configure_scene()<class_Netw_method_configure_scene>` in its root. Spawn a player into it with :ref:`spawn_player()<class_Netw_method_spawn_player>` and that player's peer receives the level. :ref:`NetwScene<class_NetwScene>` covers the rest.
 
 ::
 
@@ -46,18 +46,6 @@ A level is spawned like any other node, with :ref:`configure_scene()<class_Netw_
         add_child(arena)
         for player: NetwPlayer in Netw.session(self).players:
             arena.add_child(Netw.spawn_player(player, make_car))
-
-\ **Accounts**\ 
-
-\ :ref:`configure_admission()<class_Netw_method_configure_admission>` decides who joins. Each :ref:`NetwAccountProvider<class_NetwAccountProvider>` added with :ref:`NetwAdmissionConfig.accept()<class_NetwAdmissionConfig_method_accept>` proves an account before the handler runs, and the player keeps it as :ref:`NetwPlayer.account<class_NetwPlayer_property_account>`. :ref:`NetwIdToken<class_NetwIdToken>` proves one with a token signed by a backend the server trusts. The Steam, Nakama and Discord addons each ship a provider.
-
-::
-
-    func _init() -> void:
-        Netw.configure_admission(admit).accept(id_token)
-
-    func admit(request: NetwJoinRequest) -> Error:
-        return OK if request.account else ERR_UNAUTHORIZED
 
 .. rst-class:: classref-reftable-group
 
@@ -195,7 +183,17 @@ A :ref:`NetwChannel<class_NetwChannel>` for sending raw bytes in batches.
 
 :ref:`NetwAdmissionConfig<class_NetwAdmissionConfig>` **configure_admission**\ (\ handler\: :godot:`Callable`\ ) |static| :ref:`🔗<class_Netw_method_configure_admission>`
 
-Declares the session's admission handler and returns its :ref:`NetwAdmissionConfig<class_NetwAdmissionConfig>`. The server calls ``handler`` with each :ref:`NetwJoinRequest<class_NetwJoinRequest>` once every :ref:`NetwAccountProvider<class_NetwAccountProvider>` accepted with :ref:`NetwAdmissionConfig.accept()<class_NetwAdmissionConfig_method_accept>` has verified, and admits the peer when it returns :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>`. Verifying and the handler together may ``await`` for up to :ref:`NetwMultiplayer.auth_timeout<class_NetwMultiplayer_property_auth_timeout>`.
+Declares who may join the session.
+
+::
+
+    func _init() -> void:
+        Netw.configure_admission(admit).accept(id_token)
+
+    func admit(request: NetwJoinRequest) -> Error:
+        return OK if request.account else ERR_UNAUTHORIZED
+
+\ A peer joins when ``handler`` returns :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>`. Each :ref:`NetwAccountProvider<class_NetwAccountProvider>` passed to :ref:`NetwAdmissionConfig.accept()<class_NetwAdmissionConfig_method_accept>` proves its account before ``handler`` runs, and both may ``await`` within :ref:`NetwMultiplayer.auth_timeout<class_NetwMultiplayer_property_auth_timeout>`.
 
 .. rst-class:: classref-item-separator
 
@@ -265,11 +263,7 @@ Declares what the other peers do with ``node`` when :ref:`despawn()<class_Netw_m
 
 :ref:`NetwEntity<class_NetwEntity>` **configure_entity**\ (\ node\: :godot:`Node`\ ) |static| :ref:`🔗<class_Netw_method_configure_entity>`
 
-Declares ``node`` as a root before it enters the tree.
-
-A node placed in a scene that every peer opens needs no :ref:`spawn()<class_Netw_method_spawn>`. Every peer finds it by its path from :ref:`NetwSession.root<class_NetwSession_property_root>`, and a peer that does not have it reports it by name and path.
-
-\ :ref:`NetwEntity.of()<class_NetwEntity_method_of>` finds an existing :ref:`NetwEntity<class_NetwEntity>`.
+Declares ``node`` as a root before it enters the tree. :ref:`NetwEntity.of()<class_NetwEntity_method_of>` finds an existing :ref:`NetwEntity<class_NetwEntity>`.
 
 .. rst-class:: classref-item-separator
 
@@ -616,7 +610,7 @@ Moves ``node`` under ``new_parent`` like :godot:`Node.reparent() <Node#class_Nod
 
 \ A level keeps its :ref:`NetwScene<class_NetwScene>`, its viewers and every :ref:`NetwPlayer.scene<class_NetwPlayer_property_scene>` when it moves. For a level made with :ref:`NetwSceneConfig.isolated()<class_NetwSceneConfig_method_isolated>`, pass the node :ref:`spawn()<class_Netw_method_spawn>` returned or the level's root, and the node :ref:`spawn()<class_Netw_method_spawn>` returned moves.
 
-Unlike :godot:`Node.reparent() <Node#class_Node_method_reparent>`, it does not fire :godot:`Area3D` and :godot:`Area2D` enter and exit signals during the move, which works around `this issue <https://github.com/godotengine/godot/issues/14578>`__. An overlap that really changed during the move is reported after it with the body and area enter and exit signals, and the shape signals are not sent for it. Otherwise :godot:`Node.reparent() <Node#class_Node_method_reparent>` works fine.
+\ :godot:`Area3D` and :godot:`Area2D` do not fire enter and exit signals during the move (`Godot issue 14578 <https://github.com/godotengine/godot/issues/14578>`__). An overlap that really changed during the move is reported after it with the body and area enter and exit signals, without the shape signals.
 
 The promise fails with :godot:`@GlobalScope.ERR_DOES_NOT_EXIST <@GlobalScope#class_@GlobalScope_constant_ERR_DOES_NOT_EXIST>` when ``node`` has no entity, and :godot:`@GlobalScope.ERR_UNAVAILABLE <@GlobalScope#class_@GlobalScope_constant_ERR_UNAVAILABLE>` outside a session.
 
@@ -674,7 +668,7 @@ The method may ``await``, and the reply is sent when it returns. A method whose 
 
 Calls ``callable`` on every peer that can see the node, and returns a :ref:`NetwGroupPromise<class_NetwGroupPromise>` with each return value. The promise fails at once when the node is not part of a spawned :ref:`NetwEntity<class_NetwEntity>`.
 
-A method declared with :ref:`NetwMemberConfig.call_local()<class_NetwMemberConfig_method_call_local>` or a ``call_local`` :godot:`@GDScript.@rpc <@GDScript#class_@GDScript_annotation_@rpc>` also runs on this peer, and its value joins :ref:`NetwGroupPromise.results<class_NetwGroupPromise_property_results>` under this peer's id. Otherwise this peer is not asked. The method may ``await``, as for :ref:`request()<class_Netw_method_request>`. A method that takes longer than 5 seconds declares its own deadline with :ref:`NetwMemberConfig.timeout()<class_NetwMemberConfig_method_timeout>`.
+This peer is asked too when the method is ``call_local``, set through :godot:`@GDScript.@rpc <@GDScript#class_@GDScript_annotation_@rpc>` or :ref:`NetwMemberConfig.call_local()<class_NetwMemberConfig_method_call_local>`. The method may ``await`` for 5 seconds, and :ref:`NetwMemberConfig.timeout()<class_NetwMemberConfig_method_timeout>` sets a longer deadline.
 
 
 .. tabs::

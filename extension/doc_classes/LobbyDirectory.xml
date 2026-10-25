@@ -181,35 +181,35 @@
 		</method>
 	</methods>
 	<members>
-		<member name="display_name" type="String" setter="set_display_name" getter="get_display_name">
-			The name shown in the server browser. An empty value uses [method _peer_class].
-		</member>
-		<member name="address_label" type="String" setter="set_address_label" getter="get_address_label">
-			The label of the address input.
-		</member>
-		<member name="address_placeholder" type="String" setter="set_address_placeholder" getter="get_address_placeholder">
-			The placeholder of the address input.
-		</member>
-		<member name="address_help" type="String" setter="set_address_help" getter="get_address_help">
-			Help shown under the address input.
-		</member>
-		<member name="accepts_empty_address" type="bool" setter="set_accepts_empty_address" getter="get_accepts_empty_address">
+		<member name="accepts_empty_address" type="bool" setter="set_accepts_empty_address" getter="get_accepts_empty_address" default="false">
 			Whether joining accepts an empty address.
 		</member>
-		<member name="can_host_here" type="bool" setter="set_can_host_here" getter="get_can_host_here">
+		<member name="address_help" type="String" setter="set_address_help" getter="get_address_help" default="&quot;&quot;">
+			Help shown under the address input.
+		</member>
+		<member name="address_label" type="String" setter="set_address_label" getter="get_address_label" default="&quot;Lobby&quot;">
+			The label of the address input.
+		</member>
+		<member name="address_placeholder" type="String" setter="set_address_placeholder" getter="get_address_placeholder" default="&quot;&quot;">
+			The placeholder of the address input.
+		</member>
+		<member name="can_host_here" type="bool" setter="set_can_host_here" getter="get_can_host_here" default="true">
 			Whether this build can host lobbies.
 		</member>
-		<member name="can_probe" type="bool" setter="set_can_probe" getter="get_can_probe">
+		<member name="can_probe" type="bool" setter="set_can_probe" getter="get_can_probe" default="false">
 			Whether a lobby can be checked without joining it.
 		</member>
-		<member name="timeout_hint" type="float" setter="set_timeout_hint" getter="get_timeout_hint">
-			Seconds before a host or join request fails with [constant @GlobalScope.ERR_TIMEOUT].
+		<member name="capabilities" type="int" setter="set_capabilities" getter="get_capabilities" default="0">
+			The [enum Capability] flags this directory supports.
 		</member>
-		<member name="list_interval" type="float" setter="set_list_interval" getter="get_list_interval">
+		<member name="display_name" type="String" setter="set_display_name" getter="get_display_name" default="&quot;&quot;">
+			The name shown in the server browser. An empty value uses [method _peer_class].
+		</member>
+		<member name="list_interval" type="float" setter="set_list_interval" getter="get_list_interval" default="0.0">
 			Seconds between [method _list_lobbies] calls while [member NetwConnection.browsing] is enabled. Zero lists once when browsing starts.
 		</member>
-		<member name="capabilities" type="int" setter="set_capabilities" getter="get_capabilities">
-			The [enum Capability] flags this directory supports.
+		<member name="timeout_hint" type="float" setter="set_timeout_hint" getter="get_timeout_hint" default="20.0">
+			Seconds before a host or join request fails with [constant @GlobalScope.ERR_TIMEOUT].
 		</member>
 	</members>
 	<signals>

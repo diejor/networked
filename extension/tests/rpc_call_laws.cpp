@@ -7,12 +7,12 @@
 
 #include "godot/node.hpp"
 #include "netw/api/context.hpp"
-#include "netw/api/group_promise.hpp"
-#include "netw/api/promise.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/entity_record.hpp"
+#include "netw/api/group_promise.hpp"
 #include "netw/api/loopback.hpp"
 #include "netw/api/netw_multiplayer.hpp"
+#include "netw/api/promise.hpp"
 
 namespace TestNetwRpcCallLaws {
 
@@ -191,11 +191,8 @@ Variant via_rpc_request_call(Node *p_node) {
 }
 
 Variant via_rpc_request_call_group(Node *p_node) {
-    return home(p_node)->rpc_request_call_group(
-        doubled(p_node),
-        one_tag(),
-        5.0
-    );
+    return home(p_node)
+        ->rpc_request_call_group(doubled(p_node), one_tag(), 5.0);
 }
 
 Variant via_entity_call(Node *p_node) {

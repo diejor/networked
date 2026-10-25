@@ -94,7 +94,9 @@ runs:
           fi
           test -n "$tool"
           echo "installing ndk;$NDK_VERSION with $tool"
+          set +o pipefail
           yes | "$tool" --install "ndk;$NDK_VERSION"
+          set -o pipefail
         fi
         test -d "$ndk/toolchains/llvm/prebuilt"
         echo "ANDROID_NDK_ROOT=$ndk" >> "$GITHUB_ENV"

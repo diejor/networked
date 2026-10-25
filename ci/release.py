@@ -9,6 +9,7 @@ from pathlib import Path
 
 from common import ROOT, addon_version, digest_of, fail, load_json, main, release_stem, write_json
 from matrix import load_catalog, resolve
+from package import PACKAGES
 
 
 def tag_version(tag: str) -> str:
@@ -86,9 +87,9 @@ def run_cli(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     version = addon_version()
     manifest_path = args.dist / ("%s.manifest.json" % release_stem(version))
-    archive = args.dist / ("%s.zip" % release_stem(version))
+    archives = [args.dist / ("%s.zip" % release_stem(version, name)) for name in PACKAGES]
     sums = args.dist / "SHA256SUMS.txt"
-    assets = [archive, manifest_path]
+    assets = [*archives, manifest_path]
 
     manifest = check_inventory(
         manifest_path,

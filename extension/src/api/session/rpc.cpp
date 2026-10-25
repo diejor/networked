@@ -1476,10 +1476,9 @@ void NetwMultiplayer::rpc_refuse_unrouted_call(
         int64_t(txn),
         ERR_DOES_NOT_EXIST,
         vformat(
-            "Peer %d holds no node for route %d, so the call was dropped. "
-            "Build the same scene tree on every peer.",
-            int(get_unique_id()),
-            int(p_route)
+            "Peer %d does not have the node this call targets, so the call "
+            "was dropped. Build the same scene tree on every peer.",
+            int(get_unique_id())
         )
     );
 }
@@ -1911,10 +1910,9 @@ void NetwMultiplayer::rpc_handle_call(
         if (is_host() && arg_entity.is_valid()
             && !send_admits(p_sender, arg_entity)) {
             const String detail = vformat(
-                "Peer %d sent a call naming route %d, which it cannot see, so "
-                "the call was dropped.",
-                p_sender,
-                slot.node.route
+                "Peer %d sent a call naming a node it cannot see, so the "
+                "call was dropped.",
+                p_sender
             );
             if (warn_verdict(ERR_UNAUTHORIZED, slot.node.route)) {
                 NETW_WARN(sys::TRANSPORT, "%s", detail);

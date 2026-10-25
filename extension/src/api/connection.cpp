@@ -149,7 +149,6 @@ void NetwConnection::cancel_peer_creation(const RID &p_ticket) {
     }
 }
 
-
 Ref<NetwPromise> NetwConnection::join(
     const Ref<NetwEndpoint> &p_endpoint,
     const Dictionary &p_settings
@@ -409,7 +408,9 @@ Ref<NetwEndpoint> NetwConnection::invite(
         return Ref<NetwEndpoint>();
     }
     return remember_endpoint(api->connect_plane().invite(
-        resolve_transport(p_transport), p_address, p_from_name
+        resolve_transport(p_transport),
+        p_address,
+        p_from_name
     ));
 }
 
@@ -627,11 +628,16 @@ void NetwConnection::_bind_methods() {
     ));
 
     ClassDB::bind_method(
-        D_METHOD("get_current_endpoint"), &NetwConnection::get_current_endpoint
+        D_METHOD("get_current_endpoint"),
+        &NetwConnection::get_current_endpoint
     );
     ADD_PROPERTY(
-        PropertyInfo(Variant::OBJECT, "current_endpoint",
-            PROPERTY_HINT_RESOURCE_TYPE, "NetwEndpoint"),
+        PropertyInfo(
+            Variant::OBJECT,
+            "current_endpoint",
+            PROPERTY_HINT_RESOURCE_TYPE,
+            "NetwEndpoint"
+        ),
         "",
         "get_current_endpoint"
     );

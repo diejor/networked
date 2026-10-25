@@ -66,8 +66,9 @@ func partied(leader: MultiplayerViewport, friend: MultiplayerViewport) -> void:
 	assert_array(invited_by).contains_exactly([id_of(leader)])
 	party_of(friend).join(id_of(leader))
 	await settle(
-		func() -> bool: return party_of(friend).members.size() == 2 \
-				and party_of(leader).members.size() == 2,
+		func() -> bool:
+			return party_of(friend).members.size() == 2 \
+					and party_of(leader).members.size() == 2,
 		"the friend to join",
 	)
 
@@ -148,8 +149,9 @@ func test_a_kicked_member_is_left_alone() -> void:
 	party_of(valeria).kick(id_of(jose))
 
 	await settle(
-		func() -> bool: return party_of(jose).members == [id_of(jose)] \
-				and party_of(valeria).members == [id_of(valeria)],
+		func() -> bool:
+			return party_of(jose).members == [id_of(jose)] \
+					and party_of(valeria).members == [id_of(valeria)],
 		"the kick",
 	)
 	assert_str(party_of(jose).leader).is_equal(id_of(jose))
@@ -179,9 +181,10 @@ func test_find_match_brings_the_whole_party_into_one_match() -> void:
 	party_of(mia).find_match(3, 3)
 
 	await settle(
-		func() -> bool: return not invites[valeria].is_empty() \
-				and not invites[jose].is_empty() \
-				and not invites[mia].is_empty(),
+		func() -> bool:
+			return not invites[valeria].is_empty() \
+					and not invites[jose].is_empty() \
+					and not invites[mia].is_empty(),
 		"the matched invitations",
 	)
 	var outcomes: Array[NetwOrdinarySetup.Outcome] = []
@@ -203,8 +206,9 @@ func test_find_match_brings_the_whole_party_into_one_match() -> void:
 	for outcome in outcomes:
 		assert_int(outcome.error).is_equal(OK)
 	await settle(
-		func() -> bool: return Netw.session(valeria).players.size() == 3 \
-				and Netw.session(jose).players.size() == 3 \
-				and Netw.session(mia).players.size() == 3,
+		func() -> bool:
+			return Netw.session(valeria).players.size() == 3 \
+					and Netw.session(jose).players.size() == 3 \
+					and Netw.session(mia).players.size() == 3,
 		"every player in the matched match",
 	)

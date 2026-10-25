@@ -102,7 +102,7 @@ func test_browsing_from_a_ready_callback_signs_in_a_guest_and_lists() -> void:
 	account.port = NakamaTestServer.DEFAULT_PORT
 	tree.add_child(account)
 	var dir := NakamaLobbyDirectory.new()
-	dir.browser_filter_uid = run_uid
+	dir.browser_tag = run_uid
 	tree.add_child(dir)
 	tree.add_child(ReadyBrowser.new())
 	var listed := [false]
@@ -149,7 +149,7 @@ func make_directory(username: String) -> NakamaLobbyDirectory:
 	await NetwTestSuite.drain_frames(get_tree(), 2)
 	await NakamaTestSupport.sign_in(tree, "%s-%s" % [run_uid, username])
 	var dir := NakamaTestSupport.directory(tree)
-	dir.browser_filter_uid = run_uid
+	dir.browser_tag = run_uid
 	return dir
 
 

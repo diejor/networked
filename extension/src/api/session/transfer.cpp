@@ -390,7 +390,8 @@ void NetwMultiplayer::transfer_follow_players(
         for (KeyValue<int64_t, PlayerRow> &row : players) {
             if (row.value.row.is_valid() && row.value.peer != own) {
                 row.value.row->bind_account(
-                    String(), row.value.row->get_account_name()
+                    String(),
+                    row.value.row->get_account_name()
                 );
             }
         }
@@ -408,7 +409,8 @@ void NetwMultiplayer::transfer_follow_players(
         const String account = directory->account_of(row.value.peer);
         if (!account.is_empty()) {
             row.value.row->bind_account(
-                account, directory->member_name(row.value.peer)
+                account,
+                directory->member_name(row.value.peer)
             );
         }
     }

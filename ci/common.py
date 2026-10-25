@@ -138,9 +138,9 @@ def compatibility_minimum() -> str:
     raise fail("the extension manifest declares no compatibility_minimum")
 
 
-def release_stem(version: str | None = None) -> str:
+def release_stem(version: str | None = None, product: str = "networked") -> str:
     """The name a release asset carries, engine version included."""
-    return "networked-v%s-godot%s" % (version or addon_version(), compatibility_minimum())
+    return "%s-v%s-godot%s" % (product, version or addon_version(), compatibility_minimum())
 
 
 def gdignore(directory: Path) -> None:

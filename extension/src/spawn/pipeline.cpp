@@ -637,14 +637,8 @@ Node *Pipeline::spawn(
             method
         );
     }
-    const SpawnCall call{
-        gd::instance_id(host),
-        method,
-        p_args,
-        p_owner,
-        "Netw.spawn",
-        0
-    };
+    const SpawnCall
+        call{gd::instance_id(host), method, p_args, p_owner, "Netw.spawn", 0};
     return spawn_finish(built, call, refusal);
 }
 
@@ -687,10 +681,9 @@ Ref<NetwPromise> Pipeline::spawn_async(
     }
     if (!NetwMultiplayer::is_waiting(built)) {
         Node *node = spawn_finish(built, call, refusal);
-        return node != nullptr ? NetwPromise::resolved(
-                                     NetwMultiplayer::scene_outer_of(node)
-                                 )
-                               : refusal.promise();
+        return node != nullptr
+            ? NetwPromise::resolved(NetwMultiplayer::scene_outer_of(node))
+            : refusal.promise();
     }
 
     pending_serial += 1;
@@ -928,8 +921,7 @@ Ref<NetwEntity> Pipeline::adopt_in_place(Node *p_root) {
     Record record;
     record.set_recipe(Book::RECIPE_ADOPT);
     record.bind_origin(NetwMultiplayer::scene_outer_of(p_root)->get_parent());
-    const Ref<NetwEntity> entity
-        = arm_authoritative_spawn(&record, p_root);
+    const Ref<NetwEntity> entity = arm_authoritative_spawn(&record, p_root);
     if (entity.is_valid()) {
         NetwMultiplayer *plane = core();
         if (plane != nullptr) {
@@ -951,8 +943,7 @@ bool Pipeline::readmit(Node *p_node, const Record &p_recipe) {
     record.set_recipients(PackedInt32Array());
     record.bind_node(p_node);
     record.bind_origin(p_node->get_parent());
-    return arm_authoritative_spawn(&record, p_node)
-        .is_valid();
+    return arm_authoritative_spawn(&record, p_node).is_valid();
 }
 
 Ref<NetwEntity> Pipeline::arm_consumed_spawn(
@@ -2270,8 +2261,9 @@ SpawnBuild::Outcome Pipeline::build_spawn(
         const int64_t scene_index = frame.scene_index;
         if (scene_index < 0) {
             r_built.data = gd::bytes_to_var(frame.custom);
-        } else if (scene_index
-                   < int64_t(recv_spawner->get_spawnable_scene_count())) {
+        } else if (
+            scene_index < int64_t(recv_spawner->get_spawnable_scene_count())
+        ) {
             const SpawnBuild::Outcome loaded = wait_for_scene(
                 recv_spawner->get_spawnable_scene(int(scene_index)),
                 r_built
@@ -2354,18 +2346,17 @@ SpawnBuild::Outcome Pipeline::build_spawn(
             if (fn_waited) {
                 NETW_WARN(
                     sys::SPAWN,
-                    "Spawn constructor '%s' waited, so route %d was dropped. "
+                    "Spawn constructor '%s' waited, so the spawn was dropped. "
                     "Return the node without waiting.",
-                    id,
-                    route
+                    id
                 );
             } else {
                 NETW_WARN(
                     sys::SPAWN,
-                    "Spawn constructor '%s' did not return a Node, so route %d "
+                    "Spawn constructor '%s' did not return a Node, so the "
+                    "spawn "
                     "was dropped.",
-                    id,
-                    route
+                    id
                 );
             }
             drops_spawn_unresolved += 1;
@@ -2384,9 +2375,8 @@ SpawnBuild::Outcome Pipeline::build_spawn(
         if (host == nullptr) {
             NETW_WARN(
                 sys::SPAWN,
-                "A spawn for route %d was dropped, because the node holding "
-                "its spawn function does not exist on this peer.",
-                route
+                "A spawn was dropped, because the node holding its spawn "
+                "function does not exist on this peer."
             );
             drops_spawn_unresolved += 1;
             return SpawnBuild::DROPPED;
@@ -2397,10 +2387,9 @@ SpawnBuild::Outcome Pipeline::build_spawn(
         if (schema.get_type() == Variant::NIL) {
             NETW_WARN(
                 sys::SPAWN,
-                "A spawn for route %d was dropped, because spawn function '%s' "
-                "is not registered on '%s' on this peer. Call "
-                "Netw.configure_spawn for it on every peer.",
-                route,
+                "A spawn was dropped, because spawn function '%s' is not "
+                "registered on '%s' on this peer. Call Netw.configure_spawn "
+                "for it on every peer.",
                 method,
                 host->get_name()
             );
@@ -2438,18 +2427,16 @@ SpawnBuild::Outcome Pipeline::build_spawn(
             if (fn_waited) {
                 NETW_WARN(
                     sys::SPAWN,
-                    "Spawn function '%s' waited, so route %d was dropped. Use "
-                    "Netw.spawn_async for a spawn function that awaits.",
-                    method,
-                    route
+                    "Spawn function '%s' waited, so the spawn was dropped. "
+                    "Use Netw.spawn_async for a spawn function that awaits.",
+                    method
                 );
             } else {
                 NETW_WARN(
                     sys::SPAWN,
-                    "Spawn function '%s' did not return a Node, so route %d "
+                    "Spawn function '%s' did not return a Node, so the spawn "
                     "was dropped.",
-                    method,
-                    route
+                    method
                 );
             }
             plane->spawn_report_failed(
@@ -3037,9 +3024,8 @@ void Pipeline::expire_spawner_parked() {
         spawn_park_expired += 1;
         NETW_WARN(
             sys::SPAWN,
-            "A spawn for route %d was dropped, because its "
-            "MultiplayerSpawner never appeared on this peer.",
-            parked_route
+            "A spawn was dropped, because its MultiplayerSpawner never "
+            "appeared on this peer."
         );
     }
 }
@@ -3162,9 +3148,8 @@ void Pipeline::retry_build_parked() {
                 NETW_WARN(
                     sys::SPAWN,
                     "The node holding spawn function '%s' was freed before it "
-                    "returned, so route %d was dropped.",
-                    method,
-                    parked_route
+                    "returned, so the spawn was dropped.",
+                    method
                 );
             } else {
                 warn_slow_build(held->method, held->started_at, held->warned);
@@ -3294,9 +3279,8 @@ bool Pipeline::build_returned(
     drop_build(p_route);
     NETW_WARN(
         sys::SPAWN,
-        "Spawn function '%s' did not return a Node, so route %d was dropped.",
-        method,
-        p_route
+        "Spawn function '%s' did not return a Node, so the spawn was dropped.",
+        method
     );
     if (NetwMultiplayer *plane = core()) {
         plane->spawn_report_failed(p_route, String("returned no Node"));
@@ -3318,10 +3302,9 @@ void Pipeline::build_failed(
     drop_build(p_route);
     NETW_WARN(
         sys::SPAWN,
-        "Spawn function '%s' failed with '%s', so route %d was dropped.",
+        "Spawn function '%s' failed with '%s', so the spawn was dropped.",
         method,
-        p_detail,
-        p_route
+        p_detail
     );
     if (NetwMultiplayer *plane = core()) {
         plane->spawn_report_failed(
@@ -3345,9 +3328,8 @@ SpawnBuild::Outcome Pipeline::drop_missing_scene(
     release_build(p_route);
     NETW_WARN(
         sys::SPAWN,
-        "A spawn for route %d was dropped, because scene '%s' does not exist "
-        "on this peer. Export the same scenes on every peer.",
-        p_route,
+        "A spawn was dropped, because scene '%s' does not exist on this "
+        "peer. Export the same scenes on every peer.",
         p_path
     );
     drops_spawn_unresolved += 1;

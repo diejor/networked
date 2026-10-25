@@ -180,7 +180,10 @@ public:
 
 NETW_FRAME_SCENARIO(PairedScenario, paired_scenario, &paired_evidence, false);
 NETW_FRAME_SCENARIO(
-    PairedScenario, tampered_scenario, &tampered_evidence, true
+    PairedScenario,
+    tampered_scenario,
+    &tampered_evidence,
+    true
 );
 
 } // namespace

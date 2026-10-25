@@ -55,9 +55,8 @@ inline godot::PackedByteArray rs256_sign(
     if (crypto.is_null() || p_key.is_null()) {
         return godot::PackedByteArray();
     }
-    return crypto->sign(
-        godot::HashingContext::HASH_SHA256, p_message_hash, p_key
-    );
+    return crypto
+        ->sign(godot::HashingContext::HASH_SHA256, p_message_hash, p_key);
 }
 
 inline bool rs256_verify(
@@ -70,7 +69,9 @@ inline bool rs256_verify(
         return false;
     }
     return crypto->verify(
-        godot::HashingContext::HASH_SHA256, p_message_hash, p_signature,
+        godot::HashingContext::HASH_SHA256,
+        p_message_hash,
+        p_signature,
         p_key
     );
 }

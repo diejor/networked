@@ -4083,9 +4083,7 @@
 			The clock synchronized with the server for the first time. It happens once. The callback receives no arguments.
 		</constant>
 		<constant name="CLOCK_CONFIGURED" value="15" enum="Notification">
-			The clock settings were applied. Emitted once with no arguments. Check
-			[method clock_is_configured] if it may have already happened. Peer assignment
-			and [method NetwAction.request] are refused during this callback.
+			The clock settings were applied. Emitted once with no arguments. Check [method clock_is_configured] if it may have already happened. Peer assignment and [method NetwAction.request] are refused during this callback.
 		</constant>
 		<constant name="CLOCK_TICKRATE_MISMATCH" value="16" enum="Notification">
 			A peer runs a tickrate that differs from this peer's, and [method clock_set_mismatch_action] is [constant NetwClock.MISMATCH_ACTION_SIGNAL]. The callback receives [code](peer_id: int, their_tickrate: int)[/code].

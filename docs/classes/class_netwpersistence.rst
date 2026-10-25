@@ -161,13 +161,7 @@ The id this record is stored under. Supplied by :ref:`NetwPersistenceConfig.reco
 
 - :ref:`NetwSchema<class_NetwSchema>` **get_schema**\ (\ )
 
-The read-only saved property definition for :ref:`NetwDatabase.read()<class_NetwDatabase_method_read>`\ 
-
-and :ref:`NetwDatabase.write()<class_NetwDatabase_method_write>`. ``null`` until persistence is
-
-ready on the server. Direct database calls do not update the root's
-
-properties or :ref:`dirty<class_NetwPersistence_property_dirty>`.
+The read-only saved property definition for :ref:`NetwDatabase.read()<class_NetwDatabase_method_read>` and :ref:`NetwDatabase.write()<class_NetwDatabase_method_write>`. ``null`` until persistence is ready on the server. Direct database calls do not update the root's properties or :ref:`dirty<class_NetwPersistence_property_dirty>`.
 
 .. rst-class:: classref-section-separator
 

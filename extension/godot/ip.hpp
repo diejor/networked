@@ -33,10 +33,9 @@ inline godot::LocalVector<LocalAddress> local_interface_addresses() {
     HashMap<String, IP::Interface_Info> interfaces;
     ip->get_local_interfaces(&interfaces);
     for (const KeyValue<String, IP::Interface_Info> &entry : interfaces) {
-        const String named
-            = entry.value.name + " " + entry.value.name_friendly;
+        const String named = entry.value.name + " " + entry.value.name_friendly;
         for (const IPAddress &address : entry.value.ip_addresses) {
-            out.push_back({ named, String(address) });
+            out.push_back({named, String(address)});
         }
     }
 #else
@@ -44,11 +43,11 @@ inline godot::LocalVector<LocalAddress> local_interface_addresses() {
         = ip->get_local_interfaces();
     for (int64_t at = 0; at < interfaces.size(); at++) {
         const godot::Dictionary entry = interfaces[at];
-        const godot::String named = godot::String(entry.get("name", ""))
-            + " " + godot::String(entry.get("friendly", ""));
+        const godot::String named = godot::String(entry.get("name", "")) + " "
+            + godot::String(entry.get("friendly", ""));
         const godot::Array addresses = entry.get("addresses", godot::Array());
         for (int64_t index = 0; index < addresses.size(); index++) {
-            out.push_back({ named, godot::String(addresses[index]) });
+            out.push_back({named, godot::String(addresses[index])});
         }
     }
 #endif

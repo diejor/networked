@@ -548,10 +548,14 @@ AGAINST_SPEC = [
     {
         "record": "AcceptFrame",
         "bytes": (
-            bytes([0x0E, 0x03, 0x00]) + b"ana" + bytes([0x01])
-            + bytes([0x06, 0x00]) + b"steam:"
+            bytes([0x0E, 0x03, 0x00])
+            + b"ana"
+            + bytes([0x01])
+            + bytes([0x06, 0x00])
+            + b"steam:"
             + bytes([0x00, 0x00])
-            + bytes([0x11, 0x00]) + b"203.0.113.4:21253"
+            + bytes([0x11, 0x00])
+            + b"203.0.113.4:21253"
             + bytes([0x08])
         ),
         "values": {
@@ -570,9 +574,7 @@ AGAINST_SPEC = [
     {
         "record": "JoinFrame",
         "bytes": (
-            bytes([0x03, 0x00]) + b"ana"
-            + bytes([0x00, 0x00, 0x00, 0x00])
-            + bytes(8) + bytes([0x08]) + bytes(24)
+            bytes([0x03, 0x00]) + b"ana" + bytes([0x00, 0x00, 0x00, 0x00]) + bytes(8) + bytes([0x08]) + bytes(24)
         ),
         "values": {
             "username": "ana",

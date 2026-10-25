@@ -95,9 +95,8 @@ Variant NetwIdToken::check(
     }
     id_token::Token token;
     id_token::Proven proven;
-    const id_token::Rules rules{
-        issuer, audience, key_text.sha256_text(), name_claim, p_now_unix
-    };
+    const id_token::Rules
+        rules{issuer, audience, key_text.sha256_text(), name_claim, p_now_unix};
     if (!id_token::read_token(token_text, token)
         || !id_token::read_claims(token.claims, rules, proven)) {
         return answered;
@@ -125,7 +124,9 @@ Variant NetwIdToken::check(
     }
     const Ref<CryptoKey> proof_key = gd::new_crypto_key();
     if (!gd::rs256_verify(
-            token.signed_part.sha256_buffer(), token.signature, signer
+            token.signed_part.sha256_buffer(),
+            token.signature,
+            signer
         )
         || proof_key.is_null()
         || proof_key->load_from_string(key_text, true) != OK
@@ -174,7 +175,10 @@ void NetwIdToken::request_keys_once() {
     keys_requested = true;
     if (request_keys() != OK) {
         keys_answered(
-            id_token::KEYS_RESULT_NOT_SENT, 0, PackedByteArray(), msec_now()
+            id_token::KEYS_RESULT_NOT_SENT,
+            0,
+            PackedByteArray(),
+            msec_now()
         );
     }
 }
@@ -254,7 +258,8 @@ void NetwIdToken::keys_answered(
     for (const Ref<NetwPromise> &waiting : promises) {
         if (read.is_empty()) {
             waiting->reject(
-                ERR_CANT_CONNECT, "The signing keys could not be downloaded."
+                ERR_CANT_CONNECT,
+                "The signing keys could not be downloaded."
             );
         } else {
             waiting->resolve(int64_t(OK));
@@ -335,7 +340,8 @@ void NetwIdToken::token_settled(const String &p_issuer) {
     source->pending_key.unref();
     source->pending_pem = String();
     answer_waits(
-        *source, !source->token.is_empty() && source->expires > unix_now()
+        *source,
+        !source->token.is_empty() && source->expires > unix_now()
     );
 }
 
@@ -389,56 +395,69 @@ void NetwIdToken::forget_sources() {
 
 void NetwIdToken::_bind_methods() {
     ClassDB::bind_method(
-        D_METHOD("set_issuer", "issuer"), &NetwIdToken::set_issuer
+        D_METHOD("set_issuer", "issuer"),
+        &NetwIdToken::set_issuer
     );
     ClassDB::bind_method(D_METHOD("get_issuer"), &NetwIdToken::get_issuer);
     ADD_PROPERTY(
-        PropertyInfo(Variant::STRING, "issuer"), "set_issuer", "get_issuer"
+        PropertyInfo(Variant::STRING, "issuer"),
+        "set_issuer",
+        "get_issuer"
     );
     ClassDB::bind_method(
-        D_METHOD("set_audience", "audience"), &NetwIdToken::set_audience
+        D_METHOD("set_audience", "audience"),
+        &NetwIdToken::set_audience
     );
-    ClassDB::bind_method(
-        D_METHOD("get_audience"), &NetwIdToken::get_audience
-    );
+    ClassDB::bind_method(D_METHOD("get_audience"), &NetwIdToken::get_audience);
     ADD_PROPERTY(
         PropertyInfo(Variant::STRING, "audience"),
-        "set_audience", "get_audience"
+        "set_audience",
+        "get_audience"
     );
     ClassDB::bind_method(
-        D_METHOD("set_keys_url", "url"), &NetwIdToken::set_keys_url
+        D_METHOD("set_keys_url", "url"),
+        &NetwIdToken::set_keys_url
     );
-    ClassDB::bind_method(
-        D_METHOD("get_keys_url"), &NetwIdToken::get_keys_url
-    );
+    ClassDB::bind_method(D_METHOD("get_keys_url"), &NetwIdToken::get_keys_url);
     ADD_PROPERTY(
         PropertyInfo(Variant::STRING, "keys_url"),
-        "set_keys_url", "get_keys_url"
+        "set_keys_url",
+        "get_keys_url"
     );
     ClassDB::bind_method(D_METHOD("set_key", "key"), &NetwIdToken::set_key);
     ClassDB::bind_method(D_METHOD("get_key"), &NetwIdToken::get_key);
     ADD_PROPERTY(
         PropertyInfo(
-            Variant::OBJECT, "key", PROPERTY_HINT_RESOURCE_TYPE, "CryptoKey"
+            Variant::OBJECT,
+            "key",
+            PROPERTY_HINT_RESOURCE_TYPE,
+            "CryptoKey"
         ),
-        "set_key", "get_key"
+        "set_key",
+        "get_key"
     );
     ClassDB::bind_method(
-        D_METHOD("set_prefix", "prefix"), &NetwIdToken::set_prefix
+        D_METHOD("set_prefix", "prefix"),
+        &NetwIdToken::set_prefix
     );
     ClassDB::bind_method(D_METHOD("get_prefix"), &NetwIdToken::get_prefix);
     ADD_PROPERTY(
-        PropertyInfo(Variant::STRING, "prefix"), "set_prefix", "get_prefix"
+        PropertyInfo(Variant::STRING, "prefix"),
+        "set_prefix",
+        "get_prefix"
     );
     ClassDB::bind_method(
-        D_METHOD("set_name_claim", "claim"), &NetwIdToken::set_name_claim
+        D_METHOD("set_name_claim", "claim"),
+        &NetwIdToken::set_name_claim
     );
     ClassDB::bind_method(
-        D_METHOD("get_name_claim"), &NetwIdToken::get_name_claim
+        D_METHOD("get_name_claim"),
+        &NetwIdToken::get_name_claim
     );
     ADD_PROPERTY(
         PropertyInfo(Variant::STRING, "name_claim"),
-        "set_name_claim", "get_name_claim"
+        "set_name_claim",
+        "get_name_claim"
     );
     ClassDB::bind_method(D_METHOD("fetch_keys"), &NetwIdToken::fetch_keys);
     ClassDB::bind_static_method(

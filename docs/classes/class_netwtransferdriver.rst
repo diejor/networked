@@ -12,7 +12,7 @@ NetwTransferDriver
 
 **Inherits:** :godot:`RefCounted`
 
-The transport a :ref:`NetwTransferContract<class_NetwTransferContract>` judges, subclassed by its author.
+The transport a :ref:`NetwTransferContract<class_NetwTransferContract>` judges, subclassed once per transport.
 
 .. rst-class:: classref-introduction-group
 

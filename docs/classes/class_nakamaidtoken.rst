@@ -19,7 +19,7 @@ Proves a player's Nakama account to a server over ENet or WebRTC, with a join to
 Description
 -----------
 
-The server runs ``addons/networked_nakama/server/networked.js`` with its private key, the game ships the matching public key, and a signed in :ref:`NakamaAccount<class_NakamaAccount>` fetches the tokens.
+The server runs ``addons/networked_nakama/server/networked.js`` with its private key, the game includes the matching public key, and a signed in :ref:`NakamaAccount<class_NakamaAccount>` fetches the tokens.
 
 ::
 

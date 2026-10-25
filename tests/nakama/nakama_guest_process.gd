@@ -1,6 +1,5 @@
 extends SceneTree
 
-
 func _initialize() -> void:
 	await process_frame
 	var account := NakamaAccount.new()

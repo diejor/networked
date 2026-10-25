@@ -61,8 +61,17 @@ namespace {
 bool is_virtual_interface(const String &p_name) {
     const String name = p_name.to_lower();
     const char *const virtual_names[] = {
-        "docker", "br-",       "veth",       "virbr",  "vboxnet", "vmnet",
-        "podman", "vethernet", "virtualbox", "vmware", "hyper-v",
+        "docker",
+        "br-",
+        "veth",
+        "virbr",
+        "vboxnet",
+        "vmnet",
+        "podman",
+        "vethernet",
+        "virtualbox",
+        "vmware",
+        "hyper-v",
     };
     for (const char *virtual_name : virtual_names) {
         if (name.contains(virtual_name)) {

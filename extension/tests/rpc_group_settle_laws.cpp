@@ -207,8 +207,8 @@ TEST_CASE(
 ) {
     netw_test::FaultWatch expected_faults;
     expected_faults.expect_warning(
-        "[warn][transport] Peer * sent a call naming route *, which"
-        " it cannot see, so the call was dropped.",
+        "[warn][transport] Peer * sent a call naming a node it cannot see,"
+        " so the call was dropped.",
         1
     );
 

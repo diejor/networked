@@ -10,38 +10,52 @@
 [![play](https://img.shields.io/badge/play-examples-fa5c5c?logo=cloudflare&logoColor=white)](https://netw-examples.pages.dev)
 [![chat](https://img.shields.io/badge/chat-discord-646FA9?logo=discord&logoColor=white&labelColor=CFC9C8&color=646FA9)](https://discord.gg/7bXbVy9Zfu)
 
-A drop-in replacement for Godot's [`SceneMultiplayer`](https://docs.godotengine.org/en/stable/classes/class_scenemultiplayer.html), shipped as a GDExtension.
+A multiplayer framework for Godot 4, built as a GDExtension.
 
-After cloning, [build the GDExtension](extension/BUILDING.md) before opening
-the project in Godot.
+It replaces Godot's
+[`SceneMultiplayer`](https://docs.godotengine.org/en/stable/classes/class_scenemultiplayer.html)
+with `NetwMultiplayer`, which keeps its whole API. Existing `@rpc`,
+`MultiplayerSynchronizer` and `MultiplayerSpawner` code works unchanged once
+the addon is installed.
 
-`NetwMultiplayer` is a strict superset of `SceneMultiplayer`'s surface, and the
-extension installs it as the project's default multiplayer interface at load.
-Every `SceneTree` gets it with **no node authored and no scene changed**, your
-existing `@rpc`, `MultiplayerSynchronizer`, `MultiplayerSpawner` code keeps working.
+## Install
 
-> [!TIP]
-> Set `networked/install_as_default` to `false` in the project settings to opt 
-> out and install the session yourself.
+Download `networked` from the
+[latest release](https://github.com/diejor/networked/releases/latest) and
+unzip it into your project's root. `networked_steam`, `networked_discord` and
+`networked_nakama` are optional and unzip beside it.
 
 ## Demos
 
-[`examples/bomber`](examples/bomber) · [`examples/racing`](examples/racing) · [`examples/rocket_league`](examples/rocket_league) · [`examples/multiple_levels`](examples/multiple_levels)
+Play them in the browser at [netw-examples.pages.dev](https://netw-examples.pages.dev).
+
+- [`bomber`](examples/bomber), Godot's multiplayer bomber demo
+- [`racing`](examples/racing), Kenney's Starter Kit Racing
+- [`rocket_league`](examples/rocket_league), cars and a ball
+- [`fps`](examples/fps), Kenney's Starter Kit FPS
+- [`playground`](examples/playground), players pushing 900 cubes around
+- [`multiple_levels`](examples/multiple_levels), players moving between levels
+- [`whiteboard`](examples/whiteboard), a shared drawing board
+
+To run them from a clone of this repository,
+[build the GDExtension](extension/BUILDING.md) before opening the project in
+Godot.
 
 ## Replicate a property
 
-Declare a field once. Write it normally. The session ships every change.
+Configure a property once and write it normally. Every change reaches the
+other peers.
 
 ```gdscript
 func _init() -> void:
-    Netw.configure_property(self, &"position").state()      # server owns it
-    Netw.configure_property(self, &"steering").input()      # controller owns it
-    Netw.configure_property(self, &"aim_angle").broadcast() # server trusts
-    Netw.configure_property(self, &"fuel")                  # on demand
+    Netw.configure_property(self, &"position").state()      # the server writes it
+    Netw.configure_property(self, &"steering").input()      # the controller writes it
+    Netw.configure_property(self, &"aim_angle").broadcast() # the controller sends it
+    Netw.configure_property(self, &"fuel")                  # sent when you ask
 ```
 
-A field marked `.state()`, `.input()` or `.broadcast()` joins a per-tick set and
-needs no send call. An unmarked field ships when you push it:
+A property marked `.state()`, `.input()` or `.broadcast()` is sent every tick
+it changes. Any other is sent with `sync_property`.
 
 ```gdscript
 func refuel() -> void:
@@ -49,27 +63,26 @@ func refuel() -> void:
     Netw.sync_property(self, &"fuel")
 ```
 
-You can smooth out properties.
+Smooth a property between updates.
 
 ```gdscript
 Netw.configure_property(self, &"position").interpolate(
-		NetwInterpolate.new().lerp().smooth(0.05).to(&"position"))
+        NetwInterpolate.new().lerp().smooth(0.05).to(&"position"))
 ```
 
-And also quantize.
+Send it in fewer bits.
 
 ```gdscript
 Netw.configure_property(self, &"turret_yaw").broadcast().quantize(
-		NetwQuantizeAngle.new().bits(12).centered())
+        NetwQuantizeAngle.new().bits(12).centered())
 ```
 
-> [!NOTE]
-> You can configure your `MultiplayerSynchronizers` properties the same way!
+Both work on a property a `MultiplayerSynchronizer` already replicates.
 
 ## Pass nodes through RPCs
 
-Register the method once, then call it. Pass a node as an argument and the
-other side receives its own live copy of that node.
+Configure the method, then call it. A node passed as an argument arrives as
+the receiver's own copy of that node.
 
 ```gdscript
 func _init() -> void:
@@ -82,62 +95,59 @@ func apply_stun(attacker: Node) -> void:
 Netw.rpc(target.apply_stun, attacker_root)
 ```
 
-Calls are addressed by an id rather than by node path, so renaming or moving a
-node never breaks one. A call naming a node that peer has not spawned yet waits 
-for the spawn, so the call and the spawn may cross in either order.
+Renaming or moving a node never breaks a call. A call that names a node the
+receiver has not spawned yet waits for the spawn.
 
 ## Replicate a signal
 
-Allowlist the signal, then emit it everywhere with one call.
+Configure the signal, then emit it on every peer with one call.
 
 ```gdscript
 func _init() -> void:
-	Netw.configure_signal(self.exploded)
+    Netw.configure_signal(self.exploded)
 
-Netw.emit_entity_signal(exploded)   # local listeners and every peer's copy
+Netw.emit_entity_signal(self.exploded, position)
 ```
-
-> [!TIP]
-> You can rename, move the entities and race spawn packets with 
-> replicated signals the same way as to `@rpc`.
 
 ## Spawn
 
-Register a spawn function, then call it. The node is constructed on every peer
-and returned locally for you to place.
+Configure a spawn function, then call it. Every peer builds the node, and the
+call returns this peer's copy for you to add.
 
 ```gdscript
 func _init() -> void:
-	Netw.configure_spawn(_spawn_bullet)
+    Netw.configure_spawn(make_bullet)
 
-func _spawn_bullet(dir: Vector2, tier: int) -> Node:
-	var b := BulletScene.instantiate()
-	b.setup(dir, tier)
-	return b
+func make_bullet(direction: Vector2) -> Node:
+    var bullet := BulletScene.instantiate()
+    bullet.direction = direction
+    return bullet
 
-muzzle.add_child(Netw.spawn(_spawn_bullet, dir, 2))
+muzzle.add_child(Netw.spawn(make_bullet, direction))
 ```
 
 ## Reparent
 
-Yes, you can move nodes around with `Node.reparent`.
+`Node.reparent` is replicated.
 
 ```gdscript
 player.reparent(arena.get_node(^"Spawns"))
 ```
 
-Reparenting is replicated.
-
 ## More
 
-- **Prediction and rollback.** Declaring prediction on a field arms rewind.
-  There is no engine to turn on separately.
-- **Interest management.** `Netw.configure_interest` puts a node on a layer, and
-  a send reaches only the peers that layer lets in.
-- **Persistence.** `Netw.configure_persistence` picks the fields to save, then
-  reads and writes them straight off the live scene.
-- **Transports.** ENet, WebSocket, WebRTC and a local loopback. Listen-server,
-  dedicated server, local play and host-relay P2P are all the same session.
+- [Prediction and rollback](https://networked.readthedocs.io/en/latest/classes/class_netwprediction.html#class-netwprediction).
+  A controller runs its entity ahead and corrects when the server disagrees.
+- [Interest management](https://networked.readthedocs.io/en/latest/classes/class_netwinterest.html#class-netwinterest).
+  Each peer receives only the entities it can see.
+- [Persistence](https://networked.readthedocs.io/en/latest/classes/class_netwpersistence.html#class-netwpersistence).
+  Properties save and load with their entity, through a
+  [database](https://networked.readthedocs.io/en/latest/classes/class_netwdatabase.html#class-netwdatabase)
+  you choose.
+- [Steam](https://networked.readthedocs.io/en/latest/classes/class_steamsocial.html#class-steamsocial).
+  Friends, invites, lobbies and parties, with Steam sign in.
+- [Discord](addons/networked_discord/README.md).
+  Presence, friends, parties with voice and Discord sign in.
 
 ## Credits
 

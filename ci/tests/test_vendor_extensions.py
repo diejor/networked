@@ -53,15 +53,21 @@ linux.x86_64 = { "res://addons/sdk/linux/api.so": "" }
         digest = hashlib.sha256(archive.read_bytes()).hexdigest()
         archive.rename(self.cache / (digest + ".zip"))
         pin = {
-            "version": "1", "sha256": digest,
+            "version": "1",
+            "sha256": digest,
             "url": "https://example.invalid/sdk.zip",
-            "prefix": "addons/sdk/", "destination": "addons/sdk",
+            "prefix": "addons/sdk/",
+            "destination": "addons/sdk",
             "manifest": "vendor.gdextension",
             "source": "https://example.invalid/source",
         }
-        with patch.object(vendor_extensions, "load_json", return_value={
-            "sdk": pin,
-        }):
+        with patch.object(
+            vendor_extensions,
+            "load_json",
+            return_value={
+                "sdk": pin,
+            },
+        ):
             return vendor_extensions.place(self.root / "stage", self.cache)
 
     def test_desktop_libraries_keep_their_dependencies_and_licenses(self):
@@ -95,9 +101,13 @@ linux.x86_64 = { "res://addons/sdk/linux/api.so": "" }
             "sha256": archive.stem,
             "url": "https://example.invalid/sdk.zip",
         }
-        with patch.object(vendor_extensions, "load_json", return_value={
-            "sdk": pin,
-        }):
+        with patch.object(
+            vendor_extensions,
+            "load_json",
+            return_value={
+                "sdk": pin,
+            },
+        ):
             with self.assertRaisesRegex(CIError, "SHA-256"):
                 vendor_extensions.place(self.root / "stage", self.cache)
 

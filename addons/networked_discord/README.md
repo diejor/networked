@@ -5,8 +5,9 @@ session, using Discord's Social SDK.
 
 ## Install
 
-1. Copy `addons/networked_discord` and `addons/discord_social_sdk` from the
-   Networked release. The second is the
+1. Unzip `networked_discord` from the Networked release into your project's
+   root, beside `networked`. It holds `addons/networked_discord` and
+   `addons/discord_social_sdk`. The second is the
    [Discord Social SDK binding](https://github.com/thiagola92/discord-social-sdk)
    for Linux and Windows.
 2. Download Discord Social SDK `1.10.19337` from the
@@ -21,7 +22,7 @@ session, using Discord's Social SDK.
    need Public Client turned on under OAuth2 and the redirect
    `http://127.0.0.1/callback`.
 
-Your game ships Discord's library and owns Discord's terms. It keeps out
+Your game includes Discord's library and owns Discord's terms. It keeps out
 players under 13, meets Discord's integration requirements, and deletes a
 player's Discord data when they ask.
 

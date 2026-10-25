@@ -99,8 +99,15 @@ Ref<CryptoKey> rsa_key_of(const PackedByteArray &p_modulus) {
     const int64_t outer = size + 10;
     const int64_t inner = size + 1;
     const uint8_t head[] = {
-        0x30, 0x82, uint8_t(outer >> 8), uint8_t(outer & 0xFF),
-        0x02, 0x82, uint8_t(inner >> 8), uint8_t(inner & 0xFF), 0x00,
+        0x30,
+        0x82,
+        uint8_t(outer >> 8),
+        uint8_t(outer & 0xFF),
+        0x02,
+        0x82,
+        uint8_t(inner >> 8),
+        uint8_t(inner & 0xFF),
+        0x00,
     };
     for (const uint8_t byte : head) {
         der.push_back(byte);
@@ -200,10 +207,10 @@ bool read_claims(
         || !string_equals(p_claims.get("nonce", Variant()), p_rules.nonce)
         || !names_audience(p_claims.get("aud", Variant()), p_rules.audience)
         || !string_equals(
-            p_claims.get("azp", p_rules.audience), p_rules.audience
+            p_claims.get("azp", p_rules.audience),
+            p_rules.audience
         )
-        || subject.get_type() != Variant::STRING
-        || String(subject).is_empty()
+        || subject.get_type() != Variant::STRING || String(subject).is_empty()
         || name.get_type() != Variant::STRING) {
         return false;
     }
@@ -243,7 +250,8 @@ double expiry_of(const Dictionary &p_claims) {
 
 bool names_key(const Dictionary &p_claims, const String &p_public_pem) {
     return string_equals(
-        p_claims.get("nonce", Variant()), p_public_pem.sha256_text()
+        p_claims.get("nonce", Variant()),
+        p_public_pem.sha256_text()
     );
 }
 

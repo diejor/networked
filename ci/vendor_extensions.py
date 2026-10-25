@@ -15,10 +15,7 @@ DESKTOP = {"linux.x86_64", "windows.x86_64", "macos.universal"}
 
 def desktop_key(key: str) -> bool:
     features = set(key.split("."))
-    return (
-        any(set(cell.split(".")) <= features for cell in DESKTOP)
-        or "macos" in features
-    )
+    return any(set(cell.split(".")) <= features for cell in DESKTOP) or "macos" in features
 
 
 def trim_manifest(text: str, destination: str) -> tuple[str, set[str]]:
@@ -32,9 +29,7 @@ def trim_manifest(text: str, destination: str) -> tuple[str, set[str]]:
             key = line.split("=", 1)[0].strip()
             if not desktop_key(key):
                 continue
-            paths = re.findall(
-                r'"([^"\n]+\.(?:so|dll|dylib|framework))"', line
-            )
+            paths = re.findall(r'"([^"\n]+\.(?:so|dll|dylib|framework))"', line)
             for path in paths:
                 relative = path.removeprefix("res://" + destination + "/")
                 files.add(relative)
@@ -44,8 +39,13 @@ def trim_manifest(text: str, destination: str) -> tuple[str, set[str]]:
     return "\n".join(lines) + "\n", files
 
 
-def place(stage_root: Path, cache: Path) -> dict:
+def place(stage_root: Path, cache: Path, names: list[str] | None = None) -> dict:
     pins = load_json(CI_DIR / "vendor_extensions.json")
+    if names is not None:
+        unknown = sorted(set(names) - set(pins))
+        if unknown:
+            raise fail("no vendor pin named %s" % ", ".join(unknown))
+        pins = {name: pins[name] for name in names}
     stage_root.mkdir(parents=True, exist_ok=True)
     cache.mkdir(parents=True, exist_ok=True)
     records: dict = {}
@@ -62,19 +62,14 @@ def place(stage_root: Path, cache: Path) -> dict:
             finally:
                 partial.unlink(missing_ok=True)
         if sha256_file(archive) != pin["sha256"]:
-            raise fail(
-                "%s failed its SHA-256 check. Remove %s and retry."
-                % (name, archive)
-            )
+            raise fail("%s failed its SHA-256 check. Remove %s and retry." % (name, archive))
         destination = stage_root / pin["destination"]
         destination.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(archive) as bundle:
             prefix = pin["prefix"]
             source_manifest = pin.get("archive_manifest", pin["manifest"])
             text = bundle.read(prefix + source_manifest).decode("utf-8")
-            text = text.replace(
-                "res://" + prefix, "res://" + pin["destination"] + "/"
-            )
+            text = text.replace("res://" + prefix, "res://" + pin["destination"] + "/")
             manifest, files = trim_manifest(text, pin["destination"])
             for entry in bundle.infolist():
                 if entry.is_dir() or not entry.filename.startswith(prefix):
@@ -84,24 +79,16 @@ def place(stage_root: Path, cache: Path) -> dict:
                 if ".." in parts or PurePosixPath(relative).is_absolute():
                     raise fail("%s holds an unsafe path" % name)
                 licensed = len(parts) == 1 and "license" in relative.lower()
-                library = relative in files or any(
-                    relative.startswith(f + "/") for f in files
-                )
+                library = relative in files or any(relative.startswith(f + "/") for f in files)
                 if not licensed and not library:
                     continue
                 target = destination / relative
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(bundle.read(entry))
-            (destination / pin["manifest"]).write_text(
-                manifest, encoding="utf-8"
-            )
+            (destination / pin["manifest"]).write_text(manifest, encoding="utf-8")
             for relative in files:
                 if not (destination / relative).exists():
                     raise fail("%s is missing %s" % (name, relative))
-        (destination / "SOURCES.txt").write_text(
-            pin["source"] + "\n", encoding="utf-8"
-        )
-        records[name] = {
-            key: pin[key] for key in ("version", "url", "sha256", "source")
-        }
+        (destination / "SOURCES.txt").write_text(pin["source"] + "\n", encoding="utf-8")
+        records[name] = {key: pin[key] for key in ("version", "url", "sha256", "source")}
     return records

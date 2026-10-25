@@ -5,10 +5,10 @@ the activity joins one room, and the first to arrive serves it.
 
 ## Install
 
-Copy `addons/networked_activity` with `addons/networked_discord`, and 
-`addons/networked_nakama`.  A game whose own WebSocket server serves the 
-room leaves out `networked_nakama` and sets `room_transport` and `room_address` 
-to reach that server.
+Copy `addons/networked_activity`, `addons/networked_discord` and
+`addons/networked_nakama`. A game whose own WebSocket server serves the room
+leaves out `networked_nakama` and sets `room_transport` and `room_address` to
+reach that server.
 
 ## Use
 

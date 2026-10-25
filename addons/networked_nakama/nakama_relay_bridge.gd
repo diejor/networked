@@ -110,9 +110,9 @@ func _init(p_nakama_socket) -> void:
 func create_match() -> void:
 	if _match_state != MatchState.DISCONNECTED:
 		push_error(
-			"NakamaRelayBridge.create_match ran while the bridge is %s. Call "
-			% MatchState.keys()[_match_state]
-			+ "leave first.",
+			"The Nakama relay was asked to create a match while %s. Leave "
+			% MatchState.keys()[_match_state].to_lower()
+			+ "the current match first.",
 		)
 		return
 
@@ -133,9 +133,9 @@ func create_match() -> void:
 func join_match(p_match_id: String) -> void:
 	if _match_state != MatchState.DISCONNECTED:
 		push_error(
-			"NakamaRelayBridge.join_match ran while the bridge is %s. Call "
-			% MatchState.keys()[_match_state]
-			+ "leave first.",
+			"The Nakama relay was asked to join a match while %s. Leave "
+			% MatchState.keys()[_match_state].to_lower()
+			+ "the current match first.",
 		)
 		return
 
@@ -158,9 +158,9 @@ func join_match(p_match_id: String) -> void:
 func join_named_match(_match_name: String) -> void:
 	if _match_state != MatchState.DISCONNECTED:
 		push_error(
-			"NakamaRelayBridge.join_named_match ran while the bridge is %s. "
-			% MatchState.keys()[_match_state]
-			+ "Call leave first.",
+			"The Nakama relay was asked to join a room while %s. Leave "
+			% MatchState.keys()[_match_state].to_lower()
+			+ "the current match first.",
 		)
 		return
 
@@ -186,15 +186,15 @@ func join_named_match(_match_name: String) -> void:
 func start_matchmaking(ticket) -> void:
 	if _match_state != MatchState.DISCONNECTED:
 		push_error(
-			"NakamaRelayBridge.start_matchmaking ran while the bridge is %s. "
-			% MatchState.keys()[_match_state]
-			+ "Call leave first.",
+			"The Nakama relay was asked to matchmake while %s. Leave "
+			% MatchState.keys()[_match_state].to_lower()
+			+ "the current match first.",
 		)
 		return
 	if ticket.is_exception():
 		push_error(
-			"NakamaRelayBridge.start_matchmaking got a ticket that failed. "
-			+ "Check the ticket for an exception before passing it.",
+			"The Nakama matchmaker ticket failed, so matchmaking did not "
+			+ "start. Check the ticket for an exception first.",
 		)
 		return
 
@@ -209,9 +209,9 @@ func start_matchmaking(ticket) -> void:
 func join_matched(matched) -> void:
 	if _match_state != MatchState.DISCONNECTED:
 		push_error(
-			"NakamaRelayBridge.join_matched ran while the bridge is %s. "
-			% MatchState.keys()[_match_state]
-			+ "Call leave first.",
+			"The Nakama relay was asked to join a matched game while %s. "
+			% MatchState.keys()[_match_state].to_lower()
+			+ "Leave the current match first.",
 		)
 		return
 
@@ -464,8 +464,8 @@ func _pick_successor(survivors: Array[int]) -> int:
 		return picked
 	push_warning(
 		(
-				"NakamaRelayBridge.migration_policy answered %d, which is not a "
-				+ "surviving peer. Return one of the ids it is given."
+				"The Nakama migration policy answered %d, which is not a "
+				+ "surviving peer. Return one of the IDs it is given."
 		) % picked,
 	)
 	return survivors[0]
@@ -717,6 +717,6 @@ func _on_multiplayer_peer_packet_generated(peer_id: int, buffer: PackedByteArray
 		_nakama_socket.send_match_state_raw_async(_match_id, op_code, buffer, target_presences)
 	else:
 		push_error(
-			"A packet was sent before NakamaRelayBridge connected, so it was "
+			"A packet was sent before the Nakama relay connected, so it was "
 			+ "dropped.",
 		)

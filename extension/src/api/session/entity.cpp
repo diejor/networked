@@ -809,9 +809,8 @@ Dictionary NetwMultiplayer::entity_describe(int64_t p_route) const {
     out["entity_id"] = record->get_entity_id();
     out["peer_id"] = record->get_peer_id();
     out["stage"] = record->get_stage();
-    out["controller"] = entity::Control::public_peer(
-        record->get_control()->resolve()
-    );
+    out["controller"]
+        = entity::Control::public_peer(record->get_control()->resolve());
     out["liveness"] = liveness_route_state(p_route);
     out["layers"] = interest_engine.memberships(entity.get_id());
     return out;
@@ -2919,11 +2918,10 @@ void NetwMultiplayer::spawn_receive_failed_frame(
     const String method = String(record->get_fn_method());
     NETW_WARN(
         sys::SPAWN,
-        "Player '%s' could not spawn route %d, because '%s' %s on their "
+        "Player '%s' could not spawn a node, because '%s' %s on their "
         "peer. Make '%s' return a Node on every peer.",
         player.is_valid() ? String(player->get_username())
                           : String::num_int64(p_sender),
-        int(frame.route),
         method,
         frame.reason,
         method

@@ -7,15 +7,5 @@
     "destination": "addons/godotsteam",
     "manifest": "godotsteam.gdextension",
     "source": "https://codeberg.org/godotsteam/godotsteam/src/tag/v4.18.1-gde"
-  },
-  "webrtc": {
-    "version": "1.2.2-stable",
-    "url": "https://github.com/godotengine/webrtc-native/releases/download/1.2.2-stable/godot-extension-webrtc_native.zip",
-    "sha256": "98e9446921740d995bd9ca1be48798dc3c2ceed51e044a25ce18b3cff11f56e5",
-    "prefix": "addons/webrtc_native/",
-    "destination": "addons/webrtc",
-    "manifest": "webrtc.gdextension",
-    "archive_manifest": "webrtc_native.gdextension",
-    "source": "https://github.com/godotengine/webrtc-native/tree/1.2.2-stable"
   }
 }

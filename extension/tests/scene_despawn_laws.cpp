@@ -172,10 +172,12 @@ struct Stand {
         rig.mount();
         Node *admit = Object::cast_to<Node>(gate->call("new"));
         rig.branch(-1)->add_child(admit);
-        REQUIRE(Netw::configure_admission(Callable(admit, StringName("admit")))
-                    .is_valid());
+        REQUIRE(
+            Netw::configure_admission(Callable(admit, StringName("admit")))
+                .is_valid()
+        );
         rig.join(-1, StringName("host"));
-        const char *names[] = { "ada", "bob" };
+        const char *names[] = {"ada", "bob"};
         for (int at = 0; at < p_clients; ++at) {
             rig.join(at, StringName(names[at]));
         }
@@ -330,10 +332,12 @@ TEST_CASE(
 
     CHECK(stand.scene_of(-1) == "Arena");
     const Ref<NetwScene> ada_scene = stand.rig.player(0)->get_scene();
-    CHECK(bool(
-        ada_scene.is_valid()
-        && String(ada_scene->get_label()) == String("Arena")
-    ));
+    CHECK(
+        bool(
+            ada_scene.is_valid()
+            && String(ada_scene->get_label()) == String("Arena")
+        )
+    );
     end_frame();
     stand.rig.pump(8);
     CHECK(stand.scene_of(0) == "Arena");
@@ -419,7 +423,7 @@ TEST_CASE(
     "client with the old level gone before the new one arrives, so the "
     "client never holds both and never warns"
 ) {
-    for (const bool old_first : { true, false }) {
+    for (const bool old_first : {true, false}) {
         CAPTURE(old_first);
         Stand stand(1);
         Node *lobby = stand.open("Lobby");
@@ -433,9 +437,9 @@ TEST_CASE(
         stand.host->call(StringName("swap"), lobby, String("Arena"), old_first);
         for (int round = 0; round < 4; ++round) {
             stand.rig.pump(1);
-            CHECK_FALSE(bool(
-                stand.lists(0, "Lobby") && stand.lists(0, "Arena")
-            ));
+            CHECK_FALSE(
+                bool(stand.lists(0, "Lobby") && stand.lists(0, "Arena"))
+            );
         }
         CHECK(stand.rig.route_node(lobby_route, 0) == nullptr);
         CHECK(stand.scene_of(0) == "Arena");
@@ -501,7 +505,7 @@ TEST_CASE(
     "Netw.reparent keeps its scene, its viewers and every player's scene on "
     "the server and on each client"
 ) {
-    for (const Move how : { MOVE_NODE, MOVE_NETW }) {
+    for (const Move how : {MOVE_NODE, MOVE_NETW}) {
         CAPTURE(int(how));
         Stand stand(2);
         Node *lobby = stand.open("Lobby");
@@ -527,7 +531,7 @@ TEST_CASE(
         CHECK(stand.rig.player(0)->get_scene() == scene);
         NETW_CHECK_EQ(g_viewers_entered, int64_t(0));
         NETW_CHECK_EQ(g_viewers_exited, int64_t(0));
-        for (const int seat : { 0, 1 }) {
+        for (const int seat : {0, 1}) {
             CAPTURE(seat);
             Node *mirror = stand.rig.route_node(lobby_route, seat);
             CHECK(mirror != nullptr);
@@ -552,9 +556,9 @@ TEST_CASE(
     "or the level's root is passed to Netw.reparent"
 ) {
     const IsolatedMove rows[] = {
-        { "Node.reparent of the container", false, MOVE_NODE },
-        { "Netw.reparent of the container", false, MOVE_NETW },
-        { "Netw.reparent of the root", true, MOVE_NETW },
+        {"Node.reparent of the container", false, MOVE_NODE},
+        {"Netw.reparent of the container", false, MOVE_NETW},
+        {"Netw.reparent of the root", true, MOVE_NETW},
     };
     for (const IsolatedMove &row : rows) {
         CAPTURE(row.label);
@@ -668,9 +672,9 @@ TEST_CASE(
     CHECK(parent_of(pawn) == mirror);
     CHECK(stand.scene_of(back) == "Lobby");
     const Ref<NetwPlayer> returned = stand.rig.player(back);
-    CHECK(bool(
-        returned.is_valid() && returned->get_scene() == Netw::scene(lobby)
-    ));
+    CHECK(
+        bool(returned.is_valid() && returned->get_scene() == Netw::scene(lobby))
+    );
 }
 
 TEST_CASE(
@@ -755,8 +759,7 @@ TEST_CASE(
     netw_test::FaultWatch faults;
     FailedLevel world;
     world.stand.rig.pump(8);
-    const int pawn_route
-        = route_of(world.stand.seat(world.lobby, 0, "Pawn_"));
+    const int pawn_route = route_of(world.stand.seat(world.lobby, 0, "Pawn_"));
     world.stand.rig.pump(16);
 
     CHECK_FALSE(world.stand.rig.spawn_plane(0)->get_park().has(pawn_route));
@@ -779,15 +782,17 @@ TEST_CASE(
     CHECK(world.stand.rig.route_node(crate_route, 0) == nullptr);
 
     NETW_CHECK_EQ(
-        int(faults.warnings_containing("Spawn function 'make_level' did not "
-                                       "return a Node")),
+        int(faults.warnings_containing(
+            "Spawn function 'make_level' did not "
+            "return a Node"
+        )),
         1
     );
     NETW_CHECK_EQ(
         int(faults.warnings_containing(
-            "Player 'ada' could not spawn route " + itos(world.lobby_route)
-            + ", because 'make_level' returned no Node on their peer. Make "
-              "'make_level' return a Node on every peer."
+            "Player 'ada' could not spawn a node, because 'make_level' "
+            "returned no Node on their peer. Make 'make_level' return a Node "
+            "on every peer."
         )),
         1
     );

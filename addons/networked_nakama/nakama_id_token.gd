@@ -2,8 +2,8 @@
 ## join token the Nakama server signs.
 ##
 ## The server runs [code]addons/networked_nakama/server/networked.js[/code]
-## with its private key, the game ships the matching public key, and a signed
-## in [NakamaAccount] fetches the tokens.
+## with its private key, the game includes the matching public key, and a
+## signed in [NakamaAccount] fetches the tokens.
 ## [codeblock]
 ## const JOIN_KEY := "res://join_token.pub"
 ##

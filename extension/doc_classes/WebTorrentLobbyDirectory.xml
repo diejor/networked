@@ -11,9 +11,9 @@
 	<tutorials>
 	</tutorials>
 	<members>
-		<member name="list_interval" type="float" setter="set_list_interval" getter="get_list_interval" default="10.0">
-			Seconds between searches while [member NetwConnection.browsing] is [code]true[/code].
-		</member>
+		<member name="capabilities" type="int" setter="set_capabilities" getter="get_capabilities" overrides="LobbyDirectory" default="1" />
+		<member name="display_name" type="String" setter="set_display_name" getter="get_display_name" overrides="LobbyDirectory" default="&quot;WebTorrent&quot;" />
+		<member name="list_interval" type="float" setter="set_list_interval" getter="get_list_interval" overrides="LobbyDirectory" default="10.0" />
 		<member name="trackers" type="PackedStringArray" setter="set_trackers" getter="get_trackers" default="PackedStringArray()">
 			The [code]ws://[/code] or [code]wss://[/code] tracker URLs to browse and announce on. Empty reads [code skip-lint]trackers[/code] from [method NetwConnection.defaults] for [code]WebRTCMultiplayerPeer[/code], then the public trackers.
 		</member>

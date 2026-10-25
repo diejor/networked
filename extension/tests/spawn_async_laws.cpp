@@ -206,8 +206,7 @@ TEST_CASE(
         if (row.code == ERR_INVALID_PARAMETER) {
             faults.expect_error("*did not return a Node outside the tree*", 1);
         }
-        const Ref<NetwPromise> promise
-            = stand.host->call(StringName("begin"));
+        const Ref<NetwPromise> promise = stand.host->call(StringName("begin"));
         REQUIRE(promise.is_valid());
         stand.sim.step_ticks(8);
         CHECK_FALSE(promise->get_is_settled());
@@ -231,9 +230,9 @@ TEST_CASE(
         NETW_CHECK_EQ(int(promise->get_code()), int(row.code));
         if (row.code != OK) {
             if (row.ending == SESSION_ENDS) {
-                const ObjectID late = ObjectID(uint64_t(
-                    int64_t(stand.host->get(StringName("late_id")))
-                ));
+                const ObjectID late = ObjectID(
+                    uint64_t(int64_t(stand.host->get(StringName("late_id"))))
+                );
                 CHECK(netw::gd::instance_from_id(late) == nullptr);
             }
             continue;
@@ -449,11 +448,8 @@ TEST_CASE(
     const ClientsWait scripts;
     for (const bool on_client : {false, true}) {
         CAPTURE(on_client);
-        scripts.spawner->call(
-            StringName("client_builds_wait"),
-            on_client,
-            scripts.made
-        );
+        scripts.spawner
+            ->call(StringName("client_builds_wait"), on_client, scripts.made);
         Stand stand;
         for (const int peer : {SERVER, A}) {
             stand.sim.session(peer)->spawn_plane()->set_park_timeout_seconds(

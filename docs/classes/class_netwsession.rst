@@ -41,7 +41,7 @@ Connecting is done as you would normally do with :godot:`SceneMultiplayer`, by a
 
 \ :ref:`transfer_server()<class_NetwSession_method_transfer_server>` makes another peer the server, and :ref:`server_transferred<class_NetwSession_signal_server_transferred>` reports it on every peer. The session also survives the server leaving when its :godot:`MultiplayerPeer` can promote a client by itself. ENet, WebRTC, Steam and :godot:`OfflineMultiplayerPeer` cannot, so losing the server ends them.
 
-On a peer that can, closing the server's window moves the server. :ref:`leave()<class_NetwSession_method_leave>` ends every client's session on any peer, so a server that wants the game to go on without it moves the server first.
+On a peer that can, closing the server's window moves the server. The server calling :ref:`leave()<class_NetwSession_method_leave>` ends every client's session, even on a peer that can promote a client, so a server that wants the game to go on without it moves the server first.
 
 ::
 

@@ -299,9 +299,8 @@ class ReclaimScenario final : public netw_test::FrameScenario {
         const Node *carried = spawn("Moved", -1, true);
         moved = carried != nullptr ? uint64_t(carried->get_instance_id()) : 0;
         const Node *lingering = spawn("Linger", -1, true);
-        linger = lingering != nullptr
-            ? uint64_t(lingering->get_instance_id())
-            : 0;
+        linger
+            = lingering != nullptr ? uint64_t(lingering->get_instance_id()) : 0;
         seat(HOST)->replication_adopt_in_place(
             mounts[HOST]->get_node_or_null(NodePath("Placed"))
         );
@@ -530,10 +529,7 @@ public:
                 populate_bodies();
                 track_replicas();
                 const Ref<NetwSession> door = seat(HOST)->get_session();
-                door->kick(
-                    door->player_of(peer_of(LEAVES)),
-                    String("reclaim")
-                );
+                door->kick(door->player_of(peer_of(LEAVES)), String("reclaim"));
                 step = 9;
                 return true;
             }
@@ -595,9 +591,8 @@ public:
             }
             default: {
                 close_seats();
-                seen.orphan_warnings = faults->warnings_containing(
-                    "never entered the tree"
-                );
+                seen.orphan_warnings
+                    = faults->warnings_containing("never entered the tree");
                 delete faults;
                 faults = nullptr;
                 seen.driven = true;
@@ -621,8 +616,8 @@ const ReclaimEvidence &driven() {
 
 } // namespace TestSessionEndReclaimFrameLaws
 
-using TestSessionEndReclaimFrameLaws::CYCLES;
 using TestSessionEndReclaimFrameLaws::CycleEvidence;
+using TestSessionEndReclaimFrameLaws::CYCLES;
 using TestSessionEndReclaimFrameLaws::driven;
 using TestSessionEndReclaimFrameLaws::NetwSession;
 using TestSessionEndReclaimFrameLaws::ReclaimEvidence;

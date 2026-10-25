@@ -63,7 +63,7 @@ public:
     };
 
     enum Lifecycle {
-        LIFECYCLE_SERVER =int(entity::Control::Lifecycle::SESSION),
+        LIFECYCLE_SERVER = int(entity::Control::Lifecycle::SESSION),
         LIFECYCLE_CONTROLLER = int(entity::Control::Lifecycle::CONTROLLER),
     };
 

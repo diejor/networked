@@ -37,7 +37,7 @@ metadata/_custom_type_script = "uid://beasv4qgrdwtn"
 
 [node name="NakamaLobbyDirectory" type="LobbyDirectory" parent="LobbyProviders" unique_id=1119735850]
 script = ExtResource("10_ej8d4")
-browser_filter_uid = "networked-bomber"
+browser_tag = "networked-bomber"
 metadata/_custom_type_script = "uid://d0u2yowat1s3u"
 
 [node name="WebTorrentLobbyDirectory" type="WebTorrentLobbyDirectory" parent="LobbyProviders" unique_id=1249777623]

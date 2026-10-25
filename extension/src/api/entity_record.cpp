@@ -185,7 +185,6 @@ void NetwEntityRecord::deactivate(Node *p_owner) {
     synchronizers::sync_only_server(owner);
 }
 
-
 StringName NetwEntityRecord::entity_meta() {
     return StringName("netw_entity");
 }

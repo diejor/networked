@@ -1,7 +1,6 @@
 class_name TestNakamaDatabase
 extends NetwTestSuite
 
-
 func address(kind: int, schema_name: String, key: String) -> Dictionary:
 	return { "kind": kind, "schema_name": schema_name, "key": key }
 

@@ -4,7 +4,7 @@
 		Reads and writes the records of one open slot.
 	</brief_description>
 	<description>
-		Subclass it, together with a [NetwDatabaseBackend] whose [method NetwDatabaseBackend._open] returns it, to store records somewhere the shipped backends do not.
+		Subclass it, together with a [NetwDatabaseBackend] whose [method NetwDatabaseBackend._open] returns it, to store records somewhere the built-in backends do not.
 		Implement [method _read], [method _scan], [method _write_batch] and [method _close]. [NetwDatabase] builds every other operation from these. Each returns a [NetwPromise], and a method left unimplemented rejects with [constant @GlobalScope.ERR_UNAVAILABLE].
 		[b]Address[/b]
 		Reads, scans and writes name a record with this [Dictionary].

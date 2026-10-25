@@ -110,9 +110,11 @@ enum Moment {
     MOMENTS,
 };
 
-const char *const KIND_NAMES[KINDS] = {"Netw.spawn", "spawn_player",
-                                       "spawn_player AUTHORITY_CONTROLLER",
-                                       "transfer only"};
+const char *const KIND_NAMES[KINDS]
+    = {"Netw.spawn",
+       "spawn_player",
+       "spawn_player AUTHORITY_CONTROLLER",
+       "transfer only"};
 const char *const MOMENT_NAMES[MOMENTS] = {"enter_tree", "ready"};
 
 struct Seen {

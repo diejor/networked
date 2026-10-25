@@ -194,16 +194,22 @@ void NetwEndpoint::_bind_methods() {
     );
     ADD_PROPERTY(PropertyInfo(Variant::BOOL, "is_listed"), "", "get_is_listed");
     ClassDB::bind_method(
-        D_METHOD("get_is_invited"), &NetwEndpoint::get_is_invited
+        D_METHOD("get_is_invited"),
+        &NetwEndpoint::get_is_invited
     );
     ADD_PROPERTY(
-        PropertyInfo(Variant::BOOL, "is_invited"), "", "get_is_invited"
+        PropertyInfo(Variant::BOOL, "is_invited"),
+        "",
+        "get_is_invited"
     );
     ClassDB::bind_method(
-        D_METHOD("get_invited_by"), &NetwEndpoint::get_invited_by
+        D_METHOD("get_invited_by"),
+        &NetwEndpoint::get_invited_by
     );
     ADD_PROPERTY(
-        PropertyInfo(Variant::STRING, "invited_by"), "", "get_invited_by"
+        PropertyInfo(Variant::STRING, "invited_by"),
+        "",
+        "get_invited_by"
     );
     ClassDB::bind_method(D_METHOD("probe"), &NetwEndpoint::probe);
 
