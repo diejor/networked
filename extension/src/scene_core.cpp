@@ -1,12 +1,24 @@
 #include "netw/scene_core.hpp"
 
 #include "netw/colors.hpp"
+#include "netw/game_call.hpp"
 #include "netw/log.hpp"
 #include "netw/profile.hpp"
 
 using namespace godot;
 
 namespace netw {
+
+namespace {
+
+const GameCall SCENE_OBSERVER = {
+    sys::SCENE,
+    "The NetwScene.observe callback",
+    "func(present: bool, subject) -> bool",
+    2
+};
+
+} // namespace
 
 NetwSceneCore::Row *NetwSceneCore::row_for(int event, const RID &scene) {
     for (uint32_t index = 0; index < rows.size(); ++index) {
@@ -25,6 +37,7 @@ void NetwSceneCore::observe(
     if (!scene.is_valid() || !callback.is_valid()) {
         return;
     }
+    game_call_declared(callback, SCENE_OBSERVER);
     Row *row = row_for(event, scene);
     if (row == nullptr) {
         Row fresh;
@@ -82,7 +95,7 @@ int NetwSceneCore::dispatch(
         if (!callback.is_valid()) {
             continue;
         }
-        const Variant answer = callback.callv(args);
+        const Variant answer = game_call(callback, args, SCENE_OBSERVER);
         if (answer.get_type() == Variant::BOOL && bool(answer)) {
             NETW_TRACE(
                 sys::SCENE,

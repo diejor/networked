@@ -5,6 +5,7 @@
 #include "godot/vararg.hpp"
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
+#include "netw/game_call.hpp"
 #include "netw/log.hpp"
 #include "netw/spawn/pipeline.hpp"
 
@@ -27,6 +28,23 @@ const StringName &sig_denied() {
 Node *live_node(int64_t p_id) {
     return Object::cast_to<Node>(gd::object_of(ObjectID(uint64_t(p_id))));
 }
+
+const GameCall ACTION_PREDICT
+    = {sys::PREDICTION, "NetwAction.predict", "func() -> Node", 0};
+
+const GameCall ACTION_REVERT = {
+    sys::PREDICTION,
+    "NetwAction.revert",
+    "func(node: Node) -> void",
+    1
+};
+
+const GameCall ACTION_CONFIRM = {
+    sys::PREDICTION,
+    "NetwAction.confirm",
+    "func(node: Node) -> void",
+    1
+};
 
 } // namespace
 
@@ -199,7 +217,9 @@ void NetwAction::run_revert(int64_t p_ghost) {
         return;
     }
     if (revert.is_valid()) {
-        revert.call(ghost);
+        Array arguments;
+        arguments.push_back(ghost);
+        game_call(revert, arguments, ACTION_REVERT);
         return;
     }
     ghost->queue_free();
@@ -209,7 +229,9 @@ void NetwAction::run_confirm(int64_t p_ghost) {
     Node *ghost = live_node(p_ghost);
     if (ghost != nullptr) {
         if (confirm.is_valid()) {
-            confirm.call(ghost);
+            Array arguments;
+            arguments.push_back(ghost);
+            game_call(confirm, arguments, ACTION_CONFIRM);
         } else {
             ghost->queue_free();
         }
@@ -273,7 +295,9 @@ void NetwAction::request(int64_t p_view_tick, const Array &p_args) {
     const StringName key
         = api->lagcomp_effect_key(entity->get_rid_handle(), p_view_tick, slot);
     Node *ghost = predict.is_valid()
-        ? Object::cast_to<Node>(gd::live_object(predict.call()))
+        ? Object::cast_to<Node>(
+              gd::live_object(game_call(predict, Array(), ACTION_PREDICT))
+          )
         : nullptr;
     const int64_t ghost_id = int64_t(uint64_t(gd::instance_id(ghost)));
     api->lagcomp_effect_arm(

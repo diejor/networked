@@ -5,6 +5,7 @@
 #include "netw/api/entity.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/prediction.hpp"
+#include "netw/game_call.hpp"
 #include "netw/log.hpp"
 #include "netw/sim/body.hpp"
 
@@ -13,6 +14,13 @@ using namespace godot;
 namespace netw {
 
 namespace {
+
+const GameCall SIMULATION_STEP = {
+    sys::PREDICTION,
+    "NetwSimulation.step",
+    "func(delta: float, tick: int, is_fresh: bool) -> void",
+    3
+};
 
 const StringName &network_tick_name() {
     static const StringName name("_network_tick");
@@ -178,6 +186,7 @@ Callable NetwSimulation::get_step() const {
 }
 
 void NetwSimulation::set_step(const Callable &p_value) {
+    game_call_declared(p_value, SIMULATION_STEP);
     declared.step = p_value;
     declare();
     adopt_step(p_value);

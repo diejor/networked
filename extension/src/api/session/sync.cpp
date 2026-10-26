@@ -29,6 +29,7 @@
 #include "netw/api/sync_pipeline.hpp"
 #include "netw/colors.hpp"
 #include "netw/comp_table.hpp"
+#include "netw/game_call.hpp"
 #include "netw/log.hpp"
 #include "netw/prediction_core.hpp"
 #include "netw/profile.hpp"
@@ -55,6 +56,13 @@ using repl::PropertyColumn;
 using repl::PropertySet;
 
 namespace {
+
+const GameCall MIGRATION_STEP = {
+    sys::TABLE,
+    "The NetwSchema.migrate or NetwPersistenceConfig.migrate step",
+    "func(values: Dictionary) -> Dictionary",
+    1
+};
 
 constexpr double SHUTDOWN_NOTIFY_DELAY = 0.5;
 
@@ -1885,11 +1893,9 @@ void NetwMultiplayer::adopt_schema_declarations() {
         const Dictionary steps = declaration->get_migrations();
         const Array froms = steps.keys();
         for (int at_step = 0; at_step < froms.size(); ++at_step) {
-            schema_core.add_migration(
-                schema,
-                int(froms[at_step]),
-                steps[froms[at_step]]
-            );
+            const Callable step = steps[froms[at_step]];
+            game_call_declared(step, MIGRATION_STEP);
+            schema_core.add_migration(schema, int(froms[at_step]), step);
         }
         if (schema_seal(schema) != OK) {
             NETW_ERROR(

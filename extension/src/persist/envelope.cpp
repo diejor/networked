@@ -1,5 +1,6 @@
 #include "netw/persist/envelope.hpp"
 
+#include "netw/game_call.hpp"
 #include "netw/log.hpp"
 
 using namespace godot;
@@ -7,6 +8,13 @@ using namespace godot;
 namespace netw::persist {
 
 namespace {
+
+const GameCall MIGRATION_STEP = {
+    sys::TABLE,
+    "The NetwSchema.migrate or NetwPersistenceConfig.migrate step",
+    "func(values: Dictionary) -> Dictionary",
+    1
+};
 
 const char *KEY_FORMAT = "format_version";
 const char *KEY_KIND = "kind";
@@ -198,7 +206,17 @@ Error open_record(
         }
         Array args;
         args.push_back(row);
-        const Variant answered = step.callv(args);
+        bool called = false;
+        const Variant answered = game_call(step, args, MIGRATION_STEP, &called);
+        if (!called) {
+            r_detail = vformat(
+                "the migration from storage version %d of schema '%s' "
+                "could not be called",
+                have,
+                String(schema->name)
+            );
+            return ERR_INVALID_DATA;
+        }
         if (answered.get_type() != Variant::DICTIONARY) {
             r_detail = vformat(
                 "the migration from storage version %d of schema '%s' "

@@ -3,6 +3,7 @@
 #include "godot/class_db.hpp"
 #include "godot/object.hpp"
 #include "godot/utility.hpp"
+#include "netw/game_call.hpp"
 #include "netw/log.hpp"
 
 using namespace godot;
@@ -13,6 +14,17 @@ namespace {
 
 const char *SIG_SETTLED = "settled";
 const char *SIG_ANSWERED = "answered";
+
+const GameCall PROMISE_THEN
+    = {sys::SESSION, "The NetwPromise.then callback", "func(result)", 1};
+const GameCall PROMISE_CATCH = {
+    sys::SESSION,
+    "The NetwPromise.catch_error callback",
+    "func(code: Error, detail: String)",
+    2
+};
+const GameCall PROMISE_SETTLED
+    = {sys::SESSION, "The NetwPromise.when_settled callback", "func()", 0};
 
 void answer_waiter(const Ref<RefCounted> &p_waiter, const Variant &p_answer) {
     p_waiter->emit_signal(StringName(SIG_ANSWERED), p_answer);
@@ -80,7 +92,7 @@ Ref<NetwPromise> NetwPromise::then(const Callable &callback) {
     if (completed) {
         Array args;
         args.push_back(result);
-        callback.callv(args);
+        game_call(callback, args, PROMISE_THEN);
     } else {
         then_callbacks.push_back(callback);
     }
@@ -93,7 +105,7 @@ Ref<NetwPromise> NetwPromise::catch_error(const Callable &callback) {
         Array args;
         args.push_back(code);
         args.push_back(detail);
-        callback.callv(args);
+        game_call(callback, args, PROMISE_CATCH);
     } else {
         catch_callbacks.push_back(callback);
     }
@@ -106,7 +118,7 @@ Ref<NetwPromise> NetwPromise::when_settled(const Callable &callback) {
     }
     failure_read = true;
     if (completed || failed) {
-        callback.callv(Array());
+        game_call(callback, Array(), PROMISE_SETTLED);
         return Ref<NetwPromise>(this);
     }
     connect(StringName(SIG_SETTLED), callback, Object::CONNECT_ONE_SHOT);
@@ -148,7 +160,7 @@ void NetwPromise::resolve(const Variant &value) {
     Array args;
     args.push_back(value);
     for (uint32_t index = 0; index < chained.size(); ++index) {
-        chained[index].callv(args);
+        game_call(chained[index], args, PROMISE_THEN);
     }
     promise_wait::release(waiting, value);
 }
@@ -170,7 +182,7 @@ void NetwPromise::reject(Error error_code, const String &error_detail) {
     args.push_back(error_code);
     args.push_back(error_detail);
     for (uint32_t index = 0; index < chained.size(); ++index) {
-        chained[index].callv(args);
+        game_call(chained[index], args, PROMISE_CATCH);
     }
     promise_wait::release(waiting, Variant(error_code));
 }

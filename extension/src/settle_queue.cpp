@@ -1,8 +1,21 @@
 #include "netw/settle_queue.hpp"
 
+#include "netw/game_call.hpp"
+
 using namespace godot;
 
 namespace netw {
+
+namespace {
+
+const GameCall DEFERRED_CALL = {
+    sys::SESSION,
+    "The NetwMultiplayer.session_defer callback",
+    "func() -> void",
+    0
+};
+
+} // namespace
 
 void SettleQueue::schedule(const Callable &fn, const StringName &key) {
     if (!key.is_empty()) {
@@ -70,8 +83,6 @@ bool SettleQueue::has(const StringName &key) const {
 
 PackedStringArray SettleQueue::drain() {
     int passes = 0;
-    // The batch and the held rows are copied out rather than moved, because the
-    // two tiers disagree about which assignment a LocalVector offers.
     LocalVector<Row> batch;
     LocalVector<Row> held;
     while (has_due()) {
@@ -104,7 +115,7 @@ PackedStringArray SettleQueue::drain() {
         }
         for (const Row &row : batch) {
             if (row.fn.is_valid()) {
-                row.fn.call();
+                game_call(row.fn, Array(), DEFERRED_CALL);
             }
         }
     }

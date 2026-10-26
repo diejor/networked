@@ -20,6 +20,7 @@
 #include "godot/spatial_node.hpp"
 #include "netw/colliders.hpp"
 #include "netw/colors.hpp"
+#include "netw/game_call.hpp"
 #include "netw/log.hpp"
 #include "netw/object_port.hpp"
 #include "netw/predict/axes.hpp"
@@ -39,6 +40,48 @@ using repl::PropertyColumn;
 using repl::PropertySet;
 
 namespace {
+
+const GameCall SIMULATION_STEP = {
+    sys::PREDICTION,
+    "NetwSimulation.step",
+    "func(delta: float, tick: int, is_fresh: bool) -> void",
+    3
+};
+
+const GameCall CARRY_STEP = {
+    sys::PREDICTION,
+    "NetwPropertyConfig.carry_step",
+    "func(value: Variant, ctx: NetwPredictCarryContext) -> Variant",
+    2
+};
+
+const GameCall PREDICT_INPUT_CALL = {
+    sys::PREDICTION,
+    "NetwPrediction.predict_input",
+    "func(entity: NetwEntity, tick: int) -> Dictionary",
+    2
+};
+
+const GameCall WITNESS_CONTACTS_CALL = {
+    sys::PREDICTION,
+    "NetwPrediction.witness_contacts",
+    "func() -> Dictionary",
+    0
+};
+
+const GameCall CORRECTION_PATH_CALL = {
+    sys::PREDICTION,
+    "NetwPrediction.correction_path_clear",
+    "func(current: Dictionary, proposed: Dictionary) -> bool",
+    2
+};
+
+const GameCall SENSOR_CALL = {
+    sys::PREDICTION,
+    "A NetwPrediction.sensors entry",
+    "func() -> Variant",
+    0
+};
 
 constexpr int ACK_WINDOW_MAX = 64;
 
@@ -988,7 +1031,7 @@ void NetwPredictionEngine::call_step(
     arguments.push_back(p_fresh);
     const int stale = p_fresh ? 0 : 1;
     replay_steps += stale;
-    p_step.callv(arguments);
+    game_call(p_step, arguments, SIMULATION_STEP);
     replay_steps -= stale;
 }
 
@@ -1733,7 +1776,13 @@ Dictionary NetwPredictionEngine::witness_sample(
         );
         return Dictionary();
     }
-    return normalize_witness_sample(p_slot, sampler.call());
+    bool called = false;
+    const Variant sample
+        = game_call(sampler, Array(), WITNESS_CONTACTS_CALL, &called);
+    if (!called) {
+        return Dictionary();
+    }
+    return normalize_witness_sample(p_slot, sample);
 }
 
 Dictionary NetwPredictionEngine::normalize_witness_sample(
@@ -1814,7 +1863,12 @@ bool NetwPredictionEngine::predict_command(
     if (!predictor.is_valid()) {
         return seal_predicted_command(p_slot);
     }
-    const Variant predicted = predictor.call(p_entity, p_tick);
+    Array arguments;
+    arguments.push_back(p_entity);
+    arguments.push_back(p_tick);
+    bool called = false;
+    const Variant predicted
+        = game_call(predictor, arguments, PREDICT_INPUT_CALL, &called);
     row = mutable_row_of(p_slot);
     if (row == nullptr) {
         return false;
@@ -1829,7 +1883,7 @@ bool NetwPredictionEngine::predict_command(
         }
         return seal_predicted_command(p_slot);
     }
-    if (!invalid_command_predictor_reported_of(p_slot)) {
+    if (called && !invalid_command_predictor_reported_of(p_slot)) {
         set_invalid_command_predictor_reported(p_slot, true);
         NETW_ERROR(
             sys::PREDICTION,
@@ -2939,7 +2993,8 @@ int64_t NetwPredictionEngine::sample_environment(
     depth += 1;
     for (const KeyValue<StringName, Callable> &sensor : row->sensors) {
         if (sensor.value.is_valid()) {
-            samples[sensor.key] = sensor.value.call();
+            samples[sensor.key]
+                = game_call(sensor.value, Array(), SENSOR_CALL);
         }
     }
     depth -= 1;
@@ -7515,7 +7570,12 @@ Dictionary NetwPredictionEngine::try_transport(
     if (prior_ok) {
         Dictionary proposed = p_current.duplicate();
         proposed.merge(candidate[StringName("restore")], true);
-        corridor_clear = bool(p_corridor.call(p_current, proposed));
+        Array arguments;
+        arguments.push_back(p_current);
+        arguments.push_back(proposed);
+        corridor_clear = bool(
+            game_call(p_corridor, arguments, CORRECTION_PATH_CALL)
+        );
     }
     const bool eligible = prior_ok && corridor_clear;
 
@@ -7980,7 +8040,7 @@ Variant NetwPredictionEngine::call_carry(
     arguments.push_back(p_value);
     arguments.push_back(context);
     depth += 1;
-    const Variant result = p_rule.callv(arguments);
+    const Variant result = game_call(p_rule, arguments, CARRY_STEP);
     depth -= 1;
 
     switch (result.get_type()) {

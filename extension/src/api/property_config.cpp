@@ -2,6 +2,7 @@
 
 #include "godot/class_db.hpp"
 #include "godot/node.hpp"
+#include "netw/game_call.hpp"
 #include "netw/log.hpp"
 #include "netw/script/model.hpp"
 
@@ -12,6 +13,13 @@ namespace netw {
 using repl::PropertySet;
 
 namespace {
+
+const GameCall CARRY_STEP = {
+    sys::PREDICTION,
+    "NetwPropertyConfig.carry_step",
+    "func(value: Variant, ctx: NetwPredictCarryContext) -> Variant",
+    2
+};
 
 Callable &carry_binder() {
     static Callable binder;
@@ -110,6 +118,7 @@ Ref<NetwPropertyConfig> NetwPropertyConfig::carry_step(const Callable &p_step) {
         );
         return Ref<NetwPropertyConfig>(this);
     }
+    game_call_declared(p_step, CARRY_STEP);
     const Callable &binder = carry_binder();
     if (binder.is_valid()) {
         binder.call(owner, get_context_name(), p_step);

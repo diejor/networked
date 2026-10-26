@@ -25,6 +25,7 @@
 #include "netw/api/sync_pipeline.hpp"
 #include "netw/colors.hpp"
 #include "netw/comp_table.hpp"
+#include "netw/game_call.hpp"
 #include "netw/log.hpp"
 #include "netw/prediction_core.hpp"
 #include "netw/profile.hpp"
@@ -91,6 +92,25 @@ PackedByteArray call_frame(
     return stream.to_bytes();
 }
 
+const GameCall CHANNEL_HANDLER = {
+    sys::TRANSPORT,
+    "The NetwMultiplayer.rpc_channel_register handler",
+    "func(entity: RID, payload: PackedByteArray, sender: int)",
+    3
+};
+const GameCall RPC_LOCAL = {
+    sys::TRANSPORT,
+    "The method Netw.rpc runs on this peer",
+    "a function that takes the arguments given to Netw.rpc",
+    -1
+};
+const GameCall RPC_CONTROLLER_LOCAL = {
+    sys::TRANSPORT,
+    "The method Netw.rpc_controller runs on this peer",
+    "a function that takes the arguments given to Netw.rpc_controller",
+    -1
+};
+
 } // namespace
 
 Error NetwMultiplayer::relay_subscribe(
@@ -146,11 +166,11 @@ void NetwMultiplayer::channel_dispatch(
     if (handler == nullptr || !handler->is_valid()) {
         return;
     }
-    handler->call(
-        p_wrapper.is_valid() ? p_wrapper->get_rid_handle() : RID(),
-        p_payload,
-        p_sender
-    );
+    Array args;
+    args.push_back(p_wrapper.is_valid() ? p_wrapper->get_rid_handle() : RID());
+    args.push_back(p_payload);
+    args.push_back(p_sender);
+    game_call(*handler, args, CHANNEL_HANDLER);
 }
 
 void NetwMultiplayer::rpc_channel_register(
@@ -162,6 +182,7 @@ void NetwMultiplayer::rpc_channel_register(
         || !p_handler.is_valid()) {
         return;
     }
+    game_call_declared(p_handler, CHANNEL_HANDLER);
     channel_handlers.insert(p_channel, p_handler);
     get_channel_book()->register_channel(
         p_channel,
@@ -1099,7 +1120,7 @@ void NetwMultiplayer::rpc_call(
         if (call_local) {
             const int64_t previous = dispatching_sender;
             dispatching_sender = local_id;
-            p_callable.callv(p_args);
+            game_call(p_callable, p_args, RPC_LOCAL);
             dispatching_sender = previous;
         } else if (p_peer == local_id) {
             NETW_ERR(
@@ -1396,7 +1417,7 @@ void NetwMultiplayer::rpc_call_controller(
     }
     const int64_t previous = dispatching_sender;
     dispatching_sender = local_id;
-    p_callable.callv(p_args);
+    game_call(p_callable, p_args, RPC_CONTROLLER_LOCAL);
     dispatching_sender = previous;
 }
 

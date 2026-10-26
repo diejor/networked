@@ -4,6 +4,7 @@
 #include "netw/api/entity.hpp"
 #include "netw/colliders.hpp"
 #include "netw/colors.hpp"
+#include "netw/game_call.hpp"
 #include "netw/log.hpp"
 #include "netw/profile.hpp"
 
@@ -14,6 +15,9 @@ namespace netw {
 namespace {
 
 constexpr SubsystemName MODULE = sys::LAGCOMP;
+
+const GameCall REWIND_BODY
+    = {MODULE, "The Netw.rewind body", "func() -> Variant", 0};
 
 bool is_suspended_call(const Variant &p_answered) {
     if (p_answered.get_type() != Variant::OBJECT) {
@@ -504,7 +508,9 @@ Variant NetwLagCompCore::rewind(
         wrote.push_back(written);
     }
 
-    const Variant answered = p_body.is_valid() ? p_body.call() : Variant();
+    const Variant answered = p_body.is_valid()
+        ? game_call(p_body, Array(), REWIND_BODY)
+        : Variant();
     if (is_suspended_call(answered)) {
         NETW_WARN_ONCE(
             MODULE,

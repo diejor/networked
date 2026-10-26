@@ -4,11 +4,23 @@
 #include "godot/class_db.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/replication_core.hpp"
+#include "netw/game_call.hpp"
 #include "netw/log.hpp"
 
 using namespace godot;
 
 namespace netw {
+
+namespace {
+
+const GameCall CHANNEL_HANDLER = {
+    sys::LIVENESS,
+    "The NetwChannel.register handler",
+    "func(sender: int, payload: PackedByteArray) -> void",
+    2
+};
+
+} // namespace
 
 ReplicationCore *NetwChannel::plane() const {
     NetwMultiplayer *api
@@ -85,7 +97,10 @@ void NetwChannel::forward_payload(
     int64_t p_sender,
     const Callable &p_handler
 ) {
-    p_handler.call(p_sender, p_payload);
+    Array args;
+    args.push_back(p_sender);
+    args.push_back(p_payload);
+    game_call(p_handler, args, CHANNEL_HANDLER);
 }
 
 void NetwChannel::register_handler(const Callable &p_handler) {
@@ -93,6 +108,7 @@ void NetwChannel::register_handler(const Callable &p_handler) {
     if (replication == nullptr) {
         return;
     }
+    game_call_declared(p_handler, CHANNEL_HANDLER);
     replication->register_channel(
         id,
         callable_mp_static(&NetwChannel::forward_payload).bind(p_handler),

@@ -6,6 +6,7 @@
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/persistence_config.hpp"
 #include "netw/api/property_config.hpp"
+#include "netw/game_call.hpp"
 #include "netw/log.hpp"
 #include "netw/object_port.hpp"
 #include "netw/schema_core.hpp"
@@ -16,6 +17,20 @@ using namespace godot;
 namespace netw::persist {
 
 namespace {
+
+const GameCall MIGRATION_STEP = {
+    sys::TABLE,
+    "The NetwSchema.migrate or NetwPersistenceConfig.migrate step",
+    "func(values: Dictionary) -> Dictionary",
+    1
+};
+
+const GameCall RECORD_ID = {
+    sys::TABLE,
+    "The NetwPersistenceConfig.record_id provider",
+    "func() -> StringName",
+    0
+};
 
 Node *node_of(ObjectID p_id) {
     return Object::cast_to<Node>(gd::object_of(p_id));
@@ -170,7 +185,9 @@ RID durable_schema(
     const Dictionary steps = p_config->get_migrations();
     const Array froms = steps.keys();
     for (int at = 0; at < froms.size(); ++at) {
-        core->add_migration(schema, int(froms[at]), Callable(steps[froms[at]]));
+        const Callable step = steps[froms[at]];
+        game_call_declared(step, MIGRATION_STEP);
+        core->add_migration(schema, int(froms[at]), step);
     }
     if (p_session->schema_seal(schema) != OK) {
         r_detail = "Its columns could not be built into a table.";
@@ -366,7 +383,11 @@ RID Bindings::compile(Node *p_root) {
         name_of(p_root).utf8().get_data(),
         String(schema_name).utf8().get_data()
     );
-    const Variant answered = provider.call();
+    bool called = false;
+    const Variant answered = game_call(provider, Array(), RECORD_ID, &called);
+    if (!called) {
+        return RID();
+    }
     const StringName record_id = answered;
     NETW_ERR_COND_V(
         String(record_id).is_empty(),

@@ -4,6 +4,7 @@
 
 #include "netw/colors.hpp"
 #include "netw/entity/ids.hpp"
+#include "netw/game_call.hpp"
 #include "netw/peer_rename.hpp"
 #include "netw/profile.hpp"
 
@@ -12,6 +13,20 @@ using namespace godot;
 namespace netw {
 
 namespace {
+
+const GameCall LIVE_CALLBACK = {
+    sys::LIVENESS,
+    "The NetwMultiplayer.liveness_when_live callback",
+    "func() -> void",
+    0
+};
+
+const GameCall LIVE_TIMEOUT = {
+    sys::LIVENESS,
+    "The NetwMultiplayer.liveness_when_live on_timeout",
+    "func() -> void",
+    0
+};
 
 int rank_of(NetwLivenessCore::State state) {
     switch (state) {
@@ -459,7 +474,7 @@ void NetwLivenessCore::when_live(
     const Callable &on_timeout
 ) {
     if (route_state(route) == STATE_LIVE && deferred_flushes.find(route) < 0) {
-        callback.call();
+        game_call(callback, Array(), LIVE_CALLBACK);
         return;
     }
     Pending entry;
@@ -512,7 +527,7 @@ void NetwLivenessCore::flush_live(int route) {
     pending.remove(found);
     for (const Pending &entry : waiting) {
         if (entry.callback.is_valid()) {
-            entry.callback.call();
+            game_call(entry.callback, Array(), LIVE_CALLBACK);
         }
     }
 }
@@ -527,7 +542,7 @@ void NetwLivenessCore::fail_live(int route) {
     pending.remove(found);
     for (const Pending &entry : waiting) {
         if (entry.on_timeout.is_valid()) {
-            entry.on_timeout.call();
+            game_call(entry.on_timeout, Array(), LIVE_TIMEOUT);
         }
     }
 }
@@ -585,7 +600,7 @@ PackedInt32Array NetwLivenessCore::sweep_pending(int clock_tick) {
     expired.sort();
 
     for (const Callable &callback : fired) {
-        callback.call();
+        game_call(callback, Array(), LIVE_TIMEOUT);
     }
     return expired;
 }

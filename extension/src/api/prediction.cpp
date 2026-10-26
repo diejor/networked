@@ -8,6 +8,7 @@
 #include "godot/physics_body.hpp"
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/predict_slot_engine.hpp"
+#include "netw/game_call.hpp"
 #include "netw/log.hpp"
 #include "netw/predict/axes.hpp"
 #include "netw/predict/compare.hpp"
@@ -17,6 +18,38 @@
 using namespace godot;
 
 namespace netw {
+
+namespace {
+
+const GameCall PREDICT_INPUT_CALL = {
+    sys::PREDICTION,
+    "NetwPrediction.predict_input",
+    "func(entity: NetwEntity, tick: int) -> Dictionary",
+    2
+};
+
+const GameCall WITNESS_CONTACTS_CALL = {
+    sys::PREDICTION,
+    "NetwPrediction.witness_contacts",
+    "func() -> Dictionary",
+    0
+};
+
+const GameCall CORRECTION_PATH_CALL = {
+    sys::PREDICTION,
+    "NetwPrediction.correction_path_clear",
+    "func(current: Dictionary, proposed: Dictionary) -> bool",
+    2
+};
+
+const GameCall SENSOR_CALL = {
+    sys::PREDICTION,
+    "A NetwPrediction.sensors entry",
+    "func() -> Variant",
+    0
+};
+
+} // namespace
 
 const char *NetwPrediction::GENERATOR_UNKNOWN_BEYOND_RETENTION
     = "UNKNOWN_BEYOND_RETENTION";
@@ -284,6 +317,12 @@ void NetwPrediction::set_breach_response(
 }
 
 void NetwPrediction::set_sensors(const Dictionary &p_value) {
+    const Array sensors = p_value.values();
+    for (int64_t at = 0; at < sensors.size(); ++at) {
+        if (sensors[at].get_type() == Variant::CALLABLE) {
+            game_call_declared(Callable(sensors[at]), SENSOR_CALL);
+        }
+    }
     sensor_table = p_value;
 }
 
@@ -302,6 +341,7 @@ void NetwPrediction::set_witness_contacts(const Callable &p_value) {
         "NetwPrediction.witness_contacts needs a valid Callable, so "
         "the value was ignored. Pass a method of a live object."
     );
+    game_call_declared(p_value, WITNESS_CONTACTS_CALL);
     witness_sampler = p_value;
     rewire();
 }
@@ -313,6 +353,7 @@ void NetwPrediction::set_correction_path_clear(const Callable &p_value) {
         "NetwPrediction.correction_path_clear needs a valid Callable, "
         "so the value was ignored. Pass a method of a live object."
     );
+    game_call_declared(p_value, CORRECTION_PATH_CALL);
     corridor_sweep = p_value;
 }
 
@@ -482,6 +523,7 @@ void NetwPrediction::notify_contact() {
 }
 
 void NetwPrediction::set_predict_input(const Callable &p_predictor) {
+    game_call_declared(p_predictor, PREDICT_INPUT_CALL);
     command_predictor = p_predictor;
 }
 

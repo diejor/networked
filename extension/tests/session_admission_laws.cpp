@@ -61,6 +61,15 @@ func admit(_request: NetwJoinRequest):
 	return "admitted"
 )";
 
+constexpr const char *GATE_TAKING_PEER_ID = R"(extends Node
+
+var calls := 0
+
+func admit(_peer_id: int, _username: StringName) -> Error:
+	calls += 1
+	return OK
+)";
+
 constexpr const char *ASYNC_GATE = R"(extends Node
 
 signal decided
@@ -368,6 +377,13 @@ TEST_CASE(
     "loudly rather than seating one peer under a rule it refused every other "
     "peer by"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][session] The host could not join its own session, so it has "
+        "no NetwPlayer. This server did not admit the join (Unauthorized).",
+        1
+    );
+
     Node *branch = mounted_branch("AdmitG5");
     const Ref<NetwMultiplayer> host = branch_session(branch);
     Node *gate = gate_on(branch, GATE);
@@ -405,6 +421,39 @@ TEST_CASE(
     CHECK(host->peer_get_player(9).is_null());
     CHECK(String(host->session_refusal(9))
               .contains(String("did not return an Error")));
+
+    release_branch(host, branch);
+}
+
+TEST_CASE(
+    "[Networked][Session][SceneTree] G7 a handler that cannot take a "
+    "NetwJoinRequest refuses the join with one error naming the signature, "
+    "and the host's own join reports it once"
+) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_error(
+        "[error][session] The admission handler cannot take a "
+        "NetwJoinRequest, so the join was refused. Declare it as func "
+        "admit(request: NetwJoinRequest) -> Error.",
+        1
+    );
+    expected_faults.expect_error(
+        "[error][session] The host could not join its own session, so it has "
+        "no NetwPlayer. The admission handler cannot take a NetwJoinRequest*",
+        1
+    );
+
+    Node *branch = mounted_branch("AdmitG7");
+    const Ref<NetwMultiplayer> host = branch_session(branch);
+    Node *gate = gate_on(branch, GATE_TAKING_PEER_ID);
+    admit_through(gate);
+
+    join_as(host, "ana", 9);
+    host->session_submit_join(StringName("host"), Array());
+
+    NETW_CHECK_EQ(int(gate->get(StringName("calls"))), 0);
+    CHECK(host->peer_get_player(9).is_null());
+    CHECK(host->player_local().is_null());
 
     release_branch(host, branch);
 }

@@ -52,6 +52,7 @@
 #include "netw/connect/browse_list.hpp"
 #include "netw/connect/creation.hpp"
 #include "netw/connect/directory_transport.hpp"
+#include "netw/game_call.hpp"
 #include "netw/held_bytes.hpp"
 #include "netw/log.hpp"
 #include "netw/prediction_core.hpp"
@@ -2804,7 +2805,16 @@ void NetwMultiplayer::auth_receive(
         return;
     }
     if (auth_app_callback.is_valid()) {
-        auth_app_callback.call(p_peer, p_data);
+        static const GameCall AUTH_CALLBACK = {
+            sys::SESSION,
+            "NetwMultiplayer.auth_callback",
+            "func(peer_id: int, data: PackedByteArray)",
+            2
+        };
+        Array args;
+        args.push_back(p_peer);
+        args.push_back(p_data);
+        game_call(auth_app_callback, args, AUTH_CALLBACK);
         return;
     }
     if (kind == auth::Kind::HELLO) {
@@ -4961,9 +4971,15 @@ int64_t NetwMultiplayer::action_gate_count() const {
 
 Node *NetwMultiplayer::session_root() const {
     if (session_root_reader.is_valid()) {
-        Node *declared = Object::cast_to<Node>(
-            gd::live_object(session_root_reader.call())
-        );
+        static const GameCall ROOT_READER = {
+            sys::SESSION,
+            "The NetwMultiplayer.session_set_root reader",
+            "func() -> Node",
+            0
+        };
+        const Variant answered
+            = game_call(session_root_reader, Array(), ROOT_READER);
+        Node *declared = Object::cast_to<Node>(gd::live_object(answered));
         if (declared != nullptr) {
             session_root_last_live = gd::instance_id(declared);
         }

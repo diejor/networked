@@ -5,6 +5,7 @@
 #include "godot/object.hpp"
 #include "godot/scene_tree.hpp"
 #include "godot/time.hpp"
+#include "netw/game_call.hpp"
 #include "netw/log.hpp"
 
 using namespace godot;
@@ -64,6 +65,13 @@ void answer_waits(Source &r_source, bool p_fetched) {
         answer->resolve(p_fetched ? proof_of(r_source, wait[0]) : Variant());
     }
 }
+
+const GameCall TOKEN_FETCH = {
+    sys::SESSION,
+    "The NetwIdToken.provide fetch",
+    "func(nonce: String) -> NetwPromise",
+    1
+};
 
 } // namespace
 
@@ -300,11 +308,20 @@ Variant NetwIdToken::prove_at(const String &p_challenge, double p_now) {
     }
     const String pem = made->save_to_string(true);
     bool called = false;
+    Array args;
+    args.push_back(pem.sha256_text());
     const Variant returned
-        = gd::call_checked(source->fetch, Variant(pem.sha256_text()), called);
+        = game_call(source->fetch, args, TOKEN_FETCH, &called);
     const Ref<NetwPromise> pending(
         Object::cast_to<NetwPromise>(gd::live_object(returned))
     );
+    if (called && pending.is_null()) {
+        NETW_ERROR_ONCE(
+            sys::SESSION,
+            "The NetwIdToken.provide fetch did not return a NetwPromise, so "
+            "no token was sent. Return a NetwPromise of the token."
+        );
+    }
     source = sources().getptr(issuer);
     if (!called || pending.is_null() || source == nullptr) {
         return Variant();
@@ -384,6 +401,7 @@ void NetwIdToken::provide(const String &p_issuer, const Callable &p_fetch) {
         sources().erase(p_issuer);
         return;
     }
+    game_call_declared(p_fetch, TOKEN_FETCH);
     Source fresh;
     fresh.fetch = p_fetch;
     sources()[p_issuer] = fresh;

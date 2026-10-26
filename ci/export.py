@@ -292,6 +292,9 @@ def export_web(
     }
     if scene:
         overrides["run/main_scene"] = '"%s"' % scene
+        for entry in load_examples()["examples"]:
+            if entry["scene"] == scene:
+                overrides["config/name"] = '"%s | Networked"' % entry["title"]
     if out.exists():
         shutil.rmtree(out)
     out.mkdir(parents=True)

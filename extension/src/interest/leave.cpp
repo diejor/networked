@@ -1,5 +1,6 @@
 #include "netw/interest/leave.hpp"
 
+#include "netw/game_call.hpp"
 #include "netw/log.hpp"
 
 using namespace godot;
@@ -10,6 +11,13 @@ using LayerExits = Leave::LayerExits;
 using PerPeer = Leave::PerPeer;
 
 namespace {
+
+const GameCall LEAVE_POLICY_CUSTOM = {
+    sys::INTEREST,
+    "The NetwInterest.on_leave_policy custom_callback",
+    "func(peer_id: int, layer_id: StringName)",
+    2
+};
 
 const StringName &hide_key() {
     static const StringName key("hide");
@@ -177,7 +185,7 @@ void Leave::commit(
         Array args;
         args.push_back(peer);
         args.push_back(action[1]);
-        callback.callv(args);
+        game_call(callback, args, LEAVE_POLICY_CUSTOM);
     }
 }
 

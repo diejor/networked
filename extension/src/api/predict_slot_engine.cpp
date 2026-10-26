@@ -16,6 +16,7 @@
 #include "netw/api/scene.hpp"
 #include "netw/colliders.hpp"
 #include "netw/colors.hpp"
+#include "netw/game_call.hpp"
 #include "netw/log.hpp"
 #include "netw/predict/axes.hpp"
 #include "netw/predict/tick_work.hpp"
@@ -31,6 +32,13 @@ namespace netw {
 using repl::PropertyBindingPtr;
 
 namespace {
+
+const GameCall SIMULATION_STEP = {
+    sys::PREDICTION,
+    "NetwSimulation.step",
+    "func(delta: float, tick: int, is_fresh: bool) -> void",
+    3
+};
 
 constexpr int ARRIVAL_BUCKET_MAX = NetwPredictStats::ARRIVAL_BUCKETS - 1;
 constexpr int REPLAY_DEPTH_BUCKET_MAX
@@ -2406,7 +2414,11 @@ void NetwPredictSlotEngine::run_command(
     pool->apply_command(slot, p_command);
     const Callable step = handle->get_simulate();
     if (step.is_valid()) {
-        step.call(p_delta, p_tick, p_fresh);
+        Array arguments;
+        arguments.push_back(p_delta);
+        arguments.push_back(p_tick);
+        arguments.push_back(p_fresh);
+        game_call(step, arguments, SIMULATION_STEP);
     } else {
         NETW_TRACE(sys::PREDICTION, "Tick %d has no step to run.", int(p_tick));
     }

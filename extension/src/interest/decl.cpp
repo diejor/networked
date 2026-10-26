@@ -1,5 +1,6 @@
 #include "netw/interest/decl.hpp"
 
+#include "netw/game_call.hpp"
 #include "netw/log.hpp"
 
 using namespace godot;
@@ -7,6 +8,36 @@ using namespace godot;
 namespace netw::interest {
 
 namespace {
+
+const GameCall INTEREST_ENTER = {
+    sys::INTEREST,
+    "The NetwInterest.on_enter callback",
+    "func(layer_id: StringName, peer_id: int)",
+    2
+};
+const GameCall INTEREST_LEAVE = {
+    sys::INTEREST,
+    "The NetwInterest.on_leave callback",
+    "func(layer_id: StringName, peer_id: int)",
+    2
+};
+
+void fire_each(
+    const Array &callbacks,
+    const StringName &layer_id,
+    int64_t peer,
+    const GameCall &site
+) {
+    Array args;
+    args.push_back(layer_id);
+    args.push_back(peer);
+    for (int at = 0; at < callbacks.size(); ++at) {
+        const Callable held = callbacks[at];
+        if (held.is_valid()) {
+            game_call(held, args, site);
+        }
+    }
+}
 
 int index_of(const LocalVector<StringName> &names, const StringName &name) {
     for (uint32_t index = 0; index < names.size(); ++index) {
@@ -192,19 +223,6 @@ void Facet::remember(
     }
 }
 
-void Facet::fire(
-    const Array &callbacks,
-    const StringName &layer_id,
-    int64_t peer
-) {
-    for (int at = 0; at < callbacks.size(); ++at) {
-        const Callable held = callbacks[at];
-        if (held.is_valid()) {
-            held.call(layer_id, peer);
-        }
-    }
-}
-
 bool Facet::join(const StringName &layer_id) {
     return decl.join(layer_id);
 }
@@ -229,6 +247,7 @@ bool Facet::on_enter(const StringName &layer_id, const Callable &callback) {
         sys::INTEREST,
         "NetwInterest.on_enter needs a valid Callable."
     );
+    game_call_declared(callback, INTEREST_ENTER);
     remember(enter_callbacks, layer_id, callback);
     return true;
 }
@@ -240,6 +259,7 @@ bool Facet::on_leave(const StringName &layer_id, const Callable &callback) {
         sys::INTEREST,
         "NetwInterest.on_leave needs a valid Callable."
     );
+    game_call_declared(callback, INTEREST_LEAVE);
     remember(leave_callbacks, layer_id, callback);
     return true;
 }
@@ -291,14 +311,14 @@ bool Facet::set_perception_policy(
 void Facet::dispatch_enter(const StringName &layer_id, int64_t peer) {
     const Array *held = enter_callbacks.getptr(layer_id);
     if (held != nullptr) {
-        fire(*held, layer_id, peer);
+        fire_each(*held, layer_id, peer, INTEREST_ENTER);
     }
 }
 
 void Facet::dispatch_leave(const StringName &layer_id, int64_t peer) {
     const Array *held = leave_callbacks.getptr(layer_id);
     if (held != nullptr) {
-        fire(*held, layer_id, peer);
+        fire_each(*held, layer_id, peer, INTEREST_LEAVE);
     }
 }
 

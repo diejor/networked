@@ -26,6 +26,7 @@
 #include "netw/colors.hpp"
 #include "netw/comp_table.hpp"
 #include "netw/entity/stage.hpp"
+#include "netw/game_call.hpp"
 #include "netw/log.hpp"
 #include "netw/prediction_core.hpp"
 #include "netw/profile.hpp"
@@ -41,6 +42,41 @@ using namespace godot;
 using namespace netw;
 
 namespace netw {
+
+namespace {
+
+const GameCall PERCEPTION_CUSTOM = {
+    sys::INTEREST,
+    "The NetwInterest.on_perception_policy custom_callback",
+    "func(visible: bool, peer_id: int, layer_id: StringName)",
+    3
+};
+const GameCall LAYER_DRIVER = {
+    sys::INTEREST,
+    "NetwInterestLayer.driver",
+    "func(layer: NetwInterestLayer) -> Array[NetwEntity]",
+    1
+};
+const GameCall LAYER_DRIVER_RID = {
+    sys::INTEREST,
+    "The NetwMultiplayer.interest_layer_set_driver_callback callback",
+    "func(layer: RID) -> Array[RID]",
+    1
+};
+const GameCall LAYER_MONITOR = {
+    sys::INTEREST,
+    "NetwInterestLayer.monitor",
+    "func(entity: NetwEntity, peer_id: int, visible: bool)",
+    3
+};
+const GameCall LAYER_MONITOR_RID = {
+    sys::INTEREST,
+    "The NetwMultiplayer.interest_layer_set_monitor_callback callback",
+    "func(visible: bool, entity: RID, peer_id: int)",
+    3
+};
+
+} // namespace
 
 interest::Engine &NetwMultiplayer::interest_plane() {
     return interest_engine;
@@ -231,7 +267,11 @@ void NetwMultiplayer::interest_refresh_perception(
         const Array action = actions[at];
         const Callable callback = action[0];
         if (callback.is_valid()) {
-            callback.call(false, peer_id, action[1]);
+            Array args;
+            args.push_back(false);
+            args.push_back(peer_id);
+            args.push_back(action[1]);
+            game_call(callback, args, PERCEPTION_CUSTOM);
         }
     }
 }
@@ -654,7 +694,11 @@ void NetwMultiplayer::perception_dispatch_custom(
         const Array action = actions[at];
         const Callable callback = action[0];
         if (callback.is_valid()) {
-            callback.call(p_visible, p_peer_id, action[1]);
+            Array args;
+            args.push_back(p_visible);
+            args.push_back(p_peer_id);
+            args.push_back(action[1]);
+            game_call(callback, args, PERCEPTION_CUSTOM);
         }
     }
 }
@@ -1474,6 +1518,10 @@ void NetwMultiplayer::layer_set_driver(
         return;
     }
     if (p_callback.is_valid()) {
+        game_call_declared(
+            p_callback,
+            p_typed ? LAYER_DRIVER : LAYER_DRIVER_RID
+        );
         LayerDriverRow row;
         row.layer = p_layer;
         row.drive = p_callback;
@@ -1497,8 +1545,22 @@ Error NetwMultiplayer::layer_drive(const LayerDriverRow &p_row) {
     if (record.is_null()) {
         return OK;
     }
-    const Variant answered = p_row.typed ? p_row.drive.call(record)
-                                         : p_row.drive.call(p_row.layer);
+    Array args;
+    if (p_row.typed) {
+        args.push_back(record);
+    } else {
+        args.push_back(p_row.layer);
+    }
+    bool called = false;
+    const Variant answered = game_call(
+        p_row.drive,
+        args,
+        p_row.typed ? LAYER_DRIVER : LAYER_DRIVER_RID,
+        &called
+    );
+    if (!called) {
+        return ERR_INVALID_DATA;
+    }
     const String layer_name = record->get_layer_id();
     if (answered.get_type() != Variant::ARRAY) {
         NETW_WARN(
@@ -1662,11 +1724,18 @@ void NetwMultiplayer::layer_monitor_report(
     if (row == nullptr || !row->watch.is_valid() || p_entity.is_null()) {
         return;
     }
+    Array args;
     if (row->typed) {
-        row->watch.call(p_entity, p_peer, p_inside);
+        args.push_back(p_entity);
+        args.push_back(p_peer);
+        args.push_back(p_inside);
+        game_call(row->watch, args, LAYER_MONITOR);
         return;
     }
-    row->watch.call(p_inside, entity_of(p_entity->get_owner()), p_peer);
+    args.push_back(p_inside);
+    args.push_back(entity_of(p_entity->get_owner()));
+    args.push_back(p_peer);
+    game_call(row->watch, args, LAYER_MONITOR_RID);
 }
 
 void NetwMultiplayer::layer_monitor_enter(
@@ -1722,6 +1791,10 @@ void NetwMultiplayer::layer_set_monitor(
     if (view.is_null() || !p_callback.is_valid()) {
         return;
     }
+    game_call_declared(
+        p_callback,
+        p_typed ? LAYER_MONITOR : LAYER_MONITOR_RID
+    );
     LayerMonitorRow row;
     row.watch = p_callback;
     row.typed = p_typed;

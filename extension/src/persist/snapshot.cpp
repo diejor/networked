@@ -1,12 +1,20 @@
 #include "netw/persist/snapshot.hpp"
 
 #include "godot/templates.hpp"
+#include "netw/game_call.hpp"
 
 using namespace godot;
 
 namespace netw::persist {
 
 namespace {
+
+const GameCall MIGRATION_STEP = {
+    sys::TABLE,
+    "The NetwSchema.migrate or NetwPersistenceConfig.migrate step",
+    "func(values: Dictionary) -> Dictionary",
+    1
+};
 
 const char *KEY_FORMAT = "format_version";
 const char *KEY_KIND = "kind";
@@ -149,7 +157,18 @@ Error migrate_rows(
         for (uint32_t at = 0; at < rows.size(); ++at) {
             Array args;
             args.push_back(rows[at]);
-            const Variant answered = step.callv(args);
+            bool called = false;
+            const Variant answered
+                = game_call(step, args, MIGRATION_STEP, &called);
+            if (!called) {
+                r_detail = vformat(
+                    "the migration from storage version %d of schema '%s' "
+                    "could not be called",
+                    have,
+                    String(p_record.name)
+                );
+                return ERR_INVALID_DATA;
+            }
             if (answered.get_type() != Variant::DICTIONARY) {
                 r_detail = vformat(
                     "the migration from storage version %d of schema '%s' "

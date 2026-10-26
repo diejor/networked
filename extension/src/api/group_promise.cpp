@@ -1,6 +1,7 @@
 #include "netw/api/group_promise.hpp"
 
 #include "godot/class_db.hpp"
+#include "netw/game_call.hpp"
 #include "netw/log.hpp"
 #include "netw/subsystems.hpp"
 
@@ -12,6 +13,19 @@ namespace {
 
 const char *SIG_PEER_COMPLETED = "peer_completed";
 const char *SIG_SETTLED = "settled";
+
+const GameCall GROUP_THEN = {
+    sys::SESSION,
+    "The NetwGroupPromise.then callback",
+    "func(results: Dictionary)",
+    1
+};
+const GameCall GROUP_CATCH = {
+    sys::SESSION,
+    "The NetwGroupPromise.catch_error callback",
+    "func(code: Error, detail: String)",
+    2
+};
 
 } // namespace
 
@@ -60,7 +74,7 @@ Ref<NetwGroupPromise> NetwGroupPromise::then(const Callable &p_callback) {
     if (completed) {
         Array args;
         args.push_back(results);
-        p_callback.callv(args);
+        game_call(p_callback, args, GROUP_THEN);
     } else {
         then_callbacks.push_back(p_callback);
     }
@@ -74,7 +88,7 @@ Ref<NetwGroupPromise> NetwGroupPromise::catch_error(
         Array args;
         args.push_back(code);
         args.push_back(detail);
-        p_callback.callv(args);
+        game_call(p_callback, args, GROUP_CATCH);
     } else {
         catch_callbacks.push_back(p_callback);
     }
@@ -146,7 +160,7 @@ void NetwGroupPromise::resolve_all() {
     Array args;
     args.push_back(results);
     for (uint32_t at = 0; at < chained.size(); ++at) {
-        chained[at].callv(args);
+        game_call(chained[at], args, GROUP_THEN);
     }
     promise_wait::release(waiting, results);
 }
@@ -175,7 +189,7 @@ void NetwGroupPromise::reject(Error p_code, const String &p_detail) {
     args.push_back(p_code);
     args.push_back(p_detail);
     for (uint32_t at = 0; at < chained.size(); ++at) {
-        chained[at].callv(args);
+        game_call(chained[at], args, GROUP_CATCH);
     }
     promise_wait::release(waiting, Variant(p_code));
 }

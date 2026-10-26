@@ -14,6 +14,7 @@
 #include "netw/api/replication_core.hpp"
 #include "netw/colors.hpp"
 #include "netw/entity/stage.hpp"
+#include "netw/game_call.hpp"
 #include "netw/lifecycle/rule.hpp"
 #include "netw/log.hpp"
 #include "netw/object_port.hpp"
@@ -41,6 +42,27 @@ const char *SESSION_ENDED_MID_SPAWN
     = "The session ended before the spawn function returned.";
 const double CLOCKLESS_TICKRATE = 30.0;
 constexpr int BLOB_CAP = 4095;
+
+const GameCall SPAWN_FUNCTION = {
+    sys::SPAWN,
+    "The Netw.configure_spawn function",
+    "func(...) -> Node",
+    -1
+};
+const GameCall SPAWN_CONSTRUCTOR = {
+    sys::SPAWN,
+    "The NetwMultiplayer.spawn_register_constructor function",
+    "func(...) -> Node, taking one argument per arg_types entry",
+    -1
+};
+const GameCall DESPAWN_HOOK = {
+    sys::SPAWN,
+    "The NetwDespawnConfig.before_removal method",
+    "func() -> void",
+    0
+};
+
+bool build_called = true;
 
 bool authors(lifecycle::Kind p_kind, bool p_is_server) {
     return lifecycle::rule(p_kind, p_is_server).admitted();
@@ -623,9 +645,13 @@ Node *Pipeline::spawn(
     const StringName method = p_fn.get_method();
 
     Variant built;
+    bool called = false;
     {
         NETW_ZONE_NC("Spawn call constructor", colors::LIVENESS);
-        built = p_fn.callv(p_args);
+        built = game_call(p_fn, p_args, SPAWN_FUNCTION, &called);
+    }
+    if (!called) {
+        return nullptr;
     }
     if (NetwMultiplayer::is_waiting(built)) {
         NetwMultiplayer::free_when_returned(built);
@@ -675,9 +701,17 @@ Ref<NetwPromise> Pipeline::spawn_async(
     };
 
     Variant built;
+    bool called = false;
     {
         NETW_ZONE_NC("Spawn call constructor", colors::LIVENESS);
-        built = p_fn.callv(p_args);
+        built = game_call(p_fn, p_args, SPAWN_FUNCTION, &called);
+    }
+    if (!called) {
+        refusal.refused_quietly(
+            ERR_INVALID_PARAMETER,
+            vformat("Spawn function '%s' could not be called.", call.method)
+        );
+        return refusal.promise();
     }
     if (!NetwMultiplayer::is_waiting(built)) {
         Node *node = spawn_finish(built, call, refusal);
@@ -810,6 +844,11 @@ void Pipeline::register_spawn_constructor(
     const Array &p_arg_types,
     const Array &p_quantizers
 ) {
+    if (!p_arg_types.is_empty()) {
+        GameCall site = SPAWN_CONSTRUCTOR;
+        site.argument_count = p_arg_types.size();
+        game_call_declared(p_fn, site);
+    }
     constructors[p_id] = p_fn;
     if (p_arg_types.is_empty() && p_quantizers.is_empty()) {
         constructor_schemas.erase(p_id);
@@ -876,7 +915,11 @@ Node *Pipeline::spawn_registered(
             p_id
         );
     }
-    const Variant built = fn.callv(p_args);
+    bool called = false;
+    const Variant built = game_call(fn, p_args, SPAWN_CONSTRUCTOR, &called);
+    if (!called) {
+        return nullptr;
+    }
     if (NetwMultiplayer::is_waiting(built)) {
         NetwMultiplayer::free_when_returned(built);
         NETW_ERR_V(
@@ -1717,7 +1760,8 @@ Node *Pipeline::build_spawner(
 }
 
 Node *Pipeline::build_fn(const Callable &p_fn, const Array &p_args) {
-    const Variant built = p_fn.callv(p_args);
+    const Variant built
+        = game_call(p_fn, p_args, SPAWN_CONSTRUCTOR, &build_called);
     fn_waited = NetwMultiplayer::is_waiting(built);
     if (fn_waited) {
         NetwMultiplayer::free_when_returned(built);
@@ -1738,7 +1782,12 @@ Node *Pipeline::build_host_fn(
     if (held != nullptr && held->scene.is_empty()) {
         return take_ready(building_route);
     }
-    const Variant built = Callable(p_host, p_method).callv(p_args);
+    const Variant built = game_call(
+        Callable(p_host, p_method),
+        p_args,
+        SPAWN_FUNCTION,
+        &build_called
+    );
     fn_waited = NetwMultiplayer::is_waiting(built);
     if (fn_waited) {
         waited_result = built;
@@ -2338,6 +2387,7 @@ SpawnBuild::Outcome Pipeline::build_spawn(
         }
         r_built.args = resolved;
         fn_waited = false;
+        build_called = true;
         node = run_construct_stage(
             callable_mp(plane, &NetwMultiplayer::spawn_build_fn)
                 .bind(fn, Array(resolved))
@@ -2350,7 +2400,7 @@ SpawnBuild::Outcome Pipeline::build_spawn(
                     "Return the node without waiting.",
                     id
                 );
-            } else {
+            } else if (build_called) {
                 NETW_WARN(
                     sys::SPAWN,
                     "Spawn constructor '%s' did not return a Node, so the "
@@ -2404,6 +2454,7 @@ SpawnBuild::Outcome Pipeline::build_spawn(
         }
         r_built.args = resolved;
         fn_waited = false;
+        build_called = true;
         waited_result = Variant();
         building_route = route;
         node = run_construct_stage(
@@ -2431,7 +2482,7 @@ SpawnBuild::Outcome Pipeline::build_spawn(
                     "Use Netw.spawn_async for a spawn function that awaits.",
                     method
                 );
-            } else {
+            } else if (build_called) {
                 NETW_WARN(
                     sys::SPAWN,
                     "Spawn function '%s' did not return a Node, so the spawn "
@@ -2699,7 +2750,7 @@ double Pipeline::run_despawn_hook(Node *p_node) {
     }
     const StringName hook = cfg->get_hook_method();
     if (!String(hook).is_empty() && p_node->has_method(hook)) {
-        p_node->call(hook);
+        game_call(Callable(p_node, hook), Array(), DESPAWN_HOOK);
     }
     return cfg->get_linger_seconds();
 }

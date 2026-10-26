@@ -203,12 +203,15 @@ void NetwMultiplayer::session_request_proof(
     const bool provable = declared.state == session_decl::READY
         && config.is_valid() && config->provider_count() > 0;
     if (!provable || p_challenge.is_empty()) {
+        const String reason = provable
+            ? "An admission challenge could not be made."
+            : "The server asks for account proofs. Call "
+              "NetwAdmissionConfig.accept with the same providers on both "
+              "peers.";
+        session_report_host_refusal(p_peer, reason);
         session_report_join_failure(
             provable ? ERR_UNAVAILABLE : ERR_UNAUTHORIZED,
-            provable ? "An admission challenge could not be made."
-                     : "The server asks for account proofs. Call "
-                       "NetwAdmissionConfig.accept with the same providers "
-                       "on both peers."
+            reason
         );
         if (p_peer != get_unique_id()) {
             disconnect_peer(p_peer);
@@ -264,15 +267,29 @@ void NetwMultiplayer::session_prove_next(int64_t p_peer) {
 }
 
 void NetwMultiplayer::session_proof_failed(int64_t p_peer, Error p_error) {
-    session_report_join_failure(
-        p_error,
-        "The admission proof could not be made."
-    );
+    const String reason = "The admission proof could not be made.";
+    session_report_host_refusal(p_peer, reason);
+    session_report_join_failure(p_error, reason);
     if (p_peer != get_unique_id()) {
         disconnect_peer(p_peer);
     } else {
         link_handshakes.erase(p_peer);
     }
+}
+
+void NetwMultiplayer::session_report_host_refusal(
+    int64_t p_peer,
+    const String &p_reason
+) {
+    if (p_peer != get_unique_id() || !is_host()) {
+        return;
+    }
+    NETW_ERROR(
+        sys::SESSION,
+        "The host could not join its own session, so it has no NetwPlayer. "
+        "%s",
+        p_reason
+    );
 }
 
 void NetwMultiplayer::session_proof_settled(
@@ -324,11 +341,9 @@ void NetwMultiplayer::session_start_admission(const JoinRequest &p_request) {
     Array proofs;
     if (accepted > 0) {
         if (challenge.is_empty() || p_request.proof_bytes.is_empty()) {
-            session_fail_join(
-                peer,
-                ERR_UNAUTHORIZED,
-                "The required admission proof is missing."
-            );
+            const String missing = "The required admission proof is missing.";
+            session_report_host_refusal(peer, missing);
+            session_fail_join(peer, ERR_UNAUTHORIZED, missing);
             return;
         }
         const Variant decoded = gd::bytes_to_var(p_request.proof_bytes);
@@ -336,17 +351,15 @@ void NetwMultiplayer::session_start_admission(const JoinRequest &p_request) {
             proofs = decoded;
         }
         if (proofs.size() != accepted) {
-            session_fail_join(
-                peer,
-                ERR_UNAUTHORIZED,
-                vformat(
-                    "This server accepts %d accounts and the joining peer "
-                    "proved %d. Call NetwAdmissionConfig.accept with the same "
-                    "providers in the same order on both peers.",
-                    accepted,
-                    int64_t(proofs.size())
-                )
+            const String mismatched = vformat(
+                "This server accepts %d accounts and the joining peer proved "
+                "%d. Call NetwAdmissionConfig.accept with the same providers "
+                "in the same order on both peers.",
+                accepted,
+                int64_t(proofs.size())
             );
+            session_report_host_refusal(peer, mismatched);
+            session_fail_join(peer, ERR_UNAUTHORIZED, mismatched);
             return;
         }
     }
@@ -385,11 +398,9 @@ void NetwMultiplayer::session_verify_next(int64_t p_peer) {
     if (declared.state != session_decl::READY || config.is_null()
         || declared.generation != pending->verdict.declaration) {
         pending_admissions.erase(p_peer);
-        session_fail_join(
-            p_peer,
-            ERR_UNAVAILABLE,
-            "The admission handler changed during the join."
-        );
+        const String changed = "The admission handler changed during the join.";
+        session_report_host_refusal(p_peer, changed);
+        session_fail_join(p_peer, ERR_UNAVAILABLE, changed);
         return;
     }
     const Ref<NetwJoinRequest> request = pending->request;
@@ -423,17 +434,21 @@ void NetwMultiplayer::session_ask_admission(int64_t p_peer) {
     bool called = false;
     const Variant returned
         = gd::call_checked(declared.callable, Variant(request), called);
+    if (called) {
+        session_await(p_peer, false, returned);
+        return;
+    }
+    const String uncallable
+        = "The admission handler cannot take a NetwJoinRequest, so the join "
+          "was refused. Declare it as func admit(request: NetwJoinRequest) "
+          "-> Error.";
+    if (p_peer != get_unique_id()) {
+        NETW_ERROR(sys::SESSION, "%s", uncallable);
+    }
     session_await(
         p_peer,
         false,
-        called ? returned
-               : Variant(
-                     NetwPromise::rejected(
-                         ERR_INVALID_DATA,
-                         "The admission handler could not be called. It must "
-                         "take one NetwJoinRequest."
-                     )
-                 )
+        NetwPromise::rejected(ERR_INVALID_DATA, uncallable)
     );
 }
 
@@ -455,15 +470,14 @@ void NetwMultiplayer::session_admission_settled(
     if (declared.state != session_decl::READY
         || declared.generation != answered.verdict.declaration) {
         pending_admissions.erase(p_peer);
-        session_fail_join(
-            p_peer,
-            ERR_UNAVAILABLE,
-            "The admission handler changed during the join."
-        );
+        const String changed = "The admission handler changed during the join.";
+        session_report_host_refusal(p_peer, changed);
+        session_fail_join(p_peer, ERR_UNAVAILABLE, changed);
         return;
     }
     if (result->get_is_failed()) {
         pending_admissions.erase(p_peer);
+        session_report_host_refusal(p_peer, result->get_detail());
         session_fail_join(p_peer, result->get_code(), result->get_detail());
         return;
     }
@@ -490,15 +504,13 @@ void NetwMultiplayer::session_admission_settled(
     const Error refusal = Error(int64_t(verdict));
     if (refusal != OK) {
         pending_admissions.erase(p_peer);
-        session_fail_join(
-            p_peer,
-            refusal,
-            vformat(
-                provider ? "An account provider refused the join (%s)"
-                         : "This server did not admit the join (%s)",
-                String(gd::error_name(refusal))
-            )
+        const String refused = vformat(
+            provider ? "An account provider refused the join (%s)."
+                     : "This server did not admit the join (%s).",
+            String(gd::error_name(refusal))
         );
+        session_report_host_refusal(p_peer, refused);
+        session_fail_join(p_peer, refusal, refused);
         return;
     }
     if (provider) {
@@ -520,7 +532,9 @@ void NetwMultiplayer::session_poll_admissions(int64_t p_now_msec) {
     }
     for (const int64_t peer : expired) {
         pending_admissions.erase(peer);
-        session_fail_join(peer, ERR_TIMEOUT, "The admission timed out.");
+        const String timed_out = "The admission timed out.";
+        session_report_host_refusal(peer, timed_out);
+        session_fail_join(peer, ERR_TIMEOUT, timed_out);
     }
     expired.clear();
     for (const KeyValue<int64_t, LinkHandshake> &entry : link_handshakes) {
@@ -531,10 +545,9 @@ void NetwMultiplayer::session_poll_admissions(int64_t p_now_msec) {
     }
     for (const int64_t peer : expired) {
         link_handshakes.erase(peer);
-        session_report_join_failure(
-            ERR_TIMEOUT,
-            "The admission proof timed out."
-        );
+        const String timed_out = "The admission proof timed out.";
+        session_report_host_refusal(peer, timed_out);
+        session_report_join_failure(ERR_TIMEOUT, timed_out);
         if (peer != get_unique_id()) {
             disconnect_peer(peer);
         }

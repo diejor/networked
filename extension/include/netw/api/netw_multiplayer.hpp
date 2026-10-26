@@ -3996,6 +3996,10 @@ public:
     );
     void session_prove_next(int64_t p_peer);
     void session_proof_failed(int64_t p_peer, godot::Error p_error);
+    void session_report_host_refusal(
+        int64_t p_peer,
+        const godot::String &p_reason
+    );
     void session_proof_settled(int64_t p_peer, uint64_t p_promise);
     void session_verify_next(int64_t p_peer);
     void session_ask_admission(int64_t p_peer);
