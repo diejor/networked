@@ -222,8 +222,8 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Rpc] RD3 an RPC declared server through Netw.configure_rpc "
-    "refuses the client that controls the entity and runs everywhere the "
-    "server sends it"
+    "refuses the client that controls the entity, warns once however often "
+    "it asks, and runs everywhere the server sends it"
 ) {
     LoopbackRig rig(2);
     rig.mount();
@@ -236,11 +236,13 @@ TEST_CASE(
 
     Array args;
     args.push_back(9);
-    netw::Netw::rpc_id(
-        1,
-        Callable(seated.first, StringName("note_call")),
-        args
-    );
+    for (int asked = 0; asked < 3; ++asked) {
+        netw::Netw::rpc_id(
+            1,
+            Callable(seated.first, StringName("note_call")),
+            args
+        );
+    }
     rig.pump(6);
 
     NETW_CHECK_EQ(calls_at(seated.hub), 0);

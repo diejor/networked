@@ -609,7 +609,7 @@ Method Descriptions
 
 :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` **audience**\ (\ server_only\: :godot:`bool` = true\ ) :ref:`🔗<class_NetwPropertyConfig_method_audience>`
 
-Sends properties of this kind to the server only, or to every peer when ``server_only`` is ``false``. Sets :ref:`set_audience<class_NetwPropertyConfig_property_set_audience>`. :ref:`input()<class_NetwPropertyConfig_method_input>` already sends to the server only.
+Sends the :ref:`state()<class_NetwPropertyConfig_method_state>` properties of this kind to the server only. Sets :ref:`set_audience<class_NetwPropertyConfig_property_set_audience>`. With ``server_only`` ``false`` it changes nothing, because state properties reach every peer unless one of them calls :ref:`audience()<class_NetwPropertyConfig_method_audience>` and :ref:`input()<class_NetwPropertyConfig_method_input>` properties always reach only the server. A :ref:`broadcast()<class_NetwPropertyConfig_method_broadcast>` property ignores :ref:`audience()<class_NetwPropertyConfig_method_audience>` with a warning.
 
 .. rst-class:: classref-item-separator
 
@@ -630,8 +630,6 @@ The controlling peer owns the value and every peer sees it, with no server check
 
     func _process(_dt: float) -> void:
         aim_dir = (get_global_mouse_position() - position).normalized()
-
-\ Add :ref:`masked()<class_NetwPropertyConfig_method_masked>` when many peers watch the same :ref:`NetwEntity<class_NetwEntity>`.
 
 .. rst-class:: classref-item-separator
 
@@ -805,11 +803,7 @@ The controlling peer owns the value and only the server sees it. Use it for play
 
 :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` **masked**\ (\ ) :ref:`🔗<class_NetwPropertyConfig_method_masked>`
 
-Sends each peer only the properties that changed since it last confirmed, which saves bandwidth when many peers watch one :ref:`NetwEntity<class_NetwEntity>`.
-
-::
-
-    Netw.configure_property(self, &"position").broadcast().masked()
+Changes nothing on a property with no window, because those already send each peer only the values that changed since a state it confirmed. With a window, as :ref:`windowed()<class_NetwPropertyConfig_method_windowed>` sets and :ref:`input()<class_NetwPropertyConfig_method_input>` sets by default, it is ignored with a warning. Sets :ref:`set_masked<class_NetwPropertyConfig_property_set_masked>`.
 
 .. rst-class:: classref-item-separator
 

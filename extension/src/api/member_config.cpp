@@ -239,7 +239,12 @@ Ref<NetwMemberConfig> NetwMemberConfig::defer_until(const Signal &p_signal) {
 }
 
 Ref<NetwMemberConfig> NetwMemberConfig::timeout(double p_seconds) {
-    if (context_type != 0) {
+    const Ref<NetwMemberConfig> spawn_config
+        = netw::script::model::get_spawn_config(
+            get_context_script(),
+            context_name
+        );
+    if (context_type != 0 || spawn_config.ptr() == this) {
         NETW_WARN(
             sys::SESSION,
             "NetwMemberConfig.timeout does nothing on '%s', because only a "

@@ -188,10 +188,12 @@ public sealed class NetwSimulation : NetwRefCounted
 
     /// <summary>
     /// The physics bodies this entity runs, as paths from the entity root. They
-    /// are frozen on a <see cref="NetwSimulation.ModeEnum.Proxy"/> copy. Empty
-    /// means the root, when it is a <see cref="RigidBody2D"/> or
-    /// <see cref="RigidBody3D"/>. Set it in <c>_init</c>. A later write warns
-    /// and is ignored.
+    /// are frozen on a <see cref="NetwSimulation.ModeEnum.Proxy"/> copy. A root
+    /// that is a <see cref="RigidBody2D"/> or <see cref="RigidBody3D"/> is
+    /// always included, and a path to any other kind of node is skipped. Set it
+    /// before the entity enters the tree, such as in <c>_init</c>. The bodies
+    /// are read once, soon after the entity enters the tree, and a write after
+    /// that warns once and is ignored.
     /// </summary>
     public Godot.Collections.Array Bodies
     {

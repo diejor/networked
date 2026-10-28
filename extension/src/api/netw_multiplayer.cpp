@@ -2060,6 +2060,24 @@ void NetwMultiplayer::session_receive_join(
             int(p_sender),
             reading ? int64_t(reading->get_ticks_msec()) : 0
         )) {
+        if (!session_core.claim_flood_report(int(p_sender))) {
+            return;
+        }
+        if (join_roster.has_accepted(p_sender)) {
+            NETW_WARN(
+                sys::SESSION,
+                "Peer %d sent too many join requests, so the extra ones were "
+                "dropped.",
+                int(p_sender)
+            );
+            return;
+        }
+        NETW_WARN(
+            sys::SESSION,
+            "Peer %d sent too many join requests, so it was turned away.",
+            int(p_sender)
+        );
+        session_fail_join(p_sender, ERR_BUSY, "Too many join requests.");
         return;
     }
     if (structure_halted) {
@@ -2093,8 +2111,9 @@ void NetwMultiplayer::session_accept_join(
             int(p_sender),
             differs
         );
-        session_refuse(
+        session_fail_join(
             p_sender,
+            ERR_UNAUTHORIZED,
             vformat("Incompatible build: %s", String(differs))
         );
         return;

@@ -28,7 +28,7 @@
 			<return type="NetwPropertyConfig" />
 			<param index="0" name="server_only" type="bool" default="true" />
 			<description>
-				Sends properties of this kind to the server only, or to every peer when [param server_only] is [code]false[/code]. Sets [member set_audience]. [method input] already sends to the server only.
+				Sends the [method state] properties of this kind to the server only. Sets [member set_audience]. With [param server_only] [code]false[/code] it changes nothing, because state properties reach every peer unless one of them calls [method audience] and [method input] properties always reach only the server. A [method broadcast] property ignores [method audience] with a warning.
 			</description>
 		</method>
 		<method name="broadcast">
@@ -42,7 +42,6 @@
 				func _process(_dt: float) -&gt; void:
 				    aim_dir = (get_global_mouse_position() - position).normalized()
 				[/codeblock]
-				Add [method masked] when many peers watch the same [NetwEntity].
 			</description>
 		</method>
 		<method name="carry_along">
@@ -148,10 +147,7 @@
 		<method name="masked">
 			<return type="NetwPropertyConfig" />
 			<description>
-				Sends each peer only the properties that changed since it last confirmed, which saves bandwidth when many peers watch one [NetwEntity].
-				[codeblock]
-				Netw.configure_property(self, &amp;"position").broadcast().masked()
-				[/codeblock]
+				Changes nothing on a property with no window, because those already send each peer only the values that changed since a state it confirmed. With a window, as [method windowed] sets and [method input] sets by default, it is ignored with a warning. Sets [member set_masked].
 			</description>
 		</method>
 		<method name="on_change">

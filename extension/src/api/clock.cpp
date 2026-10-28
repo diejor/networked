@@ -47,7 +47,7 @@ int64_t NetwClock::get_tick() const {
 
 bool NetwClock::get_is_synchronized() const {
     NetwMultiplayer *api = session();
-    return api != nullptr && api->clock_is_synchronized();
+    return api != nullptr && (api->is_host() || api->clock_is_synchronized());
 }
 
 bool NetwClock::get_is_configured() const {

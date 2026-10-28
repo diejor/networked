@@ -17,6 +17,7 @@ class NetwSyncModel {
     int64_t skips_no_recipients = 0;
     int64_t drops_bad_sender = 0;
     int64_t drops_schema = 0;
+    bool schema_drop_warned = false;
     int64_t rows_in = 0;
 
     repl::PropertyBinding *live(uint64_t p_binding) const;

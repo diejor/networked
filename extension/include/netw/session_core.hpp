@@ -36,6 +36,7 @@ private:
     uint64_t tenure = 1;
 
     RateWindow join_window;
+    godot::LocalVector<int32_t> flood_reported;
 
     void enter_state(State next);
     void exit_state(State prev);
@@ -69,6 +70,7 @@ public:
     bool holds_server_authority() const;
 
     bool join_flooded(int sender, int64_t now_msec);
+    bool claim_flood_report(int sender);
 
     static int64_t compute_wire_identity();
 

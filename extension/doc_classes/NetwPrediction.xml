@@ -476,13 +476,13 @@
 			Add the difference between the server's state and the prediction to the present state, without replaying.
 		</constant>
 		<constant name="RECOVERY_POLICY_DELAY_CLOSED" value="2" enum="RecoveryPolicy">
-			Do not predict. Simulate only with inputs the server confirmed, and draw the server's state otherwise.
+			Do not predict. The controlling client does not run the step and draws the server's state.
 		</constant>
 		<constant name="RECOVERY_POLICY_OBSERVE" value="3" enum="RecoveryPolicy">
 			Report mispredictions and correct nothing.
 		</constant>
 		<constant name="RECOVERY_POLICY_AUTO" value="4" enum="RecoveryPolicy">
-			[constant RECOVERY_POLICY_REBASE_RECOVER] for a [RigidBody3D] or [RigidBody2D] on [constant NetwSimulation.SCHEDULE_FRAME], and [constant RECOVERY_POLICY_REBASE_REPLAY] otherwise. [method resolved_recovery_policy] returns the result.
+			[constant RECOVERY_POLICY_REBASE_RECOVER] for a [RigidBody3D] or [RigidBody2D] on any schedule but [constant NetwSimulation.SCHEDULE_STEPPED], and [constant RECOVERY_POLICY_REBASE_REPLAY] otherwise. [method resolved_recovery_policy] returns the result.
 		</constant>
 		<constant name="RECONCILE_INDEPENDENT" value="0" enum="Reconcile">
 			Correct each entity on its own.

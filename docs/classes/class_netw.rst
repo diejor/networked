@@ -47,6 +47,18 @@ A level is spawned like any other node, with :ref:`configure_scene()<class_Netw_
         for player: NetwPlayer in Netw.session(self).players:
             arena.add_child(Netw.spawn_player(player, make_car))
 
+\ **Replication**\ 
+
+A node's property replicates once :ref:`configure_property()<class_Netw_method_configure_property>` declares it. Data that belongs to no single node has a class of its own.
+
+- :ref:`NetwPropertyConfig<class_NetwPropertyConfig>` how a declared property is sent, from :ref:`configure_property()<class_Netw_method_configure_property>`\ 
+
+- :ref:`NetwTable<class_NetwTable>` rows of values a :ref:`NetwSchema<class_NetwSchema>` declares, from :ref:`NetwSession.table()<class_NetwSession_method_table>`\ 
+
+- :ref:`NetwChannel<class_NetwChannel>` raw bytes sent in batches, from :ref:`channel()<class_Netw_method_channel>`\ 
+
+- :ref:`NetwDatabase<class_NetwDatabase>` saved records, from :ref:`NetwSession.database()<class_NetwSession_method_database>`
+
 .. rst-class:: classref-reftable-group
 
 Methods
@@ -1025,7 +1037,7 @@ Sends the current value of ``property`` to the other peers. Use it for a propert
         fuel = 100.0
         Netw.sync_property(self, &"fuel")
 
-\ Call :ref:`configure_property()<class_Netw_method_configure_property>` first.
+\ A property declared with :ref:`configure_property()<class_Netw_method_configure_property>` is sent with its :ref:`NetwMemberConfig.write_policy<class_NetwMemberConfig_property_write_policy>`, :ref:`NetwMemberConfig.transfer_mode<class_NetwMemberConfig_property_transfer_mode>` and quantizer, and a receiver drops a value from a peer the write policy refuses. An undeclared property can be sent only by the server or the node's multiplayer authority, and a receiver keeps it only when the server sent it.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

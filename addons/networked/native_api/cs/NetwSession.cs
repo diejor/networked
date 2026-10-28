@@ -476,10 +476,12 @@ public sealed class NetwSession : NetwRefCounted
         NetwApi.MethodBind("NetwSession", "get_is_online", 36873697UL);
 
     /// <summary>
-    /// Whether a peer is assigned and connected. It stays <c>true</c> until
-    /// <see cref="NetwSession.Exited"/>, so it is still <c>true</c> while
-    /// <see cref="NetwSession.Exiting"/> runs and the session's scenes are
-    /// freed.
+    /// <c>true</c> while <see cref="NetwSession.State"/> is
+    /// <see cref="NetwSession.StateEnum.Online"/>. It is still <c>true</c>
+    /// while <see cref="NetwSession.Exiting"/> runs and the session's scenes
+    /// are freed, and turns <c>false</c> at
+    /// <see cref="NetwSession.StateEnum.Disconnecting"/>, before
+    /// <see cref="NetwSession.Exited"/>.
     /// </summary>
     public bool IsOnline
     {

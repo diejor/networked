@@ -531,7 +531,7 @@ Only the server may send it.
 
 :ref:`NetwMemberConfig<class_NetwMemberConfig>` **timeout**\ (\ seconds\: :godot:`float`\ ) :ref:`🔗<class_NetwMemberConfig_method_timeout>`
 
-A request to this method waits ``seconds`` for the reply, then fails with :godot:`@GlobalScope.ERR_TIMEOUT <@GlobalScope#class_@GlobalScope_constant_ERR_TIMEOUT>`. A method that declares none waits 5 seconds. Invalid for properties and signals.
+A request to this method waits ``seconds`` for the reply, then fails with :godot:`@GlobalScope.ERR_TIMEOUT <@GlobalScope#class_@GlobalScope_constant_ERR_TIMEOUT>`. A method that declares none waits 5 seconds. Invalid for properties, signals and spawn functions.
 
 .. rst-class:: classref-item-separator
 

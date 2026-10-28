@@ -253,7 +253,7 @@
 			[code]true[/code] when this peer has its own player, at [constant ROLE_CLIENT] and [constant ROLE_LISTEN_SERVER].
 		</member>
 		<member name="is_online" type="bool" setter="" getter="get_is_online">
-			Whether a peer is assigned and connected. It stays [code]true[/code] until [signal exited], so it is still [code]true[/code] while [signal exiting] runs and the session's scenes are freed.
+			[code]true[/code] while [member state] is [constant STATE_ONLINE]. It is still [code]true[/code] while [signal exiting] runs and the session's scenes are freed, and turns [code]false[/code] at [constant STATE_DISCONNECTING], before [signal exited].
 		</member>
 		<member name="local_player" type="NetwPlayer" setter="" getter="get_local_player">
 			The [NetwPlayer] of this peer, [code]null[/code] until [signal local_joined].

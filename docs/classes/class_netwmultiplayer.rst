@@ -856,7 +856,7 @@ Same as :godot:`SceneMultiplayer.peer_authentication_failed <SceneMultiplayer#cl
 
 **peer_packet**\ (\ id\: :godot:`int`, packet\: :godot:`PackedByteArray`\ ) :ref:`🔗<class_NetwMultiplayer_signal_peer_packet>`
 
-Same as :godot:`SceneMultiplayer.peer_packet <SceneMultiplayer#class_SceneMultiplayer_signal_peer_packet>`, for packets sent with :ref:`send_bytes()<class_NetwMultiplayer_method_send_bytes>`.
+Same as :godot:`SceneMultiplayer.peer_packet <SceneMultiplayer#class_SceneMultiplayer_signal_peer_packet>`, for packets sent with :ref:`send_bytes()<class_NetwMultiplayer_method_send_bytes>`. A packet whose first byte Networked reserves never arrives here. :ref:`CARRIER_MAGIC_RELIABLE<class_NetwMultiplayer_constant_CARRIER_MAGIC_RELIABLE>` lists those bytes.
 
 .. rst-class:: classref-section-separator
 
@@ -3559,7 +3559,7 @@ Constants
 
 **CARRIER_MAGIC_RELIABLE** = ``88`` :ref:`🔗<class_NetwMultiplayer_constant_CARRIER_MAGIC_RELIABLE>`
 
-The first byte of a reliable Networked packet. Packets sent with :ref:`send_bytes()<class_NetwMultiplayer_method_send_bytes>` must not start with this byte, :ref:`CARRIER_MAGIC_UNRELIABLE<class_NetwMultiplayer_constant_CARRIER_MAGIC_UNRELIABLE>` or :ref:`CARRIER_MAGIC_UNRELIABLE_ACKED<class_NetwMultiplayer_constant_CARRIER_MAGIC_UNRELIABLE_ACKED>`.
+The first byte of a reliable Networked packet. A packet sent with :ref:`send_bytes()<class_NetwMultiplayer_method_send_bytes>` that starts with this byte, :ref:`CARRIER_MAGIC_UNRELIABLE<class_NetwMultiplayer_constant_CARRIER_MAGIC_UNRELIABLE>` or :ref:`CARRIER_MAGIC_UNRELIABLE_ACKED<class_NetwMultiplayer_constant_CARRIER_MAGIC_UNRELIABLE_ACKED>` never reaches :ref:`peer_packet<class_NetwMultiplayer_signal_peer_packet>`. Nine more first bytes are reserved the same way, ``0x4E``, ``0x6E``, ``0x8E``, ``0x56``, ``0x76``, ``0x96``, ``0x57``, ``0x77`` and ``0x97``. Give a raw packet a first byte of your own.
 
 .. _class_NetwMultiplayer_constant_CARRIER_MAGIC_UNRELIABLE:
 
@@ -4400,7 +4400,7 @@ The display offset this connection needs, in ticks. It is the one-way latency pl
 
 :godot:`int` **clock_get_simulation_behind_count**\ (\ ) |const| :ref:`🔗<class_NetwMultiplayer_method_clock_get_simulation_behind_count>`
 
-How many frames skipped a tick because the clock runs at most one tick per frame. A count that keeps growing means this machine is too slow to keep up with :ref:`CLOCK_PARAM_TICKRATE<class_NetwMultiplayer_constant_CLOCK_PARAM_TICKRATE>`.
+How many frames ended with a tick still waiting while :ref:`clock_set_gate()<class_NetwMultiplayer_method_clock_set_gate>` was on, which runs at most one tick per frame. It stays ``0`` while the gate is off. A count that keeps growing means this machine is too slow to keep up with :ref:`CLOCK_PARAM_TICKRATE<class_NetwMultiplayer_constant_CLOCK_PARAM_TICKRATE>`.
 
 .. rst-class:: classref-item-separator
 
@@ -5453,7 +5453,7 @@ Records every :ref:`Event<enum_NetwMultiplayer_Event>` for :ref:`event_ring()<cl
 
 :godot:`Array`\[:godot:`Dictionary`\] **event_ring**\ (\ route\: :godot:`int`\ ) :ref:`🔗<class_NetwMultiplayer_method_event_ring>`
 
-Returns and clears the events recorded for ``route``, oldest first. Route ``0`` holds events that belong to no entity. Each record has the shape shown in :ref:`event_watch()<class_NetwMultiplayer_method_event_watch>`.
+Returns and clears the events recorded for ``route``, oldest first. A route keeps its 64 most recent records, and :ref:`EVENT_DESPAWNED<class_NetwMultiplayer_constant_EVENT_DESPAWNED>` clears that route's records after it is delivered. Route ``0`` holds events that belong to no entity. Each record has the shape shown in :ref:`event_watch()<class_NetwMultiplayer_method_event_watch>`.
 
 .. rst-class:: classref-item-separator
 
@@ -5490,7 +5490,7 @@ Calls ``sink`` with a record every time one of ``events`` happens. Returns an id
     func _on_despawn(record: Dictionary) -> void:
         print(record.tick, " ", record.verdict)
 
-\ ``target`` filters by entity or peer. ``opts`` accepts ``once``, ``dedupe``, ``phase`` and ``note``.
+\ ``target`` filters by entity or peer.
 
 .. code:: text
 
@@ -5499,7 +5499,34 @@ Calls ``sink`` with a record every time one of ``events`` happens. Returns an id
     ┠╴entity_id  StringName  the same, by entity id
     ┖╴peer       int         only events involving this peer
 
-\ Every record has every key below.
+\ ``predicate`` keeps a record only when it passes every key given. Each ``_in`` key lists the values it accepts.
+
+.. code:: text
+
+    Dictionary
+    ┠╴verdict_in  Array  accepted verdicts
+    ┠╴sender_in   Array  accepted values of detail.sender
+    ┠╴channel_in  Array  accepted values of detail.channel
+    ┠╴comp_in     Array  accepted values of detail.comp
+    ┠╴stage_in    Array  accepted values of detail.stage
+    ┠╴layer_in    Array  accepted values of detail.layer
+    ┠╴tick_min    int    the earliest tick accepted
+    ┖╴tick_max    int    the latest tick accepted
+
+\ ``opts`` changes how the watch delivers.
+
+.. code:: text
+
+    Dictionary
+    ┠╴phase    int     1 after the event by default, or 0 before it
+    ┠╴enabled  bool    false keeps the watch and delivers nothing
+    ┠╴once     bool    turns enabled off after the first record
+    ┠╴dedupe   bool    one record per event and verdict on each route
+    ┖╴note     String  a label listed by event_watches
+
+\ ``dedupe`` is on by default for a watch on :ref:`EVENT_VERDICT<class_NetwMultiplayer_constant_EVENT_VERDICT>` or :ref:`EVENT_SEAM_MISUSE<class_NetwMultiplayer_constant_EVENT_SEAM_MISUSE>`.
+
+Every record has every key below.
 
 .. code:: text
 
@@ -7508,7 +7535,7 @@ Same as :godot:`SceneMultiplayer.send_auth() <SceneMultiplayer#class_SceneMultip
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **send_bytes**\ (\ bytes\: :godot:`PackedByteArray`, id\: :godot:`int` = 0, mode\: :godot:`MultiplayerPeer.TransferMode <MultiplayerPeer#enum_multiplayerpeer_TransferMode>` = 2, channel\: :godot:`int` = 0\ ) :ref:`🔗<class_NetwMultiplayer_method_send_bytes>`
 
-Same as :godot:`SceneMultiplayer.send_bytes() <SceneMultiplayer#class_SceneMultiplayer_method_send_bytes>`. Returns :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@GlobalScope_constant_ERR_UNCONFIGURED>` when there is no :godot:`MultiplayerAPI.multiplayer_peer <MultiplayerAPI#class_MultiplayerAPI_property_multiplayer_peer>`.
+Same as :godot:`SceneMultiplayer.send_bytes() <SceneMultiplayer#class_SceneMultiplayer_method_send_bytes>`. Returns :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@GlobalScope_constant_ERR_UNCONFIGURED>` when there is no :godot:`MultiplayerAPI.multiplayer_peer <MultiplayerAPI#class_MultiplayerAPI_property_multiplayer_peer>`. A packet whose first byte Networked reserves never reaches :ref:`peer_packet<class_NetwMultiplayer_signal_peer_packet>`. :ref:`CARRIER_MAGIC_RELIABLE<class_NetwMultiplayer_constant_CARRIER_MAGIC_RELIABLE>` lists those bytes.
 
 .. rst-class:: classref-item-separator
 

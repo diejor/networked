@@ -166,6 +166,14 @@ bool SessionCore::join_flooded(int sender, int64_t now_msec) {
     return join_window.exceeded(sender, now_msec);
 }
 
+bool SessionCore::claim_flood_report(int sender) {
+    if (flood_reported.find(int32_t(sender)) >= 0) {
+        return false;
+    }
+    flood_reported.push_back(int32_t(sender));
+    return true;
+}
+
 int64_t SessionCore::compute_wire_identity() {
     return int64_t(wire::WireRegistry::create_default().identity_hash());
 }
@@ -185,6 +193,7 @@ void SessionCore::clear() {
     role = ROLE_NONE;
     end_tenure();
     join_window.clear();
+    flood_reported.clear();
 }
 
 } // namespace netw

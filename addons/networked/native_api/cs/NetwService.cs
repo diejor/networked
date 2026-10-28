@@ -19,11 +19,11 @@ namespace Networked;
 /// func _service_type() -&gt; Script:
 ///     return MatchClock
 ///
-/// func _service_entered(api: NetwMultiplayer) -&gt; void:
-///     api.session_entered.connect(_on_session_entered)
+/// func _service_entered(session: NetwSession) -&gt; void:
+///     session.entered.connect(_on_entered)
 ///
-/// func _service_exiting(api: NetwMultiplayer) -&gt; void:
-///     api.session_entered.disconnect(_on_session_entered)
+/// func _service_exiting(session: NetwSession) -&gt; void:
+///     session.entered.disconnect(_on_entered)
 /// </code>
 /// <para>
 /// A node that extends another class can call

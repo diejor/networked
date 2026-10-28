@@ -19,6 +19,7 @@
 #include "support/loopback_rig.h"
 #include "support/minted_script.h"
 #include "support/netw_call_log.h"
+#include "support/netw_recorder.h"
 
 #if defined(NETW_TIER_HOSTED)
 
@@ -963,9 +964,9 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Session] a peer whose wire identity is not this build's is "
-    "refused at the join gate with a reason naming the wire, and is never "
-    "seated"
+    "[Networked][Session] a peer refused for another build or for a join "
+    "flood while it waits is told why and turned away, and a seated peer "
+    "that floods keeps its seat"
 ) {
     netw_test::FaultWatch expected_faults;
     expected_faults.expect_warning(
@@ -974,33 +975,69 @@ TEST_CASE(
         " both peers.",
         1
     );
+    expected_faults.expect_warning(
+        "[warn][session] Peer * sent too many join requests, so it was "
+        "turned away.",
+        1
+    );
+    expected_faults.expect_warning(
+        "[warn][session] Peer * sent too many join requests, so the extra "
+        "ones were dropped.",
+        1
+    );
 
-    LoopbackRig rig(1);
+    LoopbackRig rig(3);
     rig.pump(4);
 
     NetwMultiplayer *host = rig.server();
     const int stranger = rig.peer_id(0);
+    const int waiting = rig.peer_id(1);
+    const int seated = rig.peer_id(2);
+    netw_test::Recorder stranger_heard(
+        rig.client(0),
+        {StringName("peer_kicked")}
+    );
+    netw_test::Recorder waiting_heard(
+        rig.client(1),
+        {StringName("peer_kicked")}
+    );
+    netw_test::Recorder seated_heard(
+        rig.client(2),
+        {StringName("peer_kicked")}
+    );
 
     netw::JoinRequest older;
     older.username = StringName("v10");
     older.app_tag = host->auth_app_tag_of();
     older.wire_identity = netw::SessionCore::compute_wire_identity() ^ 0xA5A5;
     older.schema_identity = host->session_schema_identity();
-
-    host->session_receive_join(older.serialize(), stranger);
-    rig.pump(4);
-
-    CHECK(player_of(host, stranger).is_null());
-    CHECK(host->session_refusal(stranger).contains("wire"));
-
     netw::JoinRequest current = older;
     current.username = StringName("v11");
     current.wire_identity = netw::SessionCore::compute_wire_identity();
 
-    host->session_receive_join(current.serialize(), stranger);
+    host->session_receive_join(current.serialize(), seated);
+    rig.pump(4);
+    REQUIRE(player_of(host, seated).is_valid());
+    for (int sent = 0; sent < 12; ++sent) {
+        host->session_receive_join(current.serialize(), seated);
+    }
+
+    host->session_receive_join(older.serialize(), stranger);
+
+    host->structure_halt_enter();
+    for (int sent = 0; sent < 12; ++sent) {
+        host->session_receive_join(current.serialize(), waiting);
+    }
     rig.pump(4);
 
-    CHECK(player_of(host, stranger).is_valid());
+    NETW_REQUIRE_EQ(stranger_heard.count(StringName("peer_kicked")), 1);
+    CHECK(String(stranger_heard.args(StringName("peer_kicked"))[0])
+              .contains("wire"));
+    NETW_CHECK_EQ(waiting_heard.count(StringName("peer_kicked")), 1);
+    NETW_CHECK_EQ(seated_heard.count(StringName("peer_kicked")), 0);
+    CHECK(player_of(host, stranger).is_null());
+    CHECK(player_of(host, waiting).is_null());
+    CHECK(player_of(host, seated).is_valid());
 }
 
 } // namespace TestNetwSessionJoinLaws

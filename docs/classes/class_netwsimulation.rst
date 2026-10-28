@@ -312,9 +312,9 @@ Property Descriptions
 - |void| **set_bodies**\ (\ value\: :godot:`Array`\[:godot:`NodePath`\]\ )
 - :godot:`Array`\[:godot:`NodePath`\] **get_bodies**\ (\ )
 
-The physics bodies this entity runs, as paths from the entity root. They are frozen on a :ref:`MODE_PROXY<class_NetwSimulation_constant_MODE_PROXY>` copy. Empty means the root, when it is a :godot:`RigidBody2D` or :godot:`RigidBody3D`.
+The physics bodies this entity runs, as paths from the entity root. They are frozen on a :ref:`MODE_PROXY<class_NetwSimulation_constant_MODE_PROXY>` copy. A root that is a :godot:`RigidBody2D` or :godot:`RigidBody3D` is always included, and a path to any other kind of node is skipped.
 
-Set it in ``_init``. A later write warns and is ignored.
+Set it before the entity enters the tree, such as in ``_init``. The bodies are read once, soon after the entity enters the tree, and a write after that warns once and is ignored.
 
 .. rst-class:: classref-item-separator
 

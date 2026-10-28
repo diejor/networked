@@ -33,7 +33,7 @@ A tick is a numbered step of the simulation. Every peer counts the same ticks, a
 
 Each physics frame adds its delta to an accumulator, and every ``1 / tickrate`` seconds in it runs one tick. A slow frame can run two ticks and a fast one none. At a :ref:`tickrate<class_NetwClock_property_tickrate>` of 30 with 60 physics ticks per second, a tick runs every second frame, and :ref:`physics_factor<class_NetwClock_property_physics_factor>` is ``2.0``.
 
-At most :ref:`NetwMultiplayer.CLOCK_PARAM_MAX_TICKS_PER_FRAME<class_NetwMultiplayer_constant_CLOCK_PARAM_MAX_TICKS_PER_FRAME>` ticks run in one frame. :ref:`behind_count<class_NetwClock_property_behind_count>` counts how often that limit was hit.
+At most :ref:`NetwMultiplayer.CLOCK_PARAM_MAX_TICKS_PER_FRAME<class_NetwMultiplayer_constant_CLOCK_PARAM_MAX_TICKS_PER_FRAME>` ticks run in one frame, and only one while :ref:`NetwMultiplayer.clock_set_gate()<class_NetwMultiplayer_method_clock_set_gate>` is on. :ref:`behind_count<class_NetwClock_property_behind_count>` counts the frames that ended with a tick still waiting while the gate was on.
 
 \ **How a client follows the server**\ 
 
@@ -314,7 +314,7 @@ Property Descriptions
 
 - :godot:`int` **get_behind_count**\ (\ )
 
-How many frames could not run every tick they needed. If it keeps growing, this machine is too slow for :ref:`tickrate<class_NetwClock_property_tickrate>`.
+How many frames ended with a tick still waiting while :ref:`NetwMultiplayer.clock_set_gate()<class_NetwMultiplayer_method_clock_set_gate>` was on, as it is while this peer predicts a physics body. It stays ``0`` while the gate is off. If it keeps growing, this machine is too slow for :ref:`tickrate<class_NetwClock_property_tickrate>`.
 
 .. rst-class:: classref-item-separator
 
@@ -363,7 +363,7 @@ How many ticks in the past remote entities are shown. See :ref:`recommended_disp
 
 - :godot:`bool` **get_is_synchronized**\ (\ )
 
-``true`` once the tick follows the server. Always ``true`` on the server.
+``true`` once the tick follows the server. Always ``true`` on the server and on a peer with no connection, as :ref:`NetwMultiplayer.is_host<class_NetwMultiplayer_property_is_host>` is.
 
 .. rst-class:: classref-item-separator
 

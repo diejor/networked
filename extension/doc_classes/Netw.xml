@@ -29,6 +29,12 @@
 		    for player: NetwPlayer in Netw.session(self).players:
 		        arena.add_child(Netw.spawn_player(player, make_car))
 		[/codeblock]
+		[b]Replication[/b]
+		A node's property replicates once [method configure_property] declares it. Data that belongs to no single node has a class of its own.
+		- [NetwPropertyConfig] how a declared property is sent, from [method configure_property]
+		- [NetwTable] rows of values a [NetwSchema] declares, from [method NetwSession.table]
+		- [NetwChannel] raw bytes sent in batches, from [method channel]
+		- [NetwDatabase] saved records, from [method NetwSession.database]
 	</description>
 	<tutorials>
 	</tutorials>
@@ -659,7 +665,7 @@
 				    fuel = 100.0
 				    Netw.sync_property(self, &amp;"fuel")
 				[/codeblock]
-				Call [method configure_property] first.
+				A property declared with [method configure_property] is sent with its [member NetwMemberConfig.write_policy], [member NetwMemberConfig.transfer_mode] and quantizer, and a receiver drops a value from a peer the write policy refuses. An undeclared property can be sent only by the server or the node's multiplayer authority, and a receiver keeps it only when the server sent it.
 			</description>
 		</method>
 	</methods>

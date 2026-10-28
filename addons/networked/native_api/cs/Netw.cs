@@ -36,6 +36,19 @@ namespace Networked;
 ///     for player: NetwPlayer in Netw.session(self).players:
 ///         arena.add_child(Netw.spawn_player(player, make_car))
 /// </code>
+/// <para>
+/// <b>Replication</b> A node's property replicates once
+/// <see cref="Netw.ConfigureProperty"/> declares it. Data that belongs to no
+/// single node has a class of its own.
+/// - <see cref="NetwPropertyConfig"/> how a declared property is sent, from
+/// <see cref="Netw.ConfigureProperty"/>
+/// - <see cref="NetwTable"/> rows of values a <see cref="NetwSchema"/>
+/// declares, from <see cref="NetwSession.Table"/>
+/// - <see cref="NetwChannel"/> raw bytes sent in batches, from
+/// <see cref="Netw.Channel"/>
+/// - <see cref="NetwDatabase"/> saved records, from
+/// <see cref="NetwSession.Database"/>
+/// </para>
 /// </remarks>
 public sealed class Netw : NetwRefCounted
 {
@@ -1091,7 +1104,13 @@ public sealed class Netw : NetwRefCounted
     ///     Netw.sync_property(self, &amp;"fuel")
     /// </code>
     /// <para>
-    /// Call <see cref="Netw.ConfigureProperty"/> first.
+    /// A property declared with <see cref="Netw.ConfigureProperty"/> is sent
+    /// with its <see cref="NetwMemberConfig.WritePolicy"/>,
+    /// <see cref="NetwMemberConfig.TransferMode"/> and quantizer, and a
+    /// receiver drops a value from a peer the write policy refuses. An
+    /// undeclared property can be sent only by the server or the node's
+    /// multiplayer authority, and a receiver keeps it only when the server sent
+    /// it.
     /// </para>
     /// </summary>
     public static void SyncProperty(Node node, StringName property)

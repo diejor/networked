@@ -14,7 +14,7 @@
 		[/codeblock]
 		[b]How a tick is produced[/b]
 		Each physics frame adds its delta to an accumulator, and every [code]1 / tickrate[/code] seconds in it runs one tick. A slow frame can run two ticks and a fast one none. At a [member tickrate] of 30 with 60 physics ticks per second, a tick runs every second frame, and [member physics_factor] is [code]2.0[/code].
-		At most [constant NetwMultiplayer.CLOCK_PARAM_MAX_TICKS_PER_FRAME] ticks run in one frame. [member behind_count] counts how often that limit was hit.
+		At most [constant NetwMultiplayer.CLOCK_PARAM_MAX_TICKS_PER_FRAME] ticks run in one frame, and only one while [method NetwMultiplayer.clock_set_gate] is on. [member behind_count] counts the frames that ended with a tick still waiting while the gate was on.
 		[b]How a client follows the server[/b]
 		The client pings the server every [member ping_interval] seconds. The server answers with its tick, and the client aims ahead of it by half the round trip plus [constant NetwMultiplayer.CLOCK_PARAM_LEAD_TICKS]. The first answer sets the tick directly. After that, [member sync_mode] decides.
 		[constant SYNC_MODE_SNAP] sets the tick directly every time, which can move it backwards. [constant SYNC_MODE_STRETCH], the default, runs the clock slightly faster or slower each frame by [constant NetwMultiplayer.CLOCK_PARAM_STRETCH_NUDGE_FACTOR] of the difference, so the tick never jumps. A difference larger than [constant NetwMultiplayer.CLOCK_PARAM_PANIC_SNAP_THRESHOLD] ticks is snapped.
@@ -37,7 +37,7 @@
 	</methods>
 	<members>
 		<member name="behind_count" type="int" setter="" getter="get_behind_count">
-			How many frames could not run every tick they needed. If it keeps growing, this machine is too slow for [member tickrate].
+			How many frames ended with a tick still waiting while [method NetwMultiplayer.clock_set_gate] was on, as it is while this peer predicts a physics body. It stays [code]0[/code] while the gate is off. If it keeps growing, this machine is too slow for [member tickrate].
 		</member>
 		<member name="display_offset" type="int" setter="set_display_offset" getter="get_display_offset">
 			How many ticks in the past remote entities are shown. See [member recommended_display_offset].
@@ -46,7 +46,7 @@
 			[code]true[/code] once the settings from [method Netw.configure_clock] are applied. [member tick] does not move before that.
 		</member>
 		<member name="is_synchronized" type="bool" setter="" getter="get_is_synchronized">
-			[code]true[/code] once the tick follows the server. Always [code]true[/code] on the server.
+			[code]true[/code] once the tick follows the server. Always [code]true[/code] on the server and on a peer with no connection, as [member NetwMultiplayer.is_host] is.
 		</member>
 		<member name="physics_factor" type="float" setter="" getter="get_physics_factor">
 			Physics frames per tick. Multiply a per-frame value by it to get a per-tick value.

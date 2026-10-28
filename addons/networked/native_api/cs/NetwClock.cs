@@ -29,10 +29,12 @@ namespace Networked;
 /// tick runs every second frame, and <see cref="NetwClock.PhysicsFactor"/> is
 /// <c>2.0</c>. At most
 /// <see cref="NetwMultiplayer.ClockParam.MaxTicksPerFrame"/> ticks run in one
-/// frame. <see cref="NetwClock.BehindCount"/> counts how often that limit was
-/// hit. <b>How a client follows the server</b> The client pings the server
-/// every <see cref="NetwClock.PingInterval"/> seconds. The server answers with
-/// its tick, and the client aims ahead of it by half the round trip plus
+/// frame, and only one while <see cref="NetwMultiplayer.ClockSetGate"/> is on.
+/// <see cref="NetwClock.BehindCount"/> counts the frames that ended with a tick
+/// still waiting while the gate was on. <b>How a client follows the server</b>
+/// The client pings the server every <see cref="NetwClock.PingInterval"/>
+/// seconds. The server answers with its tick, and the client aims ahead of it
+/// by half the round trip plus
 /// <see cref="NetwMultiplayer.ClockParam.LeadTicks"/>. The first answer sets
 /// the tick directly. After that, <see cref="NetwClock.SyncMode"/> decides.
 /// <see cref="NetwClock.SyncModeEnum.Snap"/> sets the tick directly every time,
@@ -219,7 +221,8 @@ public sealed class NetwClock : NetwRefCounted
 
     /// <summary>
     /// <c>true</c> once the tick follows the server. Always <c>true</c> on the
-    /// server.
+    /// server and on a peer with no connection, as
+    /// <see cref="NetwMultiplayer.IsHost"/> is.
     /// </summary>
     public bool IsSynchronized
     {
@@ -258,8 +261,11 @@ public sealed class NetwClock : NetwRefCounted
         NetwApi.MethodBind("NetwClock", "get_behind_count", 3905245786UL);
 
     /// <summary>
-    /// How many frames could not run every tick they needed. If it keeps
-    /// growing, this machine is too slow for <see cref="NetwClock.Tickrate"/>.
+    /// How many frames ended with a tick still waiting while
+    /// <see cref="NetwMultiplayer.ClockSetGate"/> was on, as it is while this
+    /// peer predicts a physics body. It stays <c>0</c> while the gate is off.
+    /// If it keeps growing, this machine is too slow for
+    /// <see cref="NetwClock.Tickrate"/>.
     /// </summary>
     public long BehindCount
     {

@@ -369,7 +369,7 @@
 		<method name="clock_get_simulation_behind_count" qualifiers="const">
 			<return type="int" />
 			<description>
-				How many frames skipped a tick because the clock runs at most one tick per frame. A count that keeps growing means this machine is too slow to keep up with [constant CLOCK_PARAM_TICKRATE].
+				How many frames ended with a tick still waiting while [method clock_set_gate] was on, which runs at most one tick per frame. It stays [code]0[/code] while the gate is off. A count that keeps growing means this machine is too slow to keep up with [constant CLOCK_PARAM_TICKRATE].
 			</description>
 		</method>
 		<method name="clock_get_tick" qualifiers="const">
@@ -1053,7 +1053,7 @@
 			<return type="Dictionary[]" />
 			<param index="0" name="route" type="int" />
 			<description>
-				Returns and clears the events recorded for [param route], oldest first. Route [code]0[/code] holds events that belong to no entity. Each record has the shape shown in [method event_watch].
+				Returns and clears the events recorded for [param route], oldest first. A route keeps its 64 most recent records, and [constant EVENT_DESPAWNED] clears that route's records after it is delivered. Route [code]0[/code] holds events that belong to no entity. Each record has the shape shown in [method event_watch].
 			</description>
 		</method>
 		<method name="event_unwatch">
@@ -1082,13 +1082,35 @@
 				func _on_despawn(record: Dictionary) -&gt; void:
 				    print(record.tick, " ", record.verdict)
 				[/codeblock]
-				[param target] filters by entity or peer. [param opts] accepts [code]once[/code], [code]dedupe[/code], [code]phase[/code] and [code]note[/code].
+				[param target] filters by entity or peer.
 				[codeblock lang=text]
 				Dictionary
 				┠╴route      int         only events about this entity
 				┠╴entity_id  StringName  the same, by entity id
 				┖╴peer       int         only events involving this peer
 				[/codeblock]
+				[param predicate] keeps a record only when it passes every key given. Each [code]_in[/code] key lists the values it accepts.
+				[codeblock lang=text]
+				Dictionary
+				┠╴verdict_in  Array  accepted verdicts
+				┠╴sender_in   Array  accepted values of detail.sender
+				┠╴channel_in  Array  accepted values of detail.channel
+				┠╴comp_in     Array  accepted values of detail.comp
+				┠╴stage_in    Array  accepted values of detail.stage
+				┠╴layer_in    Array  accepted values of detail.layer
+				┠╴tick_min    int    the earliest tick accepted
+				┖╴tick_max    int    the latest tick accepted
+				[/codeblock]
+				[param opts] changes how the watch delivers.
+				[codeblock lang=text]
+				Dictionary
+				┠╴phase    int     1 after the event by default, or 0 before it
+				┠╴enabled  bool    false keeps the watch and delivers nothing
+				┠╴once     bool    turns enabled off after the first record
+				┠╴dedupe   bool    one record per event and verdict on each route
+				┖╴note     String  a label listed by event_watches
+				[/codeblock]
+				[code]dedupe[/code] is on by default for a watch on [constant EVENT_VERDICT] or [constant EVENT_SEAM_MISUSE].
 				Every record has every key below.
 				[codeblock lang=text]
 				Dictionary
@@ -2418,7 +2440,7 @@
 			<param index="2" name="mode" type="int" enum="MultiplayerPeer.TransferMode" default="2" />
 			<param index="3" name="channel" type="int" default="0" />
 			<description>
-				Same as [method SceneMultiplayer.send_bytes]. Returns [constant @GlobalScope.ERR_UNCONFIGURED] when there is no [member MultiplayerAPI.multiplayer_peer].
+				Same as [method SceneMultiplayer.send_bytes]. Returns [constant @GlobalScope.ERR_UNCONFIGURED] when there is no [member MultiplayerAPI.multiplayer_peer]. A packet whose first byte Networked reserves never reaches [signal peer_packet]. [constant CARRIER_MAGIC_RELIABLE] lists those bytes.
 			</description>
 		</method>
 		<method name="send_to">
@@ -3257,7 +3279,7 @@
 			<param index="0" name="id" type="int" />
 			<param index="1" name="packet" type="PackedByteArray" />
 			<description>
-				Same as [signal SceneMultiplayer.peer_packet], for packets sent with [method send_bytes].
+				Same as [signal SceneMultiplayer.peer_packet], for packets sent with [method send_bytes]. A packet whose first byte Networked reserves never arrives here. [constant CARRIER_MAGIC_RELIABLE] lists those bytes.
 			</description>
 		</signal>
 	</signals>
@@ -3416,7 +3438,7 @@
 			Recorded after the event happened. Count only this phase to count events.
 		</constant>
 		<constant name="CARRIER_MAGIC_RELIABLE" value="88">
-			The first byte of a reliable Networked packet. Packets sent with [method send_bytes] must not start with this byte, [constant CARRIER_MAGIC_UNRELIABLE] or [constant CARRIER_MAGIC_UNRELIABLE_ACKED].
+			The first byte of a reliable Networked packet. A packet sent with [method send_bytes] that starts with this byte, [constant CARRIER_MAGIC_UNRELIABLE] or [constant CARRIER_MAGIC_UNRELIABLE_ACKED] never reaches [signal peer_packet]. Nine more first bytes are reserved the same way, [code]0x4E[/code], [code]0x6E[/code], [code]0x8E[/code], [code]0x56[/code], [code]0x76[/code], [code]0x96[/code], [code]0x57[/code], [code]0x77[/code] and [code]0x97[/code]. Give a raw packet a first byte of your own.
 		</constant>
 		<constant name="CARRIER_MAGIC_UNRELIABLE" value="120">
 			The first byte of an unreliable Networked packet. See [constant CARRIER_MAGIC_RELIABLE].

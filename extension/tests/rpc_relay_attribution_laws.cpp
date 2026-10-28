@@ -693,12 +693,18 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "[Networked][Rpc] RT3 NetwMemberConfig.timeout on a property warns that "
-    "it does nothing, and a timeout of zero or less is refused"
+    "[Networked][Rpc] RT3 NetwMemberConfig.timeout on a property or a spawn "
+    "function warns that it does nothing, and a timeout of zero or less is "
+    "refused"
 ) {
     netw_test::FaultWatch faults;
     faults.expect_warning(
         "[warn][session] NetwMemberConfig.timeout does nothing on 'hp', "
+        "because only a requested method waits for a reply. Remove the call.",
+        1
+    );
+    faults.expect_warning(
+        "[warn][session] NetwMemberConfig.timeout does nothing on 'others', "
         "because only a requested method waits for a reply. Remove the call.",
         1
     );
@@ -709,6 +715,8 @@ TEST_CASE(
     );
     Node *sink = sink_of(DEADLINE_SINK);
     netw::Netw::configure_property(sink, StringName("hp"))->timeout(2.0);
+    netw::Netw::configure_spawn(Callable(sink, StringName("others")))
+        ->timeout(2.0);
     netw::Netw::configure_rpc(Callable(sink, StringName("hasty")))
         ->timeout(-1.0);
     memdelete(sink);

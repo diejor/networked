@@ -590,7 +590,8 @@ public class NetwMemberConfig : NetwRefCounted
     /// <summary>
     /// A request to this method waits <paramref name="seconds"/> for the reply,
     /// then fails with <c>@GlobalScope.ERR_TIMEOUT</c>. A method that declares
-    /// none waits 5 seconds. Invalid for properties and signals.
+    /// none waits 5 seconds. Invalid for properties, signals and spawn
+    /// functions.
     /// </summary>
     public NetwMemberConfig Timeout(double seconds)
     {

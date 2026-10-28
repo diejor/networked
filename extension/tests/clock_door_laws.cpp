@@ -39,10 +39,6 @@ TEST_CASE(
     const Ref<NetwClock> door = session->get_clock();
 
     NETW_CHECK_EQ(door->get_tick(), session->clock_get_tick());
-    NETW_CHECK_EQ(
-        door->get_is_synchronized(),
-        session->clock_is_synchronized()
-    );
     NETW_CHECK_EQ(door->get_is_configured(), session->clock_is_configured());
     NETW_CHECK_EQ(
         door->get_behind_count(),
@@ -164,6 +160,24 @@ TEST_CASE(
         session->clock_engine().ticktime(),
         ==
     );
+}
+
+TEST_CASE(
+    "[Networked][Clock][Door][Hosted] C7 the server's clock is always "
+    "synchronized, and a client's only once it follows the server"
+) {
+    Ref<NetwMultiplayer> session = make_session();
+    const Ref<NetwClock> door = session->get_clock();
+
+    session->session_set_role(NetwMultiplayer::ROLE_DEDICATED_SERVER);
+    CHECK_FALSE(session->clock_is_synchronized());
+    CHECK(door->get_is_synchronized());
+
+    session->session_set_role(NetwMultiplayer::ROLE_CLIENT);
+    CHECK_FALSE(door->get_is_synchronized());
+
+    session->clock_set_synchronized(true);
+    CHECK(door->get_is_synchronized());
 }
 
 TEST_CASE(

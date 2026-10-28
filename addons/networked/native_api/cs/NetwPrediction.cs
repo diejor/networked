@@ -267,8 +267,8 @@ public sealed class NetwPrediction : NetwRefCounted
         /// </summary>
         RebaseRecover = 1,
         /// <summary>
-        /// Do not predict. Simulate only with inputs the server confirmed, and
-        /// draw the server's state otherwise.
+        /// Do not predict. The controlling client does not run the step and
+        /// draws the server's state.
         /// </summary>
         DelayClosed = 2,
         /// <summary>
@@ -277,8 +277,8 @@ public sealed class NetwPrediction : NetwRefCounted
         Observe = 3,
         /// <summary>
         /// <see cref="NetwPrediction.RecoveryPolicyEnum.RebaseRecover"/> for a
-        /// <see cref="RigidBody3D"/> or <see cref="RigidBody2D"/> on
-        /// <see cref="NetwSimulation.ScheduleEnum.Frame"/>, and
+        /// <see cref="RigidBody3D"/> or <see cref="RigidBody2D"/> on any
+        /// schedule but <see cref="NetwSimulation.ScheduleEnum.Stepped"/>, and
         /// <see cref="NetwPrediction.RecoveryPolicyEnum.RebaseReplay"/>
         /// otherwise. <see cref="NetwPrediction.ResolvedRecoveryPolicy"/>
         /// returns the result.

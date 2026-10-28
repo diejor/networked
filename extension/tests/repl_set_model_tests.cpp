@@ -791,8 +791,15 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Repl][Hosted] a schema the spawn descriptor disagrees with "
-    "is refused after the sender is admitted"
+    "is refused after the sender is admitted, with one warning"
 ) {
+    netw_test::FaultWatch expected_faults;
+    expected_faults.expect_warning(
+        "[warn][wire] An update for '*' from peer 7 was dropped, because its "
+        "synchronized properties are configured differently on that peer. "
+        "Configure them the same way on every peer.",
+        1
+    );
     netw_test::Books books;
     Node *node = memnew(Node);
     netw::NetwSyncModel model = model_with_binding(
@@ -806,8 +813,9 @@ TEST_CASE(
     model.note_descriptors(ROUTE, noted);
 
     CHECK(model.admit_row(ROUTE, 0, 7, 7) == nullptr);
+    CHECK(model.admit_row(ROUTE, 0, 7, 7) == nullptr);
     const Dictionary stats = model.stats();
-    NETW_CHECK_EQ(int64_t(stats[StringName("drops_schema")]), 1);
+    NETW_CHECK_EQ(int64_t(stats[StringName("drops_schema")]), 2);
     NETW_CHECK_EQ(int64_t(stats[StringName("drops_bad_sender")]), 0);
     memdelete(node);
 }

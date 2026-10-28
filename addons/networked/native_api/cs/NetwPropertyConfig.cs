@@ -849,10 +849,6 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
     /// func _process(_dt: float) -&gt; void:
     ///     aim_dir = (get_global_mouse_position() - position).normalized()
     /// </code>
-    /// <para>
-    /// Add <see cref="NetwPropertyConfig.Masked"/> when many peers watch the
-    /// same <see cref="NetwEntity"/>.
-    /// </para>
     /// </summary>
     public NetwPropertyConfig Broadcast()
     {
@@ -1197,10 +1193,14 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
         NetwApi.MethodBind("NetwPropertyConfig", "audience", 231730980UL);
 
     /// <summary>
-    /// Sends properties of this kind to the server only, or to every peer when
-    /// <paramref name="serverOnly"/> is <c>false</c>. Sets
-    /// <see cref="NetwPropertyConfig.SetAudience"/>.
-    /// <see cref="NetwPropertyConfig.Input"/> already sends to the server only.
+    /// Sends the <see cref="NetwPropertyConfig.State"/> properties of this kind
+    /// to the server only. Sets <see cref="NetwPropertyConfig.SetAudience"/>.
+    /// With <paramref name="serverOnly"/> <c>false</c> it changes nothing,
+    /// because state properties reach every peer unless one of them calls
+    /// <see cref="NetwPropertyConfig.Audience"/> and
+    /// <see cref="NetwPropertyConfig.Input"/> properties always reach only the
+    /// server. A <see cref="NetwPropertyConfig.Broadcast"/> property ignores
+    /// <see cref="NetwPropertyConfig.Audience"/> with a warning.
     /// </summary>
     public NetwPropertyConfig Audience(bool serverOnly = true)
     {
@@ -1218,12 +1218,11 @@ public sealed class NetwPropertyConfig : NetwMemberConfig
         NetwApi.MethodBind("NetwPropertyConfig", "masked", 1162647290UL);
 
     /// <summary>
-    /// Sends each peer only the properties that changed since it last
-    /// confirmed, which saves bandwidth when many peers watch one
-    /// <see cref="NetwEntity"/>.
-    /// <code>
-    /// Netw.configure_property(self, &amp;"position").broadcast().masked()
-    /// </code>
+    /// Changes nothing on a property with no window, because those already send
+    /// each peer only the values that changed since a state it confirmed. With
+    /// a window, as <see cref="NetwPropertyConfig.Windowed"/> sets and
+    /// <see cref="NetwPropertyConfig.Input"/> sets by default, it is ignored
+    /// with a warning. Sets <see cref="NetwPropertyConfig.SetMasked"/>.
     /// </summary>
     public NetwPropertyConfig Masked()
     {

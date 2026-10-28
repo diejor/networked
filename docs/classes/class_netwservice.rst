@@ -31,11 +31,11 @@ Get it with :ref:`NetwSession.service()<class_NetwSession_method_service>`. Over
     func _service_type() -> Script:
         return MatchClock
 
-    func _service_entered(api: NetwMultiplayer) -> void:
-        api.session_entered.connect(_on_session_entered)
+    func _service_entered(session: NetwSession) -> void:
+        session.entered.connect(_on_entered)
 
-    func _service_exiting(api: NetwMultiplayer) -> void:
-        api.session_entered.disconnect(_on_session_entered)
+    func _service_exiting(session: NetwSession) -> void:
+        session.entered.disconnect(_on_entered)
 
 \ A node that extends another class can call :ref:`register()<class_NetwService_method_register>` and :ref:`unregister()<class_NetwService_method_unregister>` instead.
 

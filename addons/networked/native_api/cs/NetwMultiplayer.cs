@@ -1655,10 +1655,14 @@ public sealed class NetwMultiplayer : NetwRefCounted
     }
 
     /// <summary>
-    /// The first byte of a reliable Networked packet. Packets sent with
-    /// <see cref="NetwMultiplayer.SendBytes"/> must not start with this byte,
+    /// The first byte of a reliable Networked packet. A packet sent with
+    /// <see cref="NetwMultiplayer.SendBytes"/> that starts with this byte,
     /// <see cref="NetwMultiplayer.CarrierMagicUnreliable"/> or
-    /// <see cref="NetwMultiplayer.CarrierMagicUnreliableAcked"/>.
+    /// <see cref="NetwMultiplayer.CarrierMagicUnreliableAcked"/> never reaches
+    /// <see cref="NetwMultiplayer.PeerPacket"/>. Nine more first bytes are
+    /// reserved the same way, <c>0x4E</c>, <c>0x6E</c>, <c>0x8E</c>,
+    /// <c>0x56</c>, <c>0x76</c>, <c>0x96</c>, <c>0x57</c>, <c>0x77</c> and
+    /// <c>0x97</c>. Give a raw packet a first byte of your own.
     /// </summary>
     public const long CarrierMagicReliable = 88;
     /// <summary>
@@ -1709,7 +1713,9 @@ public sealed class NetwMultiplayer : NetwRefCounted
 
     /// <summary>
     /// Same as <c>SceneMultiplayer.peer_packet</c>, for packets sent with
-    /// <see cref="NetwMultiplayer.SendBytes"/>.
+    /// <see cref="NetwMultiplayer.SendBytes"/>. A packet whose first byte
+    /// Networked reserves never arrives here.
+    /// <see cref="NetwMultiplayer.CarrierMagicReliable"/> lists those bytes.
     /// </summary>
     public event Action<long, byte[]> PeerPacket
     {
@@ -5588,8 +5594,6 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// </code>
     /// <para>
     /// <paramref name="target"/> filters by entity or peer.
-    /// <paramref name="opts"/> accepts <c>once</c>, <c>dedupe</c>, <c>phase</c>
-    /// and <c>note</c>.
     /// <code>
     /// Dictionary
     /// ┠╴route      int         only events about this entity
@@ -5598,7 +5602,36 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// </code>
     /// </para>
     /// <para>
-    /// Every record has every key below.
+    /// <paramref name="predicate"/> keeps a record only when it passes every
+    /// key given. Each <c>_in</c> key lists the values it accepts.
+    /// <code>
+    /// Dictionary
+    /// ┠╴verdict_in  Array  accepted verdicts
+    /// ┠╴sender_in   Array  accepted values of detail.sender
+    /// ┠╴channel_in  Array  accepted values of detail.channel
+    /// ┠╴comp_in     Array  accepted values of detail.comp
+    /// ┠╴stage_in    Array  accepted values of detail.stage
+    /// ┠╴layer_in    Array  accepted values of detail.layer
+    /// ┠╴tick_min    int    the earliest tick accepted
+    /// ┖╴tick_max    int    the latest tick accepted
+    /// </code>
+    /// </para>
+    /// <para>
+    /// <paramref name="opts"/> changes how the watch delivers.
+    /// <code>
+    /// Dictionary
+    /// ┠╴phase    int     1 after the event by default, or 0 before it
+    /// ┠╴enabled  bool    false keeps the watch and delivers nothing
+    /// ┠╴once     bool    turns enabled off after the first record
+    /// ┠╴dedupe   bool    one record per event and verdict on each route
+    /// ┖╴note     String  a label listed by event_watches
+    /// </code>
+    /// </para>
+    /// <para>
+    /// <c>dedupe</c> is on by default for a watch on
+    /// <see cref="NetwMultiplayer.Event.Verdict"/> or
+    /// <see cref="NetwMultiplayer.Event.SeamMisuse"/>. Every record has every
+    /// key below.
     /// <code>
     /// Dictionary
     /// ┠╴event       int         one value of Event
@@ -5689,8 +5722,11 @@ public sealed class NetwMultiplayer : NetwRefCounted
 
     /// <summary>
     /// Returns and clears the events recorded for <paramref name="route"/>,
-    /// oldest first. Route <c>0</c> holds events that belong to no entity. Each
-    /// record has the shape shown in <see cref="NetwMultiplayer.EventWatch"/>.
+    /// oldest first. A route keeps its 64 most recent records, and
+    /// <see cref="NetwMultiplayer.Event.Despawned"/> clears that route's
+    /// records after it is delivered. Route <c>0</c> holds events that belong
+    /// to no entity. Each record has the shape shown in
+    /// <see cref="NetwMultiplayer.EventWatch"/>.
     /// </summary>
     public Godot.Collections.Array EventRing(long route)
     {
@@ -8169,7 +8205,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
     /// <summary>
     /// Same as <see cref="SceneMultiplayer.SendBytes"/>. Returns
     /// <c>@GlobalScope.ERR_UNCONFIGURED</c> when there is no
-    /// <see cref="MultiplayerApi.MultiplayerPeer"/>.
+    /// <see cref="MultiplayerApi.MultiplayerPeer"/>. A packet whose first byte
+    /// Networked reserves never reaches
+    /// <see cref="NetwMultiplayer.PeerPacket"/>.
+    /// <see cref="NetwMultiplayer.CarrierMagicReliable"/> lists those bytes.
     /// </summary>
     public Error SendBytes(byte[] bytes, long id =
         0, MultiplayerPeer.TransferModeEnum mode =
@@ -8939,9 +8978,11 @@ public sealed class NetwMultiplayer : NetwRefCounted
             3905245786UL);
 
     /// <summary>
-    /// How many frames skipped a tick because the clock runs at most one tick
-    /// per frame. A count that keeps growing means this machine is too slow to
-    /// keep up with <see cref="NetwMultiplayer.ClockParam.Tickrate"/>.
+    /// How many frames ended with a tick still waiting while
+    /// <see cref="NetwMultiplayer.ClockSetGate"/> was on, which runs at most
+    /// one tick per frame. It stays <c>0</c> while the gate is off. A count
+    /// that keeps growing means this machine is too slow to keep up with
+    /// <see cref="NetwMultiplayer.ClockParam.Tickrate"/>.
     /// </summary>
     public long ClockGetSimulationBehindCount()
     {

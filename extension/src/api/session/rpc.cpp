@@ -1845,7 +1845,9 @@ void NetwMultiplayer::rpc_handle_call(
                   String(method),
                   String(p_comp_node->get_name())
               );
-        NETW_WARN(sys::TRANSPORT, "%s", detail);
+        if (claim_verdict_warning(ERR_METHOD_NOT_FOUND, route)) {
+            NETW_WARN(sys::TRANSPORT, "%s", detail);
+        }
         refuse(ERR_METHOD_NOT_FOUND, detail);
         return;
     }
@@ -1863,7 +1865,9 @@ void NetwMultiplayer::rpc_handle_call(
             "RPC with the same arguments on every peer.",
             String(method)
         );
-        NETW_WARN(sys::TRANSPORT, "%s", detail);
+        if (claim_verdict_warning(ERR_INVALID_DATA, route)) {
+            NETW_WARN(sys::TRANSPORT, "%s", detail);
+        }
         refuse(ERR_INVALID_DATA, detail);
         return;
     }
@@ -1882,7 +1886,9 @@ void NetwMultiplayer::rpc_handle_call(
             String(method),
             String(p_comp_node->get_name())
         );
-        NETW_WARN(sys::TRANSPORT, "%s", detail);
+        if (claim_verdict_warning(ERR_UNAUTHORIZED, route)) {
+            NETW_WARN(sys::TRANSPORT, "%s", detail);
+        }
         refuse(ERR_UNAUTHORIZED, detail);
         return;
     }
@@ -1898,7 +1904,9 @@ void NetwMultiplayer::rpc_handle_call(
             String(method),
             String(p_comp_node->get_name())
         );
-        NETW_WARN(sys::TRANSPORT, "%s", detail);
+        if (claim_verdict_warning(ERR_INVALID_DATA, route)) {
+            NETW_WARN(sys::TRANSPORT, "%s", detail);
+        }
         refuse(ERR_INVALID_DATA, detail);
         return;
     }
@@ -1959,14 +1967,16 @@ void NetwMultiplayer::rpc_handle_call(
     );
 
     if (target_type != CALL_TARGET_EVERYONE && target_peer != get_unique_id()) {
-        NETW_WARN(
-            sys::TRANSPORT,
-            "A call for '%s' was meant for peer %d and reached peer %d, so it "
-            "was dropped.",
-            String(method),
-            int(target_peer),
-            int(get_unique_id())
-        );
+        if (claim_verdict_warning(ERR_INVALID_PARAMETER, route)) {
+            NETW_WARN(
+                sys::TRANSPORT,
+                "A call for '%s' was meant for peer %d and reached peer %d, so "
+                "it was dropped.",
+                String(method),
+                int(target_peer),
+                int(get_unique_id())
+            );
+        }
         return;
     }
 

@@ -625,7 +625,7 @@ Add the difference between the server's state and the prediction to the present 
 
 :ref:`RecoveryPolicy<enum_NetwPrediction_RecoveryPolicy>` **RECOVERY_POLICY_DELAY_CLOSED** = ``2``
 
-Do not predict. Simulate only with inputs the server confirmed, and draw the server's state otherwise.
+Do not predict. The controlling client does not run the step and draws the server's state.
 
 .. _class_NetwPrediction_constant_RECOVERY_POLICY_OBSERVE:
 
@@ -641,7 +641,7 @@ Report mispredictions and correct nothing.
 
 :ref:`RecoveryPolicy<enum_NetwPrediction_RecoveryPolicy>` **RECOVERY_POLICY_AUTO** = ``4``
 
-:ref:`RECOVERY_POLICY_REBASE_RECOVER<class_NetwPrediction_constant_RECOVERY_POLICY_REBASE_RECOVER>` for a :godot:`RigidBody3D` or :godot:`RigidBody2D` on :ref:`NetwSimulation.SCHEDULE_FRAME<class_NetwSimulation_constant_SCHEDULE_FRAME>`, and :ref:`RECOVERY_POLICY_REBASE_REPLAY<class_NetwPrediction_constant_RECOVERY_POLICY_REBASE_REPLAY>` otherwise. :ref:`resolved_recovery_policy()<class_NetwPrediction_method_resolved_recovery_policy>` returns the result.
+:ref:`RECOVERY_POLICY_REBASE_RECOVER<class_NetwPrediction_constant_RECOVERY_POLICY_REBASE_RECOVER>` for a :godot:`RigidBody3D` or :godot:`RigidBody2D` on any schedule but :ref:`NetwSimulation.SCHEDULE_STEPPED<class_NetwSimulation_constant_SCHEDULE_STEPPED>`, and :ref:`RECOVERY_POLICY_REBASE_REPLAY<class_NetwPrediction_constant_RECOVERY_POLICY_REBASE_REPLAY>` otherwise. :ref:`resolved_recovery_policy()<class_NetwPrediction_method_resolved_recovery_policy>` returns the result.
 
 .. rst-class:: classref-item-separator
 

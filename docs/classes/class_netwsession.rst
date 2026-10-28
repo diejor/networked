@@ -582,7 +582,7 @@ The :ref:`NetwConnection<class_NetwConnection>` of this session, to find servers
 
 - :godot:`bool` **get_is_online**\ (\ )
 
-Whether a peer is assigned and connected. It stays ``true`` until :ref:`exited<class_NetwSession_signal_exited>`, so it is still ``true`` while :ref:`exiting<class_NetwSession_signal_exiting>` runs and the session's scenes are freed.
+``true`` while :ref:`state<class_NetwSession_property_state>` is :ref:`STATE_ONLINE<class_NetwSession_constant_STATE_ONLINE>`. It is still ``true`` while :ref:`exiting<class_NetwSession_signal_exiting>` runs and the session's scenes are freed, and turns ``false`` at :ref:`STATE_DISCONNECTING<class_NetwSession_constant_STATE_DISCONNECTING>`, before :ref:`exited<class_NetwSession_signal_exited>`.
 
 .. rst-class:: classref-item-separator
 
