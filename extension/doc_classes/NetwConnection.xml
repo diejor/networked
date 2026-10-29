@@ -45,7 +45,7 @@
 		    connection.join(endpoint)
 		[/codeblock]
 		[b]Connecting[/b]
-		[method join] and [method host] create the peer, assign it, and settle their [NetwPromise] once the session is online. A failure arrives once through [signal failed], and a player the server refuses arrives through [signal NetwSession.join_failed] instead.
+		[method join] and [method host] create the peer, assign it, and settle their [NetwPromise] once the session is online. A failure arrives once through [signal failed]. A player the server refuses also arrives through [signal NetwSession.join_failed], with the same code and reason.
 		[b]Sharing[/b]
 		[member join_address] is the address the server advertises, and [member max_players] is its player limit. A client reads both from the server once its join is accepted, and [signal join_address_changed] reports each change. [member current_endpoint] names the [member NetwEndpoint.peer_class], so a service can share both.
 		[codeblock]
@@ -266,7 +266,7 @@
 			<param index="1" name="reason" type="String" />
 			<description>
 				Emitted once when an attempt fails, and never for [method cancel]. A connection to it reads the failure of the [NetwPromise] that started the attempt, so a caller may drop that promise.
-				A join whose connection closes fails with [constant @GlobalScope.ERR_CANT_CONNECT] when the server never answered. It fails with [constant @GlobalScope.ERR_CONNECTION_ERROR] when the server answered and then refused the join or ran out of time. Running out of time means [member NetwMultiplayer.auth_timeout] ended the join on one of the peers.
+				A join the server refuses fails with the [param error] and [param reason] of [signal NetwSession.join_failed], also when the game assigned the peer itself. A join whose connection closes with no answer fails with [constant @GlobalScope.ERR_CANT_CONNECT] when the server was never reached, and with [constant @GlobalScope.ERR_CONNECTION_ERROR] when it was.
 			</description>
 		</signal>
 		<signal name="invited">

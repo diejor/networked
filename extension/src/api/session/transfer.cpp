@@ -157,10 +157,38 @@ void NetwMultiplayer::transfer_live_entities(
     });
 }
 
+void NetwMultiplayer::session_follow_relabel_pending(int64_t p_successor_was) {
+    if (effective_peer.is_null() || !auth_is_armed()) {
+        return;
+    }
+    if (!prepared_join.has_value() && submitted_join.has_value()) {
+        prepared_join = submitted_join;
+    }
+    installing_transfer = true;
+    const PackedInt32Array pending = get_authenticating_peers();
+    for (int at = 0; at < pending.size(); ++at) {
+        const int64_t peer = pending[at];
+        if (peer == SERVER_PEER || peer == p_successor_was) {
+            effective_peer->emit_signal(
+                StringName(SIG_PEER_DISCONNECTED),
+                peer
+            );
+            link_handshakes.erase(peer);
+        }
+    }
+    installing_transfer = false;
+    effective_peer->emit_signal(StringName(SIG_PEER_CONNECTED), SERVER_PEER);
+}
+
 void NetwMultiplayer::session_follow_relabel(
     int64_t p_successor_was,
     int64_t p_former_now
 ) {
+    if (session_get_state() == SESSION_STATE_CONNECTING
+        && !has_server_role()) {
+        session_follow_relabel_pending(p_successor_was);
+        return;
+    }
     if (session_get_state() != SESSION_STATE_ONLINE) {
         NETW_TRACE(
             sys::SESSION,

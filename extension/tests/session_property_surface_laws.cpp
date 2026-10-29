@@ -25,7 +25,6 @@ TEST_CASE(
     CHECK_FALSE(session->is_object_decoding_allowed());
     CHECK_FALSE(session->is_refusing_new_connections());
     CHECK_FALSE(session->is_server_relay_enabled());
-    NETW_CHECK_EQ(session->get_auth_timeout(), 0);
     NETW_CHECK_EQ(session->get_max_sync_packet_size(), 0);
     NETW_CHECK_EQ(session->get_max_delta_packet_size(), 0);
 
@@ -34,31 +33,25 @@ TEST_CASE(
         session->set_allow_object_decoding(true);
         session->set_server_relay_enabled(true);
         session->set_max_sync_packet_size(1200);
-        session->set_auth_timeout(9.0);
         CHECK(session->get_root_path().is_empty());
-        NETW_CHECK_EQ(session->get_auth_timeout(), 0);
     }
 }
 
 TEST_CASE(
     "[Networked][Session][Hosted] L4 the authentication timeout is the "
-    "wrapped transport's own rather than a copy the session keeps, so a "
-    "write through either one is the single deadline the other reads"
+    "session's own, and a transport the session authenticates holds 0, so "
+    "only the session's deadline closes a link"
 ) {
     Ref<NetwMultiplayer> session = make_session();
     Ref<SceneMultiplayer> transport;
     transport.instantiate();
     session->session_set_inner(transport);
+    session->auth_arm();
 
     session->set_auth_timeout(12.0);
 
-    NETW_CHECK_EQ(transport->get_auth_timeout(), 12);
     NETW_CHECK_EQ(session->get_auth_timeout(), 12);
-
-    SUBCASE("and a write on the transport is the deadline the session reads") {
-        transport->set_auth_timeout(4.0);
-        NETW_CHECK_EQ(session->get_auth_timeout(), 4);
-    }
+    NETW_CHECK_EQ(transport->get_auth_timeout(), 0);
 }
 
 TEST_CASE(

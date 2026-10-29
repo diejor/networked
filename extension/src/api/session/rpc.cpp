@@ -341,6 +341,10 @@ void NetwMultiplayer::relay_two(
 }
 
 void NetwMultiplayer::relay_auth_failed(int64_t p_peer) {
+    if (installing_transfer) {
+        auth_forget_link(p_peer);
+        return;
+    }
     Dictionary detail;
     detail["peer"] = p_peer;
     event_emit(
@@ -352,12 +356,15 @@ void NetwMultiplayer::relay_auth_failed(int64_t p_peer) {
         OK,
         Dictionary()
     );
+    const LinkHandshake *link = link_handshakes.getptr(p_peer);
+    const bool reported = link != nullptr && link->refused;
+    auth_forget_link(p_peer);
     emit_signal(SIG_PEER_AUTHENTICATION_FAILED, p_peer);
     notify(PEER_AUTHENTICATION_FAILED, p_peer);
-    if (!probe_forget(p_peer)) {
-        NETW_WARN(
+    if (!probe_forget(p_peer) && !reported) {
+        NETW_DEBUG(
             netw::sys::SESSION,
-            "Peer %d failed authentication and was refused.",
+            "Peer %d left before it finished authenticating.",
             int(p_peer)
         );
     }

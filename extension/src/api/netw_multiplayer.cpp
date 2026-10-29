@@ -287,6 +287,7 @@ void NetwMultiplayer::embed_adopt_inner(const Ref<SceneMultiplayer> &p_inner) {
         return;
     }
     const Callable adopted = p_inner->get_auth_callback();
+    auth_timeout_seconds = p_inner->get_auth_timeout();
     session_set_inner(p_inner);
     if (adopted.is_valid()) {
         set_auth_callback(adopted);
@@ -1559,9 +1560,6 @@ bool NetwMultiplayer::session_publish_control(
     }
     if (p_channel == control_channels.kicked) {
         if (from_server && states_reason) {
-            if (join_awaiting_admission) {
-                session_report_join_failure(ERR_UNAUTHORIZED, stated.reason);
-            }
             session_note_exit(enums::NetwSession::KICKED, stated.reason);
             notify(PEER_KICKED, stated.reason);
         }
@@ -1628,11 +1626,14 @@ void NetwMultiplayer::session_admit(const session::AcceptFrame &p_accepted) {
     player_hand_back(joined);
     player_tell_kept(joined);
     player_publish_joined(joined);
+    if (!has_server_role()) {
+        auth_advance(joined);
+    }
 }
 
 bool NetwMultiplayer::session_preflight_join(
     const session::AcceptFrame &p_accepted,
-    const Array &p_args
+    const JoinRequest &p_request
 ) {
     const JoinPlan plan = session_resolve_join();
     if (!plan.available) {
@@ -1646,7 +1647,7 @@ bool NetwMultiplayer::session_preflight_join(
     if (!plan.handler.is_valid()) {
         return true;
     }
-    if (plan.declared && p_args.is_empty()
+    if (plan.declared && p_request.arg_values.is_empty()
         && !join_arg_types(plan.handler).is_empty()) {
         NETW_WARN(
             sys::SESSION,
@@ -1658,9 +1659,8 @@ bool NetwMultiplayer::session_preflight_join(
         );
         session_fail_join(
             p_accepted.peer_id,
-            ERR_INVALID_DATA,
-            "This server's join handler needs arguments the join carried none "
-            "of"
+            ERR_UNCONFIGURED,
+            session_join_args_refusal(p_request)
         );
         return false;
     }
@@ -1679,9 +1679,20 @@ void NetwMultiplayer::session_fail_join(
         session_report_join_failure(p_error, p_reason);
         return;
     }
-    if (is_host()) {
-        session_turn_peer_away(peer, p_reason);
+    if (auth_refuse(peer, p_error, p_reason) || !is_host()) {
+        return;
     }
+    send_to(
+        peer,
+        0,
+        session_join_channel,
+        auth::encode_refused(int64_t(p_error), p_reason),
+        true,
+        0,
+        String(),
+        false
+    );
+    session_turn_peer_away(peer, String());
 }
 
 void NetwMultiplayer::session_turn_peer_away(
@@ -1788,12 +1799,12 @@ void NetwMultiplayer::session_run_join_handler(
 }
 
 void NetwMultiplayer::session_after_entered() {
+    if (auth_admitted_roster.has_value()) {
+        session_apply_admitted_roster();
+        return;
+    }
     const int64_t role = session_get_role();
-    bool joins_by_default = role != ROLE_DEDICATED_SERVER;
-#if defined(NETW_TESTS)
-    joins_by_default = joins_by_default && !session_default_join_held;
-#endif
-    if (!prepared_join.has_value() && joins_by_default) {
+    if (!prepared_join.has_value() && role != ROLE_DEDICATED_SERVER) {
         prepared_join = JoinRequest();
     }
     if (role == ROLE_CLIENT) {
@@ -1801,6 +1812,27 @@ void NetwMultiplayer::session_after_entered() {
         return;
     }
     session_submit_host_join();
+}
+
+void NetwMultiplayer::session_apply_admitted_roster() {
+    const PackedByteArray roster = *auth_admitted_roster;
+    auth_admitted_roster.reset();
+    prepared_join.reset();
+    LocalVector<session::AcceptFrame> rows;
+    if (!session::roster_read(roster, rows)) {
+        NETW_WARN(
+            sys::SESSION,
+            "The server's list of players could not be read. Run the same "
+            "Networked version on both peers."
+        );
+        return;
+    }
+    for (const session::AcceptFrame &row : rows) {
+        if (row.peer_id == get_unique_id()) {
+            connect_core.advertise(row.join_address, int64_t(row.max_players));
+        }
+        session_admit(row);
+    }
 }
 
 void NetwMultiplayer::session_submit_host_join() {
@@ -1838,6 +1870,7 @@ void NetwMultiplayer::session_after_edge(int64_t, int64_t p_new) {
         unreachable_peers.clear();
         settled_peer_departures.clear();
         session_clear_prepared_join();
+        auth_admitted_roster.reset();
         serverless_mesh_polls = 0;
         transfer_awaits_roster = false;
         transfer_authored = PackedInt64Array();
@@ -1866,6 +1899,15 @@ void NetwMultiplayer::session_relay_peer_connected(int64_t p_peer) {
         0
     );
     emit_signal(StringName("peer_connected"), p_peer);
+    LinkHandshake *link = link_handshakes.getptr(p_peer);
+    if (link == nullptr || !link->admitted.has_value()) {
+        return;
+    }
+    const session::AcceptFrame admitted = *link->admitted;
+    const Array args = link->admitted_args;
+    link->admitted.reset();
+    link->admitted_args = Array();
+    session_publish_admitted(admitted, args);
 }
 
 void NetwMultiplayer::session_relay_peer_disconnected(int64_t p_peer) {
@@ -2042,9 +2084,6 @@ const char *NetwMultiplayer::session_identity_differs(
     if (p_request.wire_identity != SessionCore::compute_wire_identity()) {
         return "wire";
     }
-    if (p_request.schema_identity != session_schema_identity()) {
-        return "schema";
-    }
     return nullptr;
 }
 
@@ -2053,6 +2092,7 @@ void NetwMultiplayer::session_receive_join(
     int64_t p_sender
 ) {
     if (!is_host()) {
+        session_receive_join_answer(p_payload, p_sender);
         return;
     }
     const Time *reading = Time::get_singleton();
@@ -2060,26 +2100,37 @@ void NetwMultiplayer::session_receive_join(
             int(p_sender),
             reading ? int64_t(reading->get_ticks_msec()) : 0
         )) {
-        if (!session_core.claim_flood_report(int(p_sender))) {
-            return;
-        }
-        if (join_roster.has_accepted(p_sender)) {
+        if (session_core.claim_flood_report(int(p_sender))) {
             NETW_WARN(
                 sys::SESSION,
                 "Peer %d sent too many join requests, so the extra ones were "
                 "dropped.",
                 int(p_sender)
             );
-            return;
         }
-        NETW_WARN(
-            sys::SESSION,
-            "Peer %d sent too many join requests, so it was turned away.",
-            int(p_sender)
-        );
-        session_fail_join(p_sender, ERR_BUSY, "Too many join requests.");
         return;
     }
+    session_take_join(p_payload, p_sender);
+}
+
+void NetwMultiplayer::session_receive_join_answer(
+    const PackedByteArray &p_payload,
+    int64_t p_sender
+) {
+    if (p_sender != SERVER_PEER) {
+        return;
+    }
+    const auth::Answer answer = auth::decode_answer(p_payload);
+    if (!answer.ok || answer.kind != auth::AnswerKind::REFUSED) {
+        return;
+    }
+    session_report_join_failure(Error(answer.code), answer.reason);
+}
+
+void NetwMultiplayer::session_take_join(
+    const PackedByteArray &p_payload,
+    int64_t p_sender
+) {
     if (structure_halted) {
         halt_park_join(p_payload, p_sender);
         return;
@@ -2099,6 +2150,12 @@ void NetwMultiplayer::session_accept_join(
             "was dropped.",
             int(p_sender)
         );
+        auth_refuse(
+            p_sender,
+            ERR_UNCONFIGURED,
+            "The join could not be read. Run the same build of the game on "
+            "both computers."
+        );
         return;
     }
     requested.peer_id = p_sender;
@@ -2113,16 +2170,24 @@ void NetwMultiplayer::session_accept_join(
         );
         session_fail_join(
             p_sender,
-            ERR_UNAUTHORIZED,
+            ERR_UNCONFIGURED,
             vformat("Incompatible build: %s", String(differs))
+        );
+        return;
+    }
+    if (p_sender != get_unique_id() && join_roster.has_accepted(p_sender)) {
+        NETW_TRACE(
+            sys::SESSION,
+            "Peer %d already holds a player, so its join was dropped.",
+            int(p_sender)
         );
         return;
     }
     if (!session_decode_join_args(requested)) {
         session_fail_join(
             p_sender,
-            ERR_INVALID_DATA,
-            "Invalid join arguments."
+            ERR_UNCONFIGURED,
+            session_join_args_refusal(requested)
         );
         return;
     }
@@ -2154,15 +2219,64 @@ void NetwMultiplayer::session_finish_join(
     }
     session::AcceptFrame accepting;
     if (!session_resolve_inbound_join(requested, p_sender, accepting)) {
+        auth_refuse(
+            p_sender,
+            ERR_UNCONFIGURED,
+            session_join_args_refusal(requested)
+        );
         return;
     }
     accepting.account = account;
     accepting.account_name
         = account.is_empty() ? String() : p_admission->get_account_name();
     const Array decoded = requested.arg_values;
-    if (!session_preflight_join(accepting, decoded)) {
+    if (!session_preflight_join(accepting, requested)) {
         return;
     }
+    LinkHandshake *link = auth_joining_link(p_sender);
+    if (link != nullptr) {
+        link->admitted = accepting;
+        link->admitted_args = decoded;
+        link->join = PackedByteArray();
+        if (auth_send_raw(
+                p_sender,
+                auth::encode_admitted(auth_admitted_bytes(accepting))
+            )
+            != OK) {
+            disconnect_peer(p_sender);
+        }
+        return;
+    }
+    session_publish_admitted(accepting, decoded);
+}
+
+PackedByteArray NetwMultiplayer::auth_admitted_bytes(
+    const session::AcceptFrame &p_joiner
+) const {
+    const int64_t joiner = p_joiner.peer_id;
+    LocalVector<session::AcceptFrame> rows;
+    for (const session::AcceptFrame &row : join_roster.accepted_joins()) {
+        if (row.peer_id != joiner) {
+            rows.push_back(session::accept_seen_by(row, joiner));
+        }
+    }
+    session::AcceptFrame own = p_joiner;
+    const String address = connect_core.join_address();
+    if (wire::string_bytes(address) <= wire::STRING_CAP) {
+        own.join_address = address;
+    }
+    own.max_players = uint64_t(connection_max_players());
+    rows.push_back(own);
+    return session::roster_write(rows);
+}
+
+void NetwMultiplayer::session_publish_admitted(
+    const session::AcceptFrame &p_accepted,
+    const Array &p_args
+) {
+    const session::AcceptFrame accepting = p_accepted;
+    const Array decoded = p_args;
+    const int64_t p_sender = accepting.peer_id;
     session_admit(accepting);
 
     if (inner.is_valid()) {
@@ -2420,6 +2534,22 @@ void NetwMultiplayer::session_note_exit(
     session_exit_detail = p_detail;
 }
 
+void NetwMultiplayer::session_leave_for_schema(const String &p_node) {
+    if (is_host() || session_exit_reason >= 0
+        || session_get_state() != SESSION_STATE_ONLINE) {
+        return;
+    }
+    const String reason = vformat(
+        "'%s' synchronizes different properties here than on the server. "
+        "Run the same build on both peers.",
+        p_node
+    );
+    NETW_ERROR(sys::SESSION, "%s", reason);
+    session_note_exit(enums::NetwSession::KICKED, reason);
+    notify(PEER_KICKED, reason);
+    schema_leave_pending = true;
+}
+
 void NetwMultiplayer::session_announce_edge(int p_old, int p_new) {
     sim_follow_server();
     session_after_edge(p_old, p_new);
@@ -2654,11 +2784,19 @@ void NetwMultiplayer::set_allow_object_decoding(bool p_value) {
 }
 
 double NetwMultiplayer::get_auth_timeout() const {
-    return inner.is_valid() ? inner->get_auth_timeout() : 0.0;
+    return auth_timeout_seconds;
 }
 
 void NetwMultiplayer::set_auth_timeout(double p_seconds) {
-    if (inner.is_valid()) {
+    NETW_ERR_COND(
+        p_seconds < 0.0,
+        sys::SESSION,
+        "NetwMultiplayer.auth_timeout got %s seconds. Pass 0 for no limit "
+        "or a number of seconds above zero.",
+        String::num(p_seconds)
+    );
+    auth_timeout_seconds = p_seconds;
+    if (inner.is_valid() && !auth_is_armed()) {
         inner->set_auth_timeout(p_seconds);
     }
 }
@@ -2755,14 +2893,51 @@ Error NetwMultiplayer::send_auth(
     if (inner.is_null()) {
         return ERR_UNCONFIGURED;
     }
-    return inner->send_auth(int32_t(p_peer), p_data);
+    if (!auth_is_armed()) {
+        return inner->send_auth(int32_t(p_peer), p_data);
+    }
+    if (p_data.is_empty()) {
+        return ERR_INVALID_PARAMETER;
+    }
+    return inner->send_auth(int32_t(p_peer), auth::encode_game(p_data));
 }
 
 Error NetwMultiplayer::complete_auth(int64_t p_peer) {
     if (inner.is_null()) {
         return ERR_UNCONFIGURED;
     }
-    return inner->complete_auth(int32_t(p_peer));
+    if (!auth_is_armed()) {
+        return inner->complete_auth(int32_t(p_peer));
+    }
+    if (!get_authenticating_peers().has(int32_t(p_peer))) {
+        return ERR_INVALID_PARAMETER;
+    }
+    LinkHandshake &link = link_handshakes[p_peer];
+    if (link.game_completed) {
+        return ERR_FILE_CANT_WRITE;
+    }
+    link.game_completed = true;
+    auth_advance(p_peer);
+    return OK;
+}
+
+Error NetwMultiplayer::auth_send_raw(
+    int64_t p_peer,
+    const PackedByteArray &p_data
+) {
+    if (inner.is_null()) {
+        return ERR_UNCONFIGURED;
+    }
+    return inner->send_auth(int32_t(p_peer), p_data);
+}
+
+bool NetwMultiplayer::auth_is_armed() const {
+    return inner.is_valid()
+        && inner->get_auth_callback()
+        == callable_mp(
+               const_cast<NetwMultiplayer *>(this),
+               &NetwMultiplayer::auth_receive
+        );
 }
 
 PackedInt32Array NetwMultiplayer::get_authenticating_peers() const {
@@ -2802,6 +2977,7 @@ void NetwMultiplayer::auth_arm() {
         return;
     }
     inner->set_auth_callback(callable_mp(this, &NetwMultiplayer::auth_receive));
+    inner->set_auth_timeout(0.0);
 }
 
 void NetwMultiplayer::auth_disarm() {
@@ -2811,6 +2987,7 @@ void NetwMultiplayer::auth_disarm() {
     const Callable ours = callable_mp(this, &NetwMultiplayer::auth_receive);
     if (inner->get_auth_callback() == ours) {
         inner->set_auth_callback(Callable());
+        inner->set_auth_timeout(auth_timeout_seconds);
     }
 }
 
@@ -2823,22 +3000,25 @@ void NetwMultiplayer::auth_receive(
         session_answer_probe(p_peer);
         return;
     }
-    if (auth_app_callback.is_valid()) {
-        static const GameCall AUTH_CALLBACK = {
-            sys::SESSION,
-            "NetwMultiplayer.auth_callback",
-            "func(peer_id: int, data: PackedByteArray)",
-            2
-        };
-        Array args;
-        args.push_back(p_peer);
-        args.push_back(p_data);
-        game_call(auth_app_callback, args, AUTH_CALLBACK);
+    const LinkHandshake *link = link_handshakes.getptr(p_peer);
+    if (link != nullptr && link->refused) {
         return;
     }
-    if (kind == auth::Kind::HELLO) {
-        auth_receive_hello(p_peer, p_data);
-        return;
+    switch (kind) {
+        case auth::Kind::HELLO:
+            auth_receive_hello(p_peer, p_data);
+            return;
+        case auth::Kind::GAME:
+            auth_receive_game(p_peer, p_data);
+            return;
+        case auth::Kind::JOIN:
+            auth_receive_join(p_peer, p_data);
+            return;
+        case auth::Kind::ANSWER:
+            auth_receive_answer(p_peer, p_data);
+            return;
+        default:
+            break;
     }
     NETW_WARN(
         sys::SESSION,
@@ -2853,11 +3033,25 @@ void NetwMultiplayer::auth_receive(
 
 void NetwMultiplayer::auth_send_hello(int64_t p_peer) {
     NETW_ZONE_NC("netw::auth_send_hello", colors::SESSION);
-    if (p_peer == 0 || has_server_role()) {
+    if (p_peer == 0 || inner.is_null()
+        || !get_authenticating_peers().has(int32_t(p_peer))) {
         return;
     }
-    if (auth_app_callback.is_valid() || inner.is_null()) {
+    link_handshakes[p_peer] = LinkHandshake();
+    LinkHandshake &opened = link_handshakes[p_peer];
+    const double seconds = auth_link_seconds();
+    opened.deadline = seconds > 0.0
+        ? int64_t(Time::get_singleton()->get_ticks_msec())
+            + int64_t(seconds * 1000.0)
+        : 0;
+    if (has_server_role()) {
         return;
+    }
+    const bool to_server = p_peer == SERVER_PEER;
+    const bool proves = to_server && session_requires_proof();
+    int flags = proves ? auth::HELLO_PROOF_CAPABLE : 0;
+    if (auth_app_callback.is_valid()) {
+        flags |= auth::HELLO_GAME_AUTH;
     }
     NETW_DEBUG(
         sys::SESSION,
@@ -2865,14 +3059,9 @@ void NetwMultiplayer::auth_send_hello(int64_t p_peer) {
         int(p_peer),
         String::num_uint64(auth_app_tag, 16)
     );
-    const Error sent = send_auth(
+    const Error sent = auth_send_raw(
         p_peer,
-        auth::encode_client_hello(
-            uint64_t(auth_app_tag),
-            p_peer == SERVER_PEER && session_requires_proof()
-                ? auth::HELLO_PROOF_CAPABLE
-                : 0
-        )
+        auth::encode_client_hello(uint64_t(auth_app_tag), flags)
     );
     if (sent != OK) {
         NETW_WARN(
@@ -2885,10 +3074,69 @@ void NetwMultiplayer::auth_send_hello(int64_t p_peer) {
         );
         return;
     }
-    if (p_peer == SERVER_PEER && session_requires_proof()) {
+    auth_advance(p_peer);
+}
+
+void NetwMultiplayer::auth_advance(int64_t p_peer) {
+    LinkHandshake *link = link_handshakes.getptr(p_peer);
+    if (link == nullptr || link->completed || link->refused) {
         return;
     }
-    const Error completed = auth_complete_link(p_peer);
+    const bool game_done
+        = !auth_app_callback.is_valid() || link->game_completed;
+    if (!game_done) {
+        return;
+    }
+    if (has_server_role()) {
+        if (!link->hello_heard) {
+            return;
+        }
+        if (get_unique_id() != SERVER_PEER) {
+            auth_complete_link(p_peer);
+            return;
+        }
+        if (!link->join_received || link->joining) {
+            return;
+        }
+        link->joining = true;
+        const PackedByteArray join = link->join;
+        session_take_join(join, p_peer);
+        return;
+    }
+    if (p_peer != SERVER_PEER && !join_roster.has_accepted(p_peer)) {
+        return;
+    }
+    if (p_peer != SERVER_PEER) {
+        auth_complete_link(p_peer);
+        return;
+    }
+    if (!link->hello_heard || (link->challenged && !link->proven)
+        || link->join_sent) {
+        return;
+    }
+    link->join_sent = true;
+    JoinRequest request;
+    if (prepared_join.has_value()) {
+        request = *prepared_join;
+        prepared_join.reset();
+    }
+    session_submit_request(request);
+    connection_emit_progressed(
+        String("Waiting for the server to admit the player."),
+        -1.0
+    );
+}
+
+Error NetwMultiplayer::auth_complete_link(int64_t p_peer) {
+    LinkHandshake &link = link_handshakes[p_peer];
+    if (link.completed) {
+        return OK;
+    }
+    link.completed = true;
+    if (inner.is_null()) {
+        return ERR_UNCONFIGURED;
+    }
+    const Error completed = inner->complete_auth(int32_t(p_peer));
     if (completed != OK) {
         NETW_ERROR(
             sys::SESSION,
@@ -2899,20 +3147,201 @@ void NetwMultiplayer::auth_send_hello(int64_t p_peer) {
         );
         disconnect_peer(p_peer);
     }
-}
-
-Error NetwMultiplayer::auth_complete_link(int64_t p_peer) {
-    LinkHandshake &link = link_handshakes[p_peer];
-    if (link.completed) {
-        return OK;
-    }
-    link.completed = true;
-    return complete_auth(p_peer);
+    return completed;
 }
 
 void NetwMultiplayer::auth_forget_link(int64_t p_peer) {
     link_handshakes.erase(p_peer);
     pending_admissions.erase(p_peer);
+}
+
+NetwMultiplayer::LinkHandshake *NetwMultiplayer::auth_joining_link(
+    int64_t p_peer
+) {
+    LinkHandshake *link = link_handshakes.getptr(p_peer);
+    return link != nullptr && link->joining && !link->completed ? link
+                                                                : nullptr;
+}
+
+void NetwMultiplayer::auth_receive_game(
+    int64_t p_peer,
+    const PackedByteArray &p_data
+) {
+    if (!auth_app_callback.is_valid()) {
+        NETW_WARN(
+            sys::SESSION,
+            "Peer %d sent authentication for a NetwMultiplayer.auth_callback "
+            "this peer does not set, so it was disconnected. Set the same "
+            "auth_callback on both peers.",
+            int(p_peer)
+        );
+        disconnect_peer(p_peer);
+        return;
+    }
+    static const GameCall AUTH_CALLBACK = {
+        sys::SESSION,
+        "NetwMultiplayer.auth_callback",
+        "func(peer_id: int, data: PackedByteArray)",
+        2
+    };
+    Array args;
+    args.push_back(p_peer);
+    args.push_back(auth::payload_of(p_data));
+    game_call(auth_app_callback, args, AUTH_CALLBACK);
+}
+
+void NetwMultiplayer::auth_receive_join(
+    int64_t p_peer,
+    const PackedByteArray &p_data
+) {
+    LinkHandshake *link = link_handshakes.getptr(p_peer);
+    if (!has_server_role() || get_unique_id() != SERVER_PEER || link == nullptr
+        || !link->hello_heard) {
+        NETW_WARN(
+            sys::SESSION,
+            "Peer %d sent a join before its hello, so it was disconnected. "
+            "Run the same Networked version on both peers.",
+            int(p_peer)
+        );
+        disconnect_peer(p_peer);
+        return;
+    }
+    if (link->join_received) {
+        return;
+    }
+    link->join_received = true;
+    link->join = auth::payload_of(p_data);
+    auth_advance(p_peer);
+}
+
+void NetwMultiplayer::auth_receive_answer(
+    int64_t p_peer,
+    const PackedByteArray &p_data
+) {
+    LinkHandshake *link = link_handshakes.getptr(p_peer);
+    if (link == nullptr || link->completed) {
+        return;
+    }
+    const auth::Answer answer = auth::decode_answer(p_data);
+    if (has_server_role()) {
+        if (answer.ok && answer.kind == auth::AnswerKind::CONFIRMED
+            && link->admitted.has_value()) {
+            auth_complete_link(p_peer);
+        }
+        return;
+    }
+    if (p_peer != SERVER_PEER
+        || (answer.ok && answer.kind == auth::AnswerKind::CONFIRMED)
+        || (answer.ok && answer.kind == auth::AnswerKind::ADMITTED
+            && !link->join_sent)) {
+        return;
+    }
+    if (!answer.ok) {
+        NETW_WARN(
+            sys::SESSION,
+            "The server's answer to the join could not be read, so the "
+            "connection was closed. Run the same Networked version on both "
+            "peers."
+        );
+        auth_refused_locally(
+            ERR_UNCONFIGURED,
+            "The server's answer could not be read. Run the same build of "
+            "the game on both computers."
+        );
+        return;
+    }
+    if (answer.kind == auth::AnswerKind::ADMITTED) {
+        auth_admitted_roster = answer.payload;
+        auth_send_raw(p_peer, auth::encode_confirmed());
+        auth_complete_link(p_peer);
+        return;
+    }
+    link->refused = true;
+    auth_refused_locally(Error(answer.code), answer.reason);
+}
+
+bool NetwMultiplayer::auth_refuse(
+    int64_t p_peer,
+    Error p_code,
+    const String &p_reason
+) {
+    LinkHandshake *link = link_handshakes.getptr(p_peer);
+    if (link == nullptr || link->completed || !link->hello_heard
+        || p_peer == get_unique_id()) {
+        return false;
+    }
+    if (link->refused) {
+        return true;
+    }
+    link->refused = true;
+    link->refused_polls = 0;
+    link->join = PackedByteArray();
+    pending_admissions.erase(p_peer);
+    auth_send_raw(p_peer, auth::encode_refused(int64_t(p_code), p_reason));
+    return true;
+}
+
+void NetwMultiplayer::auth_poll_refused() {
+    if (!has_server_role()) {
+        return;
+    }
+    const int64_t now = int64_t(Time::get_singleton()->get_ticks_msec());
+    LocalVector<int64_t> due;
+    LocalVector<int64_t> remembered;
+    LocalVector<int64_t> expired;
+    for (KeyValue<int64_t, LinkHandshake> &entry : link_handshakes) {
+        LinkHandshake &link = entry.value;
+        if (!link.refused) {
+            continue;
+        }
+        if (link.refused_polls < POLLS_BEFORE_TURNED_AWAY_PEER_DROPS) {
+            link.refused_polls += 1;
+            if (link.refused_polls == POLLS_BEFORE_TURNED_AWAY_PEER_DROPS) {
+                (link.deadline > now ? remembered : due).push_back(entry.key);
+            }
+            continue;
+        }
+        if (link.deadline <= now) {
+            expired.push_back(entry.key);
+        }
+    }
+    for (const int64_t peer : due) {
+        link_handshakes.erase(peer);
+        disconnect_peer(peer);
+    }
+    for (const int64_t peer : remembered) {
+        if (effective_peer.is_valid()) {
+            effective_peer->disconnect_peer(int32_t(peer));
+        }
+    }
+    for (const int64_t peer : expired) {
+        const bool pending = get_authenticating_peers().has(int32_t(peer));
+        relay_auth_failed(peer);
+        if (pending) {
+            disconnect_peer(peer);
+        }
+    }
+}
+
+void NetwMultiplayer::auth_refused_locally(
+    Error p_code,
+    const String &p_reason
+) {
+    connect_core.on_join_refused(p_code, p_reason);
+    session_report_join_failure(p_code, p_reason);
+    callable_mp(this, &NetwMultiplayer::auth_close_refused_peer)
+        .call_deferred();
+}
+
+void NetwMultiplayer::auth_close_refused_peer() {
+    if (session_get_state() != SESSION_STATE_CONNECTING) {
+        return;
+    }
+    const Ref<MultiplayerPeer> refused = assigned_peer;
+    NETW_API_VIRTUAL(set_multiplayer_peer)(Ref<MultiplayerPeer>());
+    if (refused.is_valid()) {
+        refused->close();
+    }
 }
 
 #if defined(NETW_TESTS)
@@ -2960,19 +3389,49 @@ void NetwMultiplayer::auth_receive_hello(
                                                           : "framing"
             );
         }
+        if (decoded.refusal == auth::Refusal::FRAMING) {
+            disconnect_peer(p_peer);
+            return;
+        }
+        const String outdated = decoded.refusal == auth::Refusal::APP
+            ? "The server runs another build of this game. Update the game "
+              "on both computers."
+            : "The server runs another version of Networked. Update the "
+              "game on both computers.";
+        if (!has_server_role() && p_peer == SERVER_PEER) {
+            session_fail_own_join(p_peer, ERR_UNCONFIGURED, outdated);
+            return;
+        }
+        if (has_server_role()) {
+            link_handshakes[p_peer].hello_heard = true;
+            if (auth_refuse(p_peer, ERR_UNCONFIGURED, outdated)) {
+                return;
+            }
+        }
         disconnect_peer(p_peer);
         return;
     }
+    LinkHandshake &heard = link_handshakes[p_peer];
+    if (heard.completed || (heard.hello_heard && !has_server_role())) {
+        return;
+    }
+    heard.hello_heard = true;
+    const int64_t now = int64_t(Time::get_singleton()->get_ticks_msec());
     if (!has_server_role()) {
+        if (p_peer == SERVER_PEER) {
+            heard.deadline
+                = decoded.deadline_msec > 0 ? now + decoded.deadline_msec : 0;
+        }
         if (p_peer != SERVER_PEER
             || (decoded.flags & auth::HELLO_PROOF_CHALLENGE) == 0) {
-            auth_complete_link(p_peer);
+            auth_advance(p_peer);
             return;
         }
         if (p_data.size() != auth::HELLO_HEADER_LEN + auth::CHALLENGE_LENGTH) {
             disconnect_peer(p_peer);
             return;
         }
+        heard.challenged = true;
         session_request_proof(
             p_peer,
             String::utf8(
@@ -2983,32 +3442,52 @@ void NetwMultiplayer::auth_receive_hello(
         );
         return;
     }
-    const bool required = session_requires_proof();
-    if (required || (decoded.flags & auth::HELLO_PROOF_CAPABLE) != 0) {
-        PackedByteArray reply = auth::encode_client_hello(
-            uint64_t(auth_app_tag),
-            required ? auth::HELLO_PROOF_CHALLENGE : 0
+    const bool game_auth = (decoded.flags & auth::HELLO_GAME_AUTH) != 0;
+    if (game_auth != auth_app_callback.is_valid()) {
+        const String unmatched = game_auth
+            ? "The joining peer sets NetwMultiplayer.auth_callback and this "
+              "server does not. Set the same auth_callback on both peers."
+            : "This server sets NetwMultiplayer.auth_callback and the joining "
+              "peer does not. Set the same auth_callback on both peers.";
+        NETW_WARN(
+            sys::SESSION,
+            "Peer %d was refused. %s",
+            int(p_peer),
+            unmatched
         );
-        if (required) {
-            LinkHandshake &link = link_handshakes[p_peer];
-            if (link.challenge.is_empty()) {
-                link.challenge = session_mint_challenge();
-            }
-            if (link.challenge.is_empty()) {
-                disconnect_peer(p_peer);
-                return;
-            }
-            const CharString text = link.challenge.utf8();
-            for (int at = 0; at < text.length(); ++at) {
-                reply.push_back(uint8_t(text[at]));
-            }
+        session_refuse(p_peer, unmatched);
+        if (!auth_refuse(p_peer, ERR_UNCONFIGURED, unmatched)) {
+            disconnect_peer(p_peer);
         }
-        if (send_auth(p_peer, reply) != OK) {
+        return;
+    }
+    const bool required = session_requires_proof();
+    int flags = required ? auth::HELLO_PROOF_CHALLENGE : 0;
+    if (auth_app_callback.is_valid()) {
+        flags |= auth::HELLO_GAME_AUTH;
+    }
+    const int64_t left
+        = heard.deadline > 0 ? MAX(heard.deadline - now, int64_t(1)) : 0;
+    PackedByteArray reply
+        = auth::encode_client_hello(uint64_t(auth_app_tag), flags, left);
+    if (required) {
+        if (heard.challenge.is_empty()) {
+            heard.challenge = session_mint_challenge();
+        }
+        if (heard.challenge.is_empty()) {
             disconnect_peer(p_peer);
             return;
         }
+        const CharString text = heard.challenge.utf8();
+        for (int at = 0; at < text.length(); ++at) {
+            reply.push_back(uint8_t(text[at]));
+        }
     }
-    auth_complete_link(p_peer);
+    if (auth_send_raw(p_peer, reply) != OK) {
+        disconnect_peer(p_peer);
+        return;
+    }
+    auth_advance(p_peer);
 }
 
 session_decl::Book &NetwMultiplayer::declaration_book() {
@@ -3068,7 +3547,7 @@ void NetwMultiplayer::session_answer_probe(int64_t p_peer) {
             probe_guard.window_count(),
             probe_guard.active_count()
         );
-        send_auth(
+        auth_send_raw(
             p_peer,
             auth::encode_probe_reply(
                 int(auth::ProbeStatus::BUSY),
@@ -3079,7 +3558,7 @@ void NetwMultiplayer::session_answer_probe(int64_t p_peer) {
     }
     bool answered = false;
     const PackedByteArray payload = probe_reply_payload(answered);
-    send_auth(
+    auth_send_raw(
         p_peer,
         auth::encode_probe_reply(
             int(answered ? auth::ProbeStatus::OK : auth::ProbeStatus::ERROR),
@@ -3534,6 +4013,11 @@ Error NetwMultiplayer::NETW_API_VIRTUAL(poll)() {
     session_poll_shutdown();
     session_poll_server_shutdown();
     session_poll_turned_away();
+    auth_poll_refused();
+    if (schema_leave_pending) {
+        schema_leave_pending = false;
+        session_close_peer();
+    }
     SceneLoads::shared().poll(engine->get_process_frames());
     if (spawn::Pipeline *spawning = spawn_plane()) {
         spawning->retry_build_parked();
@@ -4928,11 +5412,11 @@ void NetwMultiplayer::session_set_inner(const Ref<SceneMultiplayer> &p_inner) {
     relay_from(inner.ptr(), SIG_SERVER_DISCONNECTED, 0);
     inner->connect(
         SIG_PEER_AUTHENTICATING,
-        callable_mp(this, &NetwMultiplayer::auth_relay_authenticating)
+        callable_mp(this, &NetwMultiplayer::auth_send_hello)
     );
     inner->connect(
         SIG_PEER_AUTHENTICATING,
-        callable_mp(this, &NetwMultiplayer::auth_send_hello)
+        callable_mp(this, &NetwMultiplayer::auth_relay_authenticating)
     );
     inner->connect(
         SIG_PEER_AUTHENTICATION_FAILED,
@@ -5166,6 +5650,13 @@ void NetwMultiplayer::session_encode_join_args(JoinRequest &r_request) {
     const JoinPlan plan = session_resolve_join();
     const Callable handler = plan.handler;
     const Array quantizers = plan.quantizers;
+    r_request.arg_types = PackedByteArray();
+    const int typed = MIN(r_request.arg_values.size(), 255);
+    for (int at = 0; at < typed; ++at) {
+        r_request.arg_types.push_back(
+            uint8_t(r_request.arg_values[at].get_type())
+        );
+    }
     if (r_request.arg_values.is_empty() || !plan.available
         || !handler.is_valid()) {
         r_request.arg_bytes = PackedByteArray();
@@ -5224,6 +5715,52 @@ bool NetwMultiplayer::session_decode_join_args(JoinRequest &r_request) {
     }
     r_request.arg_values = values;
     return true;
+}
+
+String NetwMultiplayer::session_join_args_refusal(
+    const JoinRequest &p_request
+) {
+    const PackedByteArray &sent = p_request.arg_types;
+    const JoinPlan plan = session_resolve_join();
+    if (!plan.available || !plan.handler.is_valid()) {
+        return vformat(
+            "This server declares no join handler, and the join carried %d "
+            "arguments. Declare the same Netw.configure_join on both peers.",
+            sent.size()
+        );
+    }
+    const Array schema = session_get_join_schema();
+    if (sent.size() != schema.size()) {
+        return vformat(
+            "The join handler takes %d arguments, and the join carried %d. "
+            "Pass %d arguments to Netw.prepare_join.",
+            schema.size(),
+            sent.size(),
+            schema.size()
+        );
+    }
+    for (int at = 0; at < schema.size(); ++at) {
+        const Dictionary entry = schema[at];
+        const Variant::Type expected = Variant::Type(int(entry["type"]));
+        const Variant::Type carried = Variant::Type(int(sent[at]));
+        if (expected == Variant::NIL || expected == carried) {
+            continue;
+        }
+        const String wanted = Variant::get_type_name(expected);
+        return vformat(
+            "Join argument %d '%s' must be %s, and the join carried %s. Pass "
+            "%s to Netw.prepare_join.",
+            at,
+            String(entry["name"]),
+            wanted,
+            Variant::get_type_name(carried),
+            wanted
+        );
+    }
+    return String(
+        "The join arguments are encoded differently on this server. Declare "
+        "the same Netw.configure_join on both peers."
+    );
 }
 
 bool NetwMultiplayer::session_resolve_inbound_join(
@@ -5292,8 +5829,9 @@ void NetwMultiplayer::session_submit_request(const JoinRequest &p_request) {
     if (session_has_proof(proven)) {
         sending.proof_bytes = gd::var_to_bytes(link_handshakes[proven].proofs);
         if (sending.proof_bytes.size() > 16383) {
-            session_report_join_failure(
-                ERR_INVALID_DATA,
+            session_fail_own_join(
+                proven,
+                ERR_UNCONFIGURED,
                 "The admission proof exceeds 16383 bytes."
             );
             return;
@@ -5302,12 +5840,16 @@ void NetwMultiplayer::session_submit_request(const JoinRequest &p_request) {
     session_encode_join_args(sending);
     sending.app_tag = auth_app_tag;
     sending.wire_identity = SessionCore::compute_wire_identity();
-    sending.schema_identity = session_schema_identity();
     submitted_join = p_request;
     join_awaiting_admission = true;
     notify(SESSION_JOIN_SUBMITTED, sending.username, sending.arg_values);
     if (is_host()) {
         session_receive_join(sending.serialize(), get_unique_id());
+        return;
+    }
+    const LinkHandshake *link = link_handshakes.getptr(SERVER_PEER);
+    if (link != nullptr && link->join_sent && !link->completed) {
+        auth_send_raw(SERVER_PEER, auth::encode_join(sending.serialize()));
         return;
     }
     send_to(

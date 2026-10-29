@@ -320,11 +320,6 @@ SyncPipeline *NetwMultiplayer::sync_pipeline() const {
     return plane != nullptr ? plane->get_sync_pipeline() : nullptr;
 }
 
-int64_t NetwMultiplayer::session_schema_identity() const {
-    const SyncPipeline *pipeline = sync_pipeline();
-    return pipeline != nullptr ? pipeline->sealed_schema_identity() : 0;
-}
-
 void NetwMultiplayer::sync_pipeline_on_entity_live(
     int64_t p_route,
     const Ref<NetwEntity> &p_entity

@@ -71,7 +71,6 @@ struct Stand {
         }
         rig.declare_world(netw_test::WorldDecl().clocked(15, 2));
         rig.join(-1, StringName("host"));
-        rig.join(0, StringName("guest"));
         rig.pump(6);
         NetwMultiplayer *server = rig.server();
         Array args;

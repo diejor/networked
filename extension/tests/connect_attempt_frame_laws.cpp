@@ -55,7 +55,6 @@ struct SideEvidence {
 struct AttemptEvidence {
     bool driven = false;
     int port = 0;
-    int64_t auth_failures = 0;
     int64_t tag_refusals = 0;
     SideEvidence sides[SIDE_COUNT];
 };
@@ -342,9 +341,6 @@ public:
                 close(host);
                 hosting.unref();
                 netw_test::FaultLog::detach(diagnostics);
-                evidence.auth_failures = diagnostics->warning_count_containing(
-                    "failed authentication and was refused"
-                );
                 evidence.tag_refusals = diagnostics->warning_count_containing(
                     "Set the same tag on both"
                 );
@@ -414,16 +410,15 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Connect][Frame] a join the server refuses during "
-    "authentication fails once with ERR_CONNECTION_ERROR and leaves the "
+    "authentication fails once with ERR_UNCONFIGURED and leaves the "
     "session offline rather than connecting forever"
 ) {
     const AttemptEvidence &evidence = attempt_evidence();
     REQUIRE(evidence.driven);
-    NETW_CHECK_EQ(evidence.auth_failures, 2);
     NETW_CHECK_EQ(evidence.tag_refusals, 1);
     const SideEvidence &side = evidence.sides[SIDE_REFUSED];
     NETW_CHECK_EQ(side.failed, 1);
-    NETW_CHECK_EQ(side.failed_error, int64_t(ERR_CONNECTION_ERROR));
+    NETW_CHECK_EQ(side.failed_error, int64_t(ERR_UNCONFIGURED));
     NETW_CHECK_EQ(
         side.end_session_state,
         int(netw::NetwMultiplayer::SESSION_STATE_OFFLINE)

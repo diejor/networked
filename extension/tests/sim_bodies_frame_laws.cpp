@@ -350,7 +350,6 @@ class BodiesScenario final : public netw_test::FrameScenario {
         stand->mount();
         Node *arena = stand->arena();
         stand->arm(TICKRATE, DISPLAY_OFFSET);
-        stand->session(0)->session_submit_join(StringName("first"), Array());
         stand->pump(4);
         for (int kind = 0; kind < KINDS; ++kind) {
             if (!seat(kind, arena)) {

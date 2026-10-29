@@ -4,6 +4,7 @@
 
 #if defined(NETW_TIER_HOSTED)
 
+#include "support/netw_call_log.h"
 #include "support/stock_stand.h"
 #include "support/value_flow_stand.h"
 
@@ -14,6 +15,7 @@
 #include "netw/api/netw_multiplayer.hpp"
 #include "netw/api/property_config.hpp"
 #include "netw/api/scene.hpp"
+#include "netw/api/session.hpp"
 #include "netw/script/model.hpp"
 
 #include <godot_cpp/classes/node2d.hpp>
@@ -498,6 +500,14 @@ func _init() -> void:
 	Netw.configure_property(self, &"visible").state()
 )";
 
+constexpr const char *DRIFTED_CRATE = R"(extends Node2D
+
+func _init() -> void:
+	Netw.configure_entity(self).name = &"crate"
+	Netw.configure_property(self, &"visible").state()
+	Netw.configure_property(self, &"position").state()
+)";
+
 struct PlacedCrate {
     const char *label;
     const char *source;
@@ -600,7 +610,6 @@ struct UnconnectedPair {
         SceneTree *tree = netw::gd::scene_tree();
         for (int at = 0; at < count; ++at) {
             apis[at] = netw::NetwMultiplayer::create(Ref<Script>());
-            apis[at]->session_default_join_held = true;
             apis[at]->session_get_inner()->set_root_path(NodePath("/"));
             Ref<netw::NetwClockConfig> clock;
             clock.instantiate();
@@ -657,10 +666,10 @@ struct UnconnectedPair {
         pump(4);
     }
 
-    Node *place(int p_at) {
+    Node *place(int p_at, const char *p_source = NAMED_CRATE) {
         Node2D *level = memnew(Node2D);
         level->set_name("Level");
-        Node *crate = scripted_root(NAMED_CRATE, "Crate");
+        Node *crate = scripted_root(p_source, "Crate");
         level->add_child(crate);
         crate->set_owner(level);
         mounts[p_at]->add_child(level);
@@ -775,6 +784,33 @@ TEST_CASE(
     NETW_CHECK_EQ(seat_route, host_route);
     CHECK(seat_name == StringName("crate"));
     CHECK_FALSE(Object::cast_to<CanvasItem>(joined)->is_visible());
+}
+
+TEST_CASE(
+    "[Networked][Spawn][SceneTree] NA6b a client whose placed copy "
+    "synchronizes other properties than the server's leaves the session "
+    "kicked, with a reason naming the node"
+) {
+    netw_test::FaultWatch faults;
+    faults.expect_error("*'Crate'*Run the same build on both peers.*", 1);
+    UnconnectedPair pair;
+    pair.place(0);
+    pair.pump(2);
+    pair.connect(0);
+    pair.connect(1);
+    const netw_test::CallLog heard;
+    pair.apis[1]->get_session()->connect(
+        StringName("exiting"),
+        heard.callable("exiting")
+    );
+    pair.place(1, DRIFTED_CRATE);
+    pair.pump(12);
+
+    NETW_REQUIRE_EQ(heard.count(StringName("exiting")), 1);
+    const Array exiting = heard.args(StringName("exiting"));
+    NETW_CHECK_EQ(int(exiting[0]), int(netw::NetwSession::KICKED));
+    CHECK(String(exiting[1]).contains("'Crate'"));
+    CHECK_FALSE(pair.apis[1]->is_online());
 }
 
 TEST_CASE(

@@ -17,7 +17,7 @@
 		        request.add_account("club:" + request.username, request.username)
 		    return OK
 		[/codeblock]
-		Proving and verifying count against [member NetwMultiplayer.auth_timeout]. [NetwIdToken] is a ready provider for signed tokens.
+		Proving and verifying count against the join deadline of [method NetwAdmissionConfig.timeout]. [NetwIdToken] is a ready provider for signed tokens.
 	</description>
 	<tutorials>
 	</tutorials>

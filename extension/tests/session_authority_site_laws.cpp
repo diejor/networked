@@ -105,8 +105,8 @@ TEST_CASE(
     mesh.wire(1, 9);
     mesh.pump(4);
     REQUIRE(mesh.join(1, StringName("one")).is_valid());
-    REQUIRE(mesh.join(7, StringName("seven")).is_valid());
-    REQUIRE(mesh.join(9, StringName("nine")).is_valid());
+    REQUIRE(mesh.seated(7).is_valid());
+    REQUIRE(mesh.seated(9).is_valid());
 
     const SiteReading seven = read_sites(mesh, 7, 1);
     CHECK_FALSE(seven.authority);

@@ -205,7 +205,7 @@ Declares who may join the session.
     func admit(request: NetwJoinRequest) -> Error:
         return OK if request.account else ERR_UNAUTHORIZED
 
-\ A peer joins when ``handler`` returns :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>`. Each :ref:`NetwAccountProvider<class_NetwAccountProvider>` passed to :ref:`NetwAdmissionConfig.accept()<class_NetwAdmissionConfig_method_accept>` proves its account before ``handler`` runs, and both may ``await`` within :ref:`NetwMultiplayer.auth_timeout<class_NetwMultiplayer_property_auth_timeout>`.
+\ A joining client is not connected until ``handler`` returns :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>`. :ref:`NetwAdmissionConfig<class_NetwAdmissionConfig>` shows a lobby that admits players only while it is open.
 
 .. rst-class:: classref-item-separator
 

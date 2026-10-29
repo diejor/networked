@@ -152,7 +152,6 @@ class LateSpawnScenario final : public netw_test::FrameScenario {
         stand->mount();
         host_arena = stand->arena();
         stand->arm(TICKRATE);
-        stand->session(A)->session_submit_join(StringName("a"), Array());
         stand->pump(4);
         early = spawn("Early");
         return early > 0;

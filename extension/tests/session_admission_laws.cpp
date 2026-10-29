@@ -246,7 +246,6 @@ void join_as(
     claim.username = StringName(p_username);
     claim.app_tag = p_api->auth_app_tag_of();
     claim.wire_identity = netw::SessionCore::compute_wire_identity();
-    claim.schema_identity = p_api->session_schema_identity();
     p_api->session_receive_join(claim.serialize(), p_peer);
 }
 
@@ -260,7 +259,6 @@ void join_proving(
     claim.username = StringName("ana");
     claim.app_tag = p_api->auth_app_tag_of();
     claim.wire_identity = netw::SessionCore::compute_wire_identity();
-    claim.schema_identity = p_api->session_schema_identity();
     claim.proof_bytes = netw::gd::var_to_bytes(p_proofs);
     p_api->session_receive_join(claim.serialize(), p_peer);
 }
@@ -380,7 +378,8 @@ TEST_CASE(
     netw_test::FaultWatch expected_faults;
     expected_faults.expect_error(
         "[error][session] The host could not join its own session, so it has "
-        "no NetwPlayer. This server did not admit the join (Unauthorized).",
+        "no NetwPlayer. The server did not let this player join "
+        "(Unauthorized).",
         1
     );
 
@@ -1383,15 +1382,15 @@ NETW_FRAME_SCENARIO(
 );
 
 TEST_CASE(
-    "[Networked][Session][Frame] a server that drops a client waiting on "
-    "its proof fails the join as a closed connection, not an unreachable "
-    "server"
+    "[Networked][Session][Frame] a client still proving when the join "
+    "deadline passes fails the join with ERR_TIMEOUT and a reason, not a "
+    "closed connection"
 ) {
     const ProofEvidence &evidence = abandoned_proof_evidence();
     REQUIRE(evidence.driven);
     CHECK(evidence.waited_for_proof);
-    NETW_CHECK_EQ(evidence.failure, int(ERR_CONNECTION_ERROR));
-    CHECK(evidence.failure_reason.contains("auth_timeout"));
+    NETW_CHECK_EQ(evidence.failure, int(ERR_TIMEOUT));
+    CHECK(evidence.failure_reason.contains("time"));
     NETW_CHECK_EQ(evidence.errors, 0);
 }
 

@@ -89,7 +89,6 @@ TEST_CASE(
     LoopbackRig rig(1);
     rig.mount();
     arm_rewind(rig);
-    rig.join(0, StringName("alpha"));
 
     const Axes read = axes_on_the_authority(
         rig,

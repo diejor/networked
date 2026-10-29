@@ -36,7 +36,7 @@ Accept the same providers in the same order on every peer with :ref:`NetwAdmissi
             request.add_account("club:" + request.username, request.username)
         return OK
 
-\ Proving and verifying count against :ref:`NetwMultiplayer.auth_timeout<class_NetwMultiplayer_property_auth_timeout>`. :ref:`NetwIdToken<class_NetwIdToken>` is a ready provider for signed tokens.
+\ Proving and verifying count against the join deadline of :ref:`NetwAdmissionConfig.timeout()<class_NetwAdmissionConfig_method_timeout>`. :ref:`NetwIdToken<class_NetwIdToken>` is a ready provider for signed tokens.
 
 .. rst-class:: classref-reftable-group
 

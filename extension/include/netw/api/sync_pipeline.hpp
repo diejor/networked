@@ -97,8 +97,6 @@ private:
     int64_t writes_refused = 0;
     godot::HashMap<uint64_t, int64_t> write_refusals_by_peer_member;
 
-    godot::HashMap<int64_t, bool> schemas_sealed_before_open;
-
     godot::PackedByteArray stage_bytes;
     godot::Array stage_values;
     godot::PackedByteArray stage_payload;
@@ -257,8 +255,6 @@ public:
         godot::Node *p_node,
         int64_t p_record
     );
-    void note_schema_seal(const repl::PropertySet *p_set);
-    int64_t sealed_schema_identity() const;
     bool owes_rows() const {
         return !bindings.is_empty();
     }

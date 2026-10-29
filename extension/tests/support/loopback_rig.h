@@ -59,21 +59,24 @@ class LoopbackRig {
     godot::Vector<godot::HashMap<godot::StringName, godot::RID>>
         client_state_sets;
     double tick_period_ms = 1000.0 / 30.0;
-    bool joins_by_default = false;
     void (*adopt)(
         netw::NetwMultiplayer *,
         const godot::Ref<netw::LocalMultiplayerPeer> &
     ) = nullptr;
 
     godot::Ref<netw::NetwMultiplayer> make_api(
-        const godot::Ref<netw::LocalMultiplayerPeer> &p_peer
+        const godot::Ref<netw::LocalMultiplayerPeer> &p_peer,
+        const godot::StringName &p_username = godot::StringName(),
+        const godot::Array &p_args = godot::Array()
     ) const {
         godot::Ref<netw::NetwMultiplayer> api
             = netw::NetwMultiplayer::create(godot::Ref<godot::Script>());
         REQUIRE_MESSAGE(api.is_valid(), "the session did not instantiate");
         if (api.is_valid()) {
-            api->session_default_join_held = !joins_by_default;
             api->session_get_inner()->set_root_path(godot::NodePath("/"));
+            if (!godot::String(p_username).is_empty()) {
+                api->session_prepare_join(p_username, p_args);
+            }
             if (adopt != nullptr) {
                 adopt(api.ptr(), p_peer);
             } else {
@@ -389,13 +392,12 @@ public:
     explicit LoopbackRig(
         int p_clients = 1,
         bool p_migrates = false,
-        bool p_joins_by_default = false,
         void (*p_adopt)(
             netw::NetwMultiplayer *,
             const godot::Ref<netw::LocalMultiplayerPeer> &
         ) = nullptr
     )
-        : joins_by_default(p_joins_by_default), adopt(p_adopt) {
+        : adopt(p_adopt) {
         link.instantiate();
         if (p_migrates) {
             link->enable_server_transfer();
@@ -404,7 +406,7 @@ public:
         for (int index = 0; index < p_clients; ++index) {
             add_client();
         }
-        pump();
+        pump(4);
     }
 
     ~LoopbackRig() {
@@ -718,14 +720,29 @@ public:
         return client_apis.size();
     }
 
-    int add_client() {
+    int add_client(
+        const godot::StringName &p_username = godot::StringName(),
+        const godot::Array &p_args = godot::Array()
+    ) {
         godot::Ref<netw::LocalMultiplayerPeer> peer
             = link->create_client_peer();
         client_peers.push_back(peer);
-        client_apis.push_back(make_api(peer));
+        client_apis.push_back(make_api(peer, p_username, p_args));
         client_declared.push_back({});
         client_state_sets.push_back({});
         return client_apis.size() - 1;
+    }
+
+    int arrive(
+        const godot::StringName &p_username,
+        const godot::Array &p_args = godot::Array()
+    ) {
+        const int made = add_client(p_username, p_args);
+        if (!mounts.is_empty()) {
+            mount_late(made, false);
+        }
+        pump(4);
+        return made;
     }
 
     void drop_client(int p_index, bool p_force = false) {
@@ -821,6 +838,11 @@ public:
     ) {
         netw::NetwMultiplayer *api
             = p_client < 0 ? shell() : shell_at(p_client);
+        REQUIRE_MESSAGE(
+            api->player_local().is_null(),
+            "this session joined when it connected, so name a client with "
+            "add_client or arrive"
+        );
         api->session_submit_join(p_username, p_args);
         pump(4);
         return godot::Object::cast_to<netw::NetwPlayer>(

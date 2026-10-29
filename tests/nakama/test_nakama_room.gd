@@ -137,6 +137,8 @@ func room_whole(group: Array) -> bool:
 			return false
 		if Netw.session(tree).players.size() != group.size():
 			return false
+		if tree.multiplayer.get_peers().size() != group.size() - 1:
+			return false
 	return true
 
 

@@ -39,26 +39,25 @@ TEST_CASE(
     "[Networked][Session] a host joins itself and is seated the same "
     "way a client is"
 ) {
-    LoopbackRig rig(1);
+    LoopbackRig rig(0);
     rig.pump(4);
 
     Ref<netw::NetwPlayer> seated = rig.join(-1, StringName("host"));
 
     CHECK(seated.is_valid());
     CHECK(player_of(rig.server(), 1).is_valid());
-    CHECK(rig.client(0)->player_local().is_null());
 }
 
 TEST_CASE(
     "[Networked][Session] every joined peer reaches every peer's "
     "roster"
 ) {
-    LoopbackRig rig(2);
+    LoopbackRig rig(0);
     rig.pump(4);
 
     rig.join(-1, StringName("host"));
-    rig.join(0, StringName("alice"));
-    rig.join(1, StringName("bob"));
+    rig.arrive(StringName("alice"));
+    rig.arrive(StringName("bob"));
     rig.pump(4);
 
     for (int at = -1; at < 2; ++at) {
@@ -73,10 +72,10 @@ TEST_CASE(
     "[Networked][Session] a joined peer's player carries the name "
     "its payload named"
 ) {
-    LoopbackRig rig(1);
-    rig.pump(4);
+    LoopbackRig rig(0);
+    const int at = rig.arrive(StringName("alice"));
 
-    Ref<netw::NetwPlayer> seated = rig.join(0, StringName("alice"));
+    const Ref<netw::NetwPlayer> seated = rig.client(at)->player_local();
 
     REQUIRE(seated.is_valid());
     CHECK(seated->get_username() == StringName("alice"));
@@ -129,12 +128,12 @@ TEST_CASE(
     "[Networked][Session] a client mirrors a scene without being "
     "admitted to it, and holds no seat there"
 ) {
-    LoopbackRig rig(1);
+    LoopbackRig rig(0);
     rig.declare_scene(StringName("Arena"));
     rig.pump(4);
     rig.enter_scene(StringName("Arena"));
     rig.join(-1, StringName("host"));
-    rig.join(0, StringName("alice"));
+    rig.arrive(StringName("alice"));
     rig.mirror_scene(0, StringName("Arena"));
     rig.pump(8);
 
@@ -162,12 +161,12 @@ TEST_CASE(
         1
     );
 
-    LoopbackRig rig(1);
+    LoopbackRig rig(0);
     rig.declare_scene(StringName("Arena"));
     rig.pump(4);
     rig.enter_scene(StringName("Arena"));
     rig.join(-1, StringName("host"));
-    rig.join(0, StringName("alice"));
+    rig.arrive(StringName("alice"));
 
     netw::NetwMultiplayer *api = rig.client(0);
     const RID invented = api->entity_create();
@@ -472,7 +471,7 @@ TEST_CASE(
 
     const netw::session::AcceptFrame bare
         = netw_test::accepted_row(core.ptr(), 11, StringName("ada"));
-    CHECK(core->session_preflight_join(bare, Array()));
+    CHECK(core->session_preflight_join(bare, netw::JoinRequest()));
     core->session_admit(bare);
     core->session_run_join_handler(bare, Array());
 
@@ -493,7 +492,9 @@ TEST_CASE(
 
         const netw::session::AcceptFrame starved
             = netw_test::accepted_row(core.ptr(), 12, StringName("grace"));
-        CHECK_FALSE(core->session_preflight_join(starved, Array()));
+        CHECK_FALSE(
+            core->session_preflight_join(starved, netw::JoinRequest())
+        );
 
         NETW_CHECK_EQ(int(handler->get(StringName("seated"))), 1);
         CHECK_FALSE(core->player_has(12));
@@ -518,7 +519,7 @@ TEST_CASE(
     const Ref<RefCounted> handler = shape_of(COUNTING_SEAT)->call("new");
     REQUIRE(handler.is_valid());
 
-    LoopbackRig rig(0, false, true);
+    LoopbackRig rig(0);
     rig.server()->session_set_join_override(
         Callable(handler.ptr(), StringName("seat")),
         Array()
@@ -554,7 +555,7 @@ TEST_CASE(
     const Ref<RefCounted> handler = shape_of(COUNTING_SEAT)->call("new");
     REQUIRE(handler.is_valid());
 
-    LoopbackRig rig(0, false, true);
+    LoopbackRig rig(0);
     rig.server()->session_set_join_override(
         Callable(handler.ptr(), StringName("seat_with")),
         Array()
@@ -567,7 +568,11 @@ TEST_CASE(
     );
     rig.pump(6);
 
-    NETW_CHECK_EQ(log.count("failed"), 1);
+    NETW_REQUIRE_EQ(log.count("failed"), 1);
+    const Array failed = log.args("failed");
+    NETW_CHECK_EQ(int(failed[0]), int(ERR_UNCONFIGURED));
+    CHECK(String(failed[1]).contains("takes 1 arguments"));
+    CHECK(String(failed[1]).contains("carried 0"));
     CHECK(rig.client(at)->player_local().is_null());
     CHECK(player_of(rig.server(), rig.peer_id(at)).is_null());
     NETW_CHECK_EQ(int(handler->get(StringName("seated"))), 0);
@@ -931,7 +936,7 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Session][Hosted] W0 a join whose build differs is refused by "
-    "the part that differs, and a schema is one of those parts"
+    "the part that differs"
 ) {
     Ref<NetwMultiplayer> core;
     core.instantiate();
@@ -943,7 +948,6 @@ TEST_CASE(
     agreeing.username = StringName("ada");
     agreeing.app_tag = core->auth_app_tag_of();
     agreeing.wire_identity = netw::SessionCore::compute_wire_identity();
-    agreeing.schema_identity = core->session_schema_identity();
     CHECK(core->session_identity_differs(agreeing) == nullptr);
 
     netw::JoinRequest other_app = agreeing;
@@ -954,19 +958,13 @@ TEST_CASE(
     other_wire.wire_identity += 1;
     CHECK(String(core->session_identity_differs(other_wire)) == String("wire"));
 
-    netw::JoinRequest other_schema = agreeing;
-    other_schema.schema_identity += 1;
-    CHECK(
-        String(core->session_identity_differs(other_schema)) == String("schema")
-    );
-
     core->embed_dispose();
 }
 
 TEST_CASE(
-    "[Networked][Session] a peer refused for another build or for a join "
-    "flood while it waits is told why and turned away, and a seated peer "
-    "that floods keeps its seat"
+    "[Networked][Session] a peer refused for another build is told why with "
+    "ERR_UNCONFIGURED, and a peer that floods joins has the extra ones "
+    "dropped without being refused, so a seated peer keeps its seat"
 ) {
     netw_test::FaultWatch expected_faults;
     expected_faults.expect_warning(
@@ -976,14 +974,9 @@ TEST_CASE(
         1
     );
     expected_faults.expect_warning(
-        "[warn][session] Peer * sent too many join requests, so it was "
-        "turned away.",
-        1
-    );
-    expected_faults.expect_warning(
         "[warn][session] Peer * sent too many join requests, so the extra "
         "ones were dropped.",
-        1
+        2
     );
 
     LoopbackRig rig(3);
@@ -995,22 +988,21 @@ TEST_CASE(
     const int seated = rig.peer_id(2);
     netw_test::Recorder stranger_heard(
         rig.client(0),
-        {StringName("peer_kicked")}
+        {StringName("session_join_failed")}
     );
     netw_test::Recorder waiting_heard(
         rig.client(1),
-        {StringName("peer_kicked")}
+        {StringName("session_join_failed")}
     );
     netw_test::Recorder seated_heard(
         rig.client(2),
-        {StringName("peer_kicked")}
+        {StringName("session_join_failed")}
     );
 
     netw::JoinRequest older;
     older.username = StringName("v10");
     older.app_tag = host->auth_app_tag_of();
     older.wire_identity = netw::SessionCore::compute_wire_identity() ^ 0xA5A5;
-    older.schema_identity = host->session_schema_identity();
     netw::JoinRequest current = older;
     current.username = StringName("v11");
     current.wire_identity = netw::SessionCore::compute_wire_identity();
@@ -1024,19 +1016,24 @@ TEST_CASE(
 
     host->session_receive_join(older.serialize(), stranger);
 
+    const Ref<netw::NetwPlayer> waiting_before = player_of(host, waiting);
     host->structure_halt_enter();
     for (int sent = 0; sent < 12; ++sent) {
         host->session_receive_join(current.serialize(), waiting);
     }
     rig.pump(4);
 
-    NETW_REQUIRE_EQ(stranger_heard.count(StringName("peer_kicked")), 1);
-    CHECK(String(stranger_heard.args(StringName("peer_kicked"))[0])
-              .contains("wire"));
-    NETW_CHECK_EQ(waiting_heard.count(StringName("peer_kicked")), 1);
-    NETW_CHECK_EQ(seated_heard.count(StringName("peer_kicked")), 0);
+    const StringName failed("session_join_failed");
+    NETW_REQUIRE_EQ(stranger_heard.count(failed), 1);
+    NETW_CHECK_EQ(
+        int64_t(stranger_heard.args(failed)[0]),
+        int64_t(ERR_UNCONFIGURED)
+    );
+    CHECK(String(stranger_heard.args(failed)[1]).contains("wire"));
+    NETW_CHECK_EQ(waiting_heard.count(failed), 0);
+    NETW_CHECK_EQ(seated_heard.count(failed), 0);
     CHECK(player_of(host, stranger).is_null());
-    CHECK(player_of(host, waiting).is_null());
+    CHECK(player_of(host, waiting) == waiting_before);
     CHECK(player_of(host, seated).is_valid());
 }
 

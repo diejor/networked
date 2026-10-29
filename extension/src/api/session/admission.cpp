@@ -84,12 +84,61 @@ NetwMultiplayer::Awaited *NetwMultiplayer::session_awaited_settle(
 
 void NetwMultiplayer::session_arm_deadline(
     Awaited &r_awaited,
-    uint64_t p_declaration
+    uint64_t p_declaration,
+    int64_t p_peer
 ) {
     r_awaited.declaration = p_declaration;
+    const LinkHandshake *link = link_handshakes.getptr(p_peer);
+    if (link != nullptr && !link->completed && link->deadline > 0) {
+        r_awaited.deadline = link->deadline;
+        return;
+    }
     const double timeout = get_auth_timeout();
     r_awaited.deadline
         = timeout > 0.0 ? now_msec() + int64_t(timeout * 1000.0) : 0;
+}
+
+double NetwMultiplayer::auth_link_seconds() {
+    if (!has_server_role() || get_unique_id() != SERVER_PEER) {
+        return auth_timeout_seconds;
+    }
+    const session_decl::Resolved declared
+        = declaration_book().resolve(this, session_decl::KIND_ADMISSION);
+    const Ref<NetwAdmissionConfig> config = declared.payload;
+    if (declared.state == session_decl::READY && config.is_valid()
+        && config->timeout_of() > 0.0) {
+        return config->timeout_of();
+    }
+    return auth_timeout_seconds;
+}
+
+void NetwMultiplayer::auth_poll_deadlines(int64_t p_now_msec) {
+    LocalVector<int64_t> expired;
+    for (const KeyValue<int64_t, LinkHandshake> &entry : link_handshakes) {
+        const LinkHandshake &link = entry.value;
+        if (!link.completed && !link.refused && link.deadline > 0
+            && link.deadline <= p_now_msec) {
+            expired.push_back(entry.key);
+        }
+    }
+    const String late = "The server did not admit the player in time. Raise "
+                        "NetwAdmissionConfig.timeout on the server if "
+                        "admission needs longer.";
+    for (const int64_t peer : expired) {
+        if (!has_server_role() && peer == SERVER_PEER) {
+            session_fail_own_join(peer, ERR_TIMEOUT, late);
+            continue;
+        }
+        if (has_server_role() && auth_refuse(peer, ERR_TIMEOUT, late)) {
+            session_refuse(peer, late);
+            continue;
+        }
+        link_handshakes.erase(peer);
+        disconnect_peer(peer);
+        if (has_server_role()) {
+            relay_auth_failed(peer);
+        }
+    }
 }
 
 void NetwMultiplayer::session_await(
@@ -208,14 +257,7 @@ void NetwMultiplayer::session_request_proof(
             : "The server asks for account proofs. Call "
               "NetwAdmissionConfig.accept with the same providers on both "
               "peers.";
-        session_report_host_refusal(p_peer, reason);
-        session_report_join_failure(
-            provable ? ERR_UNAVAILABLE : ERR_UNAUTHORIZED,
-            reason
-        );
-        if (p_peer != get_unique_id()) {
-            disconnect_peer(p_peer);
-        }
+        session_fail_own_join(p_peer, ERR_UNCONFIGURED, reason);
         return;
     }
     LinkHandshake &opening = link_handshakes[p_peer];
@@ -227,7 +269,7 @@ void NetwMultiplayer::session_request_proof(
     opening.bound_challenge
         = session_bind_challenge(p_challenge, p_peer, bound);
     opening.proofs = Array();
-    session_arm_deadline(opening.proof, declared.generation);
+    session_arm_deadline(opening.proof, declared.generation, p_peer);
     session_prove_next(p_peer);
 }
 
@@ -241,7 +283,7 @@ void NetwMultiplayer::session_prove_next(int64_t p_peer) {
     const Ref<NetwAdmissionConfig> config = declared.payload;
     if (declared.state != session_decl::READY || config.is_null()
         || declared.generation != link->proof.declaration) {
-        session_proof_failed(p_peer, ERR_UNAVAILABLE);
+        session_proof_failed(p_peer, ERR_UNCONFIGURED);
         return;
     }
     const int64_t next = link->proofs.size();
@@ -262,19 +304,35 @@ void NetwMultiplayer::session_prove_next(int64_t p_peer) {
     if (local_join.has_value()) {
         session_submit_request(*local_join);
     } else {
-        auth_complete_link(p_peer);
+        auth_advance(p_peer);
     }
 }
 
 void NetwMultiplayer::session_proof_failed(int64_t p_peer, Error p_error) {
-    const String reason = "The admission proof could not be made.";
-    session_report_host_refusal(p_peer, reason);
-    session_report_join_failure(p_error, reason);
-    if (p_peer != get_unique_id()) {
-        disconnect_peer(p_peer);
-    } else {
-        link_handshakes.erase(p_peer);
+    session_fail_own_join(
+        p_peer,
+        p_error,
+        "The admission proof could not be made. Sign in to the account "
+        "service this game uses, then join again."
+    );
+}
+
+void NetwMultiplayer::session_fail_own_join(
+    int64_t p_link,
+    Error p_error,
+    const String &p_reason
+) {
+    session_report_host_refusal(p_link, p_reason);
+    if (p_link == get_unique_id()) {
+        link_handshakes.erase(p_link);
+        session_report_join_failure(p_error, p_reason);
+        return;
     }
+    LinkHandshake *link = link_handshakes.getptr(p_link);
+    if (link != nullptr) {
+        link->refused = true;
+    }
+    auth_refused_locally(p_error, p_reason);
 }
 
 void NetwMultiplayer::session_report_host_refusal(
@@ -326,7 +384,7 @@ void NetwMultiplayer::session_start_admission(const JoinRequest &p_request) {
         );
         session_fail_join(
             peer,
-            ERR_UNAUTHORIZED,
+            ERR_UNCONFIGURED,
             "The admission handler is unavailable."
         );
         return;
@@ -343,7 +401,7 @@ void NetwMultiplayer::session_start_admission(const JoinRequest &p_request) {
         if (challenge.is_empty() || p_request.proof_bytes.is_empty()) {
             const String missing = "The required admission proof is missing.";
             session_report_host_refusal(peer, missing);
-            session_fail_join(peer, ERR_UNAUTHORIZED, missing);
+            session_fail_join(peer, ERR_UNCONFIGURED, missing);
             return;
         }
         const Variant decoded = gd::bytes_to_var(p_request.proof_bytes);
@@ -359,7 +417,7 @@ void NetwMultiplayer::session_start_admission(const JoinRequest &p_request) {
                 int64_t(proofs.size())
             );
             session_report_host_refusal(peer, mismatched);
-            session_fail_join(peer, ERR_UNAUTHORIZED, mismatched);
+            session_fail_join(peer, ERR_UNCONFIGURED, mismatched);
             return;
         }
     }
@@ -383,7 +441,11 @@ void NetwMultiplayer::session_start_admission(const JoinRequest &p_request) {
     opened.request = request;
     opened.proofs = proofs;
     pending_admissions.insert(peer, opened);
-    session_arm_deadline(pending_admissions[peer].verdict, declared.generation);
+    session_arm_deadline(
+        pending_admissions[peer].verdict,
+        declared.generation,
+        peer
+    );
     session_verify_next(peer);
 }
 
@@ -400,7 +462,7 @@ void NetwMultiplayer::session_verify_next(int64_t p_peer) {
         pending_admissions.erase(p_peer);
         const String changed = "The admission handler changed during the join.";
         session_report_host_refusal(p_peer, changed);
-        session_fail_join(p_peer, ERR_UNAVAILABLE, changed);
+        session_fail_join(p_peer, ERR_UNCONFIGURED, changed);
         return;
     }
     const Ref<NetwJoinRequest> request = pending->request;
@@ -448,7 +510,7 @@ void NetwMultiplayer::session_ask_admission(int64_t p_peer) {
     session_await(
         p_peer,
         false,
-        NetwPromise::rejected(ERR_INVALID_DATA, uncallable)
+        NetwPromise::rejected(ERR_UNCONFIGURED, uncallable)
     );
 }
 
@@ -472,7 +534,7 @@ void NetwMultiplayer::session_admission_settled(
         pending_admissions.erase(p_peer);
         const String changed = "The admission handler changed during the join.";
         session_report_host_refusal(p_peer, changed);
-        session_fail_join(p_peer, ERR_UNAVAILABLE, changed);
+        session_fail_join(p_peer, ERR_UNCONFIGURED, changed);
         return;
     }
     if (result->get_is_failed()) {
@@ -495,7 +557,7 @@ void NetwMultiplayer::session_admission_settled(
         pending_admissions.erase(p_peer);
         session_fail_join(
             p_peer,
-            ERR_INVALID_DATA,
+            ERR_UNCONFIGURED,
             provider ? "An account provider did not return an Error."
                      : "The admission handler did not return an Error."
         );
@@ -504,11 +566,17 @@ void NetwMultiplayer::session_admission_settled(
     const Error refusal = Error(int64_t(verdict));
     if (refusal != OK) {
         pending_admissions.erase(p_peer);
-        const String refused = vformat(
-            provider ? "An account provider refused the join (%s)."
-                     : "This server did not admit the join (%s).",
-            String(gd::error_name(refusal))
-        );
+        const String given
+            = provider ? String() : answered.request->reason_for(refusal);
+        const String refused = !given.is_empty()
+            ? given
+            : vformat(
+                  provider
+                      ? "The server could not confirm this player's account "
+                        "(%s)."
+                      : "The server did not let this player join (%s).",
+                  String(gd::error_name(refusal))
+              );
         session_report_host_refusal(p_peer, refused);
         session_fail_join(p_peer, refusal, refused);
         return;
@@ -544,14 +612,18 @@ void NetwMultiplayer::session_poll_admissions(int64_t p_now_msec) {
         }
     }
     for (const int64_t peer : expired) {
-        link_handshakes.erase(peer);
-        const String timed_out = "The admission proof timed out.";
-        session_report_host_refusal(peer, timed_out);
-        session_report_join_failure(ERR_TIMEOUT, timed_out);
-        if (peer != get_unique_id()) {
-            disconnect_peer(peer);
+        LinkHandshake *link = link_handshakes.getptr(peer);
+        if (link != nullptr) {
+            link->proof.deadline = 0;
         }
+        session_fail_own_join(
+            peer,
+            ERR_TIMEOUT,
+            "The admission proof timed out. Check that the account service "
+            "this game uses is running, then join again."
+        );
     }
+    auth_poll_deadlines(p_now_msec);
 }
 
 } // namespace netw

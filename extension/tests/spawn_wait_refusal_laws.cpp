@@ -174,7 +174,6 @@ TEST_CASE(
         Node *arena = stand.arena();
         REQUIRE(arena != nullptr);
         stand.arm(TICKRATE);
-        stand.session(A)->session_submit_join(StringName("a"), Array());
         stand.pump(4);
 
         NetwMultiplayer *server = stand.session(SERVER);

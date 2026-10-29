@@ -118,14 +118,19 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Session][Hosted] H3 a hello carrying this build's app tag "
-    "completes the link without recording a refusal"
+    "records no refusal, and the server keeps the link in auth until it has "
+    "admitted the join"
 ) {
     const netw_test::FaultWatch faults;
     PendingAuth stand;
     const Ref<NetwMultiplayer> session = stand.session;
+    session->session_set_desired_role(NetwMultiplayer::ROLE_LISTEN_SERVER);
+    session->session_peer_assigned(true, 1);
+    REQUIRE(session->is_host());
+
     session->auth_receive_hello(PEER, auth::encode_client_hello(APP_TAG, 0));
     check_text(String(session->session_refusal(PEER)), String());
-    CHECK(session->auth_link_is_completed(PEER));
+    CHECK_FALSE(session->auth_link_is_completed(PEER));
     NETW_CHECK_EQ(faults.errors(), 0);
 }
 
@@ -144,25 +149,25 @@ TEST_CASE(
 
 TEST_CASE(
     "[Networked][Session][Hosted] H8 an application callback is handed the "
-    "hello unchanged, and the session decides nothing about it"
+    "data the other peer's game sent, unchanged, and the session decides "
+    "nothing about it"
 ) {
     const Ref<NetwMultiplayer> session = tagged_session();
     const CallLog log;
-    session->set_auth_callback(log.callable(StringName("hello")));
-    session->auth_receive(PEER, auth::encode_client_hello(APP_TAG, 0));
-    NETW_CHECK_EQ(log.count(StringName("hello")), 1);
-    const Array carried = log.args(StringName("hello"));
+    session->set_auth_callback(log.callable(StringName("data")));
+    session->auth_receive(PEER, auth::encode_game(foreign_bytes()));
+    NETW_CHECK_EQ(log.count(StringName("data")), 1);
+    const Array carried = log.args(StringName("data"));
     REQUIRE(carried.size() == 2);
     NETW_CHECK_EQ(int64_t(carried[0]), PEER);
-    const bool whole
-        = PackedByteArray(carried[1]) == auth::encode_client_hello(APP_TAG, 0);
+    const bool whole = PackedByteArray(carried[1]) == foreign_bytes();
     CHECK(whole);
     check_text(String(session->session_refusal(PEER)), String());
 }
 
 TEST_CASE(
     "[Networked][Session][Hosted] H9 a probe is consumed by the session even "
-    "while an application callback owns every other packet"
+    "while an application callback is set"
 ) {
     const netw_test::FaultWatch faults;
     PendingAuth stand;
@@ -171,15 +176,15 @@ TEST_CASE(
     session->set_auth_callback(log.callable(StringName("packet")));
     session->auth_receive(PEER, auth::encode_probe_request(0));
     NETW_CHECK_EQ(log.count(StringName("packet")), 0);
-    session->auth_receive(PEER, foreign_bytes());
+    session->auth_receive(PEER, auth::encode_game(foreign_bytes()));
     NETW_CHECK_EQ(log.count(StringName("packet")), 1);
     NETW_CHECK_EQ(faults.errors(), 0);
 }
 
 TEST_CASE(
-    "[Networked][Session][Hosted] H19 a session that admits nobody still "
-    "authenticates the link a hello arrives on, because two peers that never "
-    "join each other still have to agree about the build they speak"
+    "[Networked][Session][Hosted] H19 a client keeps another client's link "
+    "in auth until the server has announced that client's player, so a "
+    "refused client never becomes a peer of the admitted ones"
 ) {
     const netw_test::FaultWatch faults;
     PendingAuth stand(false);
@@ -191,6 +196,14 @@ TEST_CASE(
     session->auth_receive_hello(PEER, auth::encode_client_hello(APP_TAG, 0));
 
     check_text(String(session->session_refusal(PEER)), String());
+    CHECK_FALSE(session->auth_link_is_completed(PEER));
+
+    netw::session::AcceptFrame announced;
+    announced.peer_id = PEER;
+    announced.username = StringName("ana");
+    announced.player_id = 2;
+    session->session_admit(announced);
+
     CHECK(session->auth_link_is_completed(PEER));
 
     session->embed_dispose();

@@ -72,7 +72,7 @@
 				func admit(request: NetwJoinRequest) -&gt; Error:
 				    return OK if request.account else ERR_UNAUTHORIZED
 				[/codeblock]
-				A peer joins when [param handler] returns [constant @GlobalScope.OK]. Each [NetwAccountProvider] passed to [method NetwAdmissionConfig.accept] proves its account before [param handler] runs, and both may [code]await[/code] within [member NetwMultiplayer.auth_timeout].
+				A joining client is not connected until [param handler] returns [constant @GlobalScope.OK]. [NetwAdmissionConfig] shows a lobby that admits players only while it is open.
 			</description>
 		</method>
 		<method name="configure_clock" qualifiers="static">

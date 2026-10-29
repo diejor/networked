@@ -20,10 +20,27 @@ Ref<NetwAdmissionConfig> NetwAdmissionConfig::accept(
     return Ref<NetwAdmissionConfig>(this);
 }
 
+Ref<NetwAdmissionConfig> NetwAdmissionConfig::timeout(double p_seconds) {
+    NETW_ERR_COND_V(
+        p_seconds <= 0.0,
+        Ref<NetwAdmissionConfig>(this),
+        sys::SESSION,
+        "NetwAdmissionConfig.timeout got %s seconds. Pass a number of "
+        "seconds above zero.",
+        String::num(p_seconds)
+    );
+    timeout_seconds = p_seconds;
+    return Ref<NetwAdmissionConfig>(this);
+}
+
 void NetwAdmissionConfig::_bind_methods() {
     ClassDB::bind_method(
         D_METHOD("accept", "provider"),
         &NetwAdmissionConfig::accept
+    );
+    ClassDB::bind_method(
+        D_METHOD("timeout", "seconds"),
+        &NetwAdmissionConfig::timeout
     );
 }
 

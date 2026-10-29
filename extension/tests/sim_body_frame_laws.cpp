@@ -328,7 +328,6 @@ class TransferScenario final : public netw_test::FrameScenario {
         stand->mount();
         Node *arena = stand->arena();
         stand->arm(TICKRATE);
-        stand->session(0)->session_submit_join(StringName("first"), Array());
         stand->pump(4);
         RaceEvidence &evidence = race_evidence();
         evidence.first_controller = stand->peer_id(0);

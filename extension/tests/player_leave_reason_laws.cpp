@@ -33,7 +33,7 @@ TEST_CASE(
 ) {
     const Ref<Script> shape = netw_test::minted_script(ACCOUNT_GATE);
     REQUIRE(shape.is_valid());
-    LoopbackRig rig(2);
+    LoopbackRig rig(0);
     rig.mount();
     Node *gate = Object::cast_to<Node>(shape->call("new"));
     rig.branch(-1)->add_child(gate);
@@ -42,8 +42,8 @@ TEST_CASE(
             .is_valid()
     );
     rig.join(-1, StringName("host"));
-    rig.join(0, StringName("ana"));
-    rig.join(1, StringName("bo"));
+    rig.arrive(StringName("ana"));
+    rig.arrive(StringName("bo"));
     const CallLog heard;
     rig.client(0)->get_session()->connect(
         StringName("exiting"),
@@ -54,9 +54,7 @@ TEST_CASE(
         heard.callable("player_left")
     );
 
-    const int second = rig.add_client();
-    rig.mount_late(second);
-    rig.join(second, StringName("ana"));
+    const int second = rig.arrive(StringName("ana"));
     rig.pump(24);
 
     NETW_REQUIRE_EQ(heard.count(StringName("player_left")), 1);
@@ -82,10 +80,10 @@ TEST_CASE(
     for (const bool migrates : {false, true}) {
         NETW_FORMAT_INT(migrates_text, int64_t(migrates));
         CAPTURE(migrates_text);
-        LoopbackRig rig(1, migrates);
+        LoopbackRig rig(0, migrates);
         rig.mount();
         rig.join(-1, StringName("host"));
-        rig.join(0, StringName("ana"));
+        rig.arrive(StringName("ana"));
         const CallLog heard;
         rig.client(0)->get_session()->connect(
             StringName("exiting"),

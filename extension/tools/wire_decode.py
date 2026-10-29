@@ -574,19 +574,19 @@ AGAINST_SPEC = [
     {
         "record": "JoinFrame",
         "bytes": (
-            bytes([0x03, 0x00]) + b"ana" + bytes([0x00, 0x00, 0x00, 0x00]) + bytes(8) + bytes([0x08]) + bytes(24)
+            bytes([0x03, 0x00]) + b"ana" + bytes([0x00, 0x00, 0x00, 0x00, 0x00]) + bytes(8) + bytes([0x08]) + bytes(16)
         ),
         "values": {
             "username": "ana",
             "args": b"",
+            "arg_types": b"",
             "proof": b"",
             "schema_hash": 0,
             "peer_id": 4,
             "app_tag": 0,
             "wire_identity": 0,
-            "schema_identity": 0,
         },
-        "why": "WIRE.md 16, a join whose three identity halves are all zero",
+        "why": "WIRE.md 16, a join whose two identity halves are both zero",
     },
     {
         "record": "TableFrameHead",

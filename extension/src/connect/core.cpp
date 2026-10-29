@@ -827,12 +827,22 @@ void ConnectCore::on_transport_failed() {
             ERR_CONNECTION_ERROR,
             "The server refused the join or ran out of time before admitting "
             "the player. Check the server's log, and raise "
-            "NetwMultiplayer.auth_timeout on both peers if the player needs "
+            "NetwAdmissionConfig.timeout on the server if the player needs "
             "more time."
         );
         return;
     }
     end_attempt(ERR_CANT_CONNECT, "The server could not be reached.");
+}
+
+void ConnectCore::on_join_refused(Error p_error, const String &p_reason) {
+    if (attempt.state == ATTEMPT_CONNECTING) {
+        end_attempt(p_error, p_reason);
+        return;
+    }
+    if (session != nullptr) {
+        session->connection_emit_failed(p_error, p_reason);
+    }
 }
 
 RID ConnectCore::open_creation(

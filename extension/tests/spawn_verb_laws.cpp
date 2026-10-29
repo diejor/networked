@@ -135,7 +135,6 @@ TEST_CASE(
     Node *arena = rig.mirror_child("Arena");
 
     teach(rig);
-    rig.join(0, StringName("alpha"));
     const int64_t owned_by = rig.peer_id(0);
 
     const Seated made = seat(rig, arena, "Owned", rig.player(0));

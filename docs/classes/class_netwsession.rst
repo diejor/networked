@@ -166,7 +166,7 @@ Signals
 
 **entered**\ (\ ) :ref:`🔗<class_NetwSession_signal_entered>`
 
-Emitted when this peer is online.
+Emitted when this peer is online. A client goes online once the server admits its player, so :ref:`player_joined<class_NetwSession_signal_player_joined>` for each player already present and then :ref:`local_joined<class_NetwSession_signal_local_joined>` follow in the same frame.
 
 .. rst-class:: classref-item-separator
 
@@ -202,7 +202,15 @@ Emitted before the session is cleaned up, so :ref:`players<class_NetwSession_pro
 
 **join_failed**\ (\ code\: :godot:`Error <@GlobalScope#enum_@globalscope_Error>`, reason\: :godot:`String`\ ) :ref:`🔗<class_NetwSession_signal_join_failed>`
 
-This peer's join was rejected with ``code`` and the ``reason`` the server gave. :ref:`local_player<class_NetwSession_property_local_player>` stays ``null``.
+This peer's join was refused with ``code`` and the ``reason`` the server gave. :ref:`local_player<class_NetwSession_property_local_player>` stays ``null``. A client refused while connecting closes its peer and never goes online, so neither :ref:`entered<class_NetwSession_signal_entered>` nor :ref:`exited<class_NetwSession_signal_exited>` fires.
+
+Networked refuses with three codes, and any other ``code`` is the one the admission handler or a :ref:`NetwAccountProvider<class_NetwAccountProvider>` returned.
+
+- :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@GlobalScope_constant_ERR_UNCONFIGURED>` the two peers are set up differently, such as another build, another Networked version or other :ref:`Netw.configure_join()<class_Netw_method_configure_join>` arguments
+
+- :godot:`@GlobalScope.ERR_TIMEOUT <@GlobalScope#class_@GlobalScope_constant_ERR_TIMEOUT>` the player was not admitted before :ref:`NetwAdmissionConfig.timeout()<class_NetwAdmissionConfig_method_timeout>` or :ref:`NetwMultiplayer.auth_timeout<class_NetwMultiplayer_property_auth_timeout>` passed
+
+- :godot:`@GlobalScope.ERR_ALREADY_IN_USE <@GlobalScope#class_@GlobalScope_constant_ERR_ALREADY_IN_USE>` the account already plays as the server's player
 
 .. rst-class:: classref-item-separator
 
@@ -363,7 +371,7 @@ Not connected.
 
 :ref:`State<enum_NetwSession_State>` **STATE_CONNECTING** = ``2``
 
-A :godot:`MultiplayerPeer` is assigned and connecting, and may still fail.
+A :godot:`MultiplayerPeer` is assigned and connecting, and may still fail. A client stays here until the server admits its player.
 
 .. _class_NetwSession_constant_STATE_ONLINE:
 
@@ -371,7 +379,7 @@ A :godot:`MultiplayerPeer` is assigned and connecting, and may still fail.
 
 :ref:`State<enum_NetwSession_State>` **STATE_ONLINE** = ``3``
 
-Connected, and :ref:`entered<class_NetwSession_signal_entered>` has fired. This peer's player is admitted later, at :ref:`local_joined<class_NetwSession_signal_local_joined>`.
+Connected, and :ref:`entered<class_NetwSession_signal_entered>` has fired. A client's player is already admitted here. A listen server admits its own player after it goes online, at :ref:`local_joined<class_NetwSession_signal_local_joined>`.
 
 .. _class_NetwSession_constant_STATE_DISCONNECTING:
 
@@ -463,7 +471,7 @@ The connection dropped with no warning.
 
 :ref:`ExitReason<enum_NetwSession_ExitReason>` **KICKED** = ``3``
 
-The server kicked this peer with :ref:`kick()<class_NetwSession_method_kick>`.
+The server kicked this peer with :ref:`kick()<class_NetwSession_method_kick>`, or this peer left because an entity synchronizes different properties here than on the server.
 
 .. _class_NetwSession_constant_REPLACED:
 

@@ -19,15 +19,21 @@ Settings for a session's admission handler.
 Description
 -----------
 
-The server receives a :ref:`NetwJoinRequest<class_NetwJoinRequest>` and waits for the handler to return :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` before admitting its :ref:`NetwPlayer<class_NetwPlayer>`. The handler may ``await``. Each :ref:`NetwAccountProvider<class_NetwAccountProvider>` accepted here proves one kind of account first.
+The server passes each joining client's :ref:`NetwJoinRequest<class_NetwJoinRequest>` to the handler, which may ``await``. The client is not connected and receives nothing until the handler returns :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>`. Any other :godot:`@GlobalScope.Error <@GlobalScope#enum_@globalscope_Error>` refuses it, and the client receives that code unchanged in :ref:`NetwSession.join_failed<class_NetwSession_signal_join_failed>`, with the reason given to :ref:`NetwJoinRequest.refuse()<class_NetwJoinRequest_method_refuse>`.
 
 ::
 
+    var lobby_open := true
+
     func _init() -> void:
-        Netw.configure_admission(admit).accept(PasscodeAccount.new())
+        Netw.configure_admission(admit)
 
     func admit(request: NetwJoinRequest) -> Error:
-        return OK if request.account else ERR_UNAUTHORIZED
+        if not lobby_open:
+            return request.refuse(ERR_BUSY, "The match has started.")
+        return OK
+
+\ Each :ref:`NetwAccountProvider<class_NetwAccountProvider>` accepted here proves one kind of account before the handler runs.
 
 .. rst-class:: classref-reftable-group
 
@@ -39,6 +45,8 @@ Methods
 
    +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------+
    | :ref:`NetwAdmissionConfig<class_NetwAdmissionConfig>` | :ref:`accept<class_NetwAdmissionConfig_method_accept>`\ (\ provider\: :ref:`NetwAccountProvider<class_NetwAccountProvider>`\ ) |
+   +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------+
+   | :ref:`NetwAdmissionConfig<class_NetwAdmissionConfig>` | :ref:`timeout<class_NetwAdmissionConfig_method_timeout>`\ (\ seconds\: :godot:`float`\ )                                       |
    +-------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
@@ -57,6 +65,18 @@ Method Descriptions
 :ref:`NetwAdmissionConfig<class_NetwAdmissionConfig>` **accept**\ (\ provider\: :ref:`NetwAccountProvider<class_NetwAccountProvider>`\ ) :ref:`🔗<class_NetwAdmissionConfig_method_accept>`
 
 Adds ``provider`` to the accounts a joining player proves, in preference order. Accept the same providers in the same order on every peer. A config with no provider sends no challenge.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwAdmissionConfig_method_timeout:
+
+.. rst-class:: classref-method
+
+:ref:`NetwAdmissionConfig<class_NetwAdmissionConfig>` **timeout**\ (\ seconds\: :godot:`float`\ ) :ref:`🔗<class_NetwAdmissionConfig_method_timeout>`
+
+Gives a client ``seconds`` from connecting to the server to be admitted, in place of :ref:`NetwMultiplayer.auth_timeout<class_NetwMultiplayer_property_auth_timeout>`. The server tells the client this deadline, so only the server's value counts. A join still waiting when it passes is refused with :godot:`@GlobalScope.ERR_TIMEOUT <@GlobalScope#class_@GlobalScope_constant_ERR_TIMEOUT>`. The server's own join does not use this deadline, and its handler is given :ref:`NetwMultiplayer.auth_timeout<class_NetwMultiplayer_property_auth_timeout>` seconds.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

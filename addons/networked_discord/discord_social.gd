@@ -33,8 +33,8 @@
 ## A Discord user ID that another peer reports is only a claim, so never key
 ## saved data, bans or inventory to it. [DiscordIdToken] proves the player's
 ## Discord account to the server. A proof opens a Discord page at most once an
-## hour, so raise [member NetwMultiplayer.auth_timeout] on the server and the
-## client to give the player time to approve it.
+## hour, so give [method NetwAdmissionConfig.timeout] a longer deadline on the
+## server to leave the player time to approve it.
 ## [br][br]
 ## With two sessions in one game, such as split screen, only the first
 ## [DiscordSocial] to enter the tree talks to Discord, because Discord signs

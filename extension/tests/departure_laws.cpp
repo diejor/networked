@@ -77,8 +77,6 @@ struct Streaming {
     Streaming() : rig(2) {
         rig.mount();
         arena = rig.mirror_child("Arena");
-        rig.join(0, StringName("alpha"));
-        rig.join(1, StringName("beta"));
         route = seat_body(rig, arena, "BodyOne");
         rig.declare_world(
             WorldDecl().clocked(30, 3).entity(

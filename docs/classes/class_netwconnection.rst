@@ -67,7 +67,7 @@ Each row of :ref:`endpoints<class_NetwConnection_property_endpoints>` is a :ref:
 
 \ **Connecting**\ 
 
-\ :ref:`join()<class_NetwConnection_method_join>` and :ref:`host()<class_NetwConnection_method_host>` create the peer, assign it, and settle their :ref:`NetwPromise<class_NetwPromise>` once the session is online. A failure arrives once through :ref:`failed<class_NetwConnection_signal_failed>`, and a player the server refuses arrives through :ref:`NetwSession.join_failed<class_NetwSession_signal_join_failed>` instead.
+\ :ref:`join()<class_NetwConnection_method_join>` and :ref:`host()<class_NetwConnection_method_host>` create the peer, assign it, and settle their :ref:`NetwPromise<class_NetwPromise>` once the session is online. A failure arrives once through :ref:`failed<class_NetwConnection_signal_failed>`. A player the server refuses also arrives through :ref:`NetwSession.join_failed<class_NetwSession_signal_join_failed>`, with the same code and reason.
 
 \ **Sharing**\ 
 
@@ -211,7 +211,7 @@ Its :ref:`NetwEndpoint.is_listed<class_NetwEndpoint_property_is_listed>` is alre
 
 Emitted once when an attempt fails, and never for :ref:`cancel()<class_NetwConnection_method_cancel>`. A connection to it reads the failure of the :ref:`NetwPromise<class_NetwPromise>` that started the attempt, so a caller may drop that promise.
 
-A join whose connection closes fails with :godot:`@GlobalScope.ERR_CANT_CONNECT <@GlobalScope#class_@GlobalScope_constant_ERR_CANT_CONNECT>` when the server never answered. It fails with :godot:`@GlobalScope.ERR_CONNECTION_ERROR <@GlobalScope#class_@GlobalScope_constant_ERR_CONNECTION_ERROR>` when the server answered and then refused the join or ran out of time. Running out of time means :ref:`NetwMultiplayer.auth_timeout<class_NetwMultiplayer_property_auth_timeout>` ended the join on one of the peers.
+A join the server refuses fails with the ``error`` and ``reason`` of :ref:`NetwSession.join_failed<class_NetwSession_signal_join_failed>`, also when the game assigned the peer itself. A join whose connection closes with no answer fails with :godot:`@GlobalScope.ERR_CANT_CONNECT <@GlobalScope#class_@GlobalScope_constant_ERR_CANT_CONNECT>` when the server was never reached, and with :godot:`@GlobalScope.ERR_CONNECTION_ERROR <@GlobalScope#class_@GlobalScope_constant_ERR_CONNECTION_ERROR>` when it was.
 
 .. rst-class:: classref-item-separator
 

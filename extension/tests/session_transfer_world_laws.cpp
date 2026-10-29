@@ -123,9 +123,6 @@ struct Session {
             netw_test::WorldDecl().clocked(TICKRATE, DISPLAY_OFFSET)
         );
         rig.join(-1, StringName("host"));
-        for (int at = 0; at < CLIENTS; ++at) {
-            rig.join(at, StringName(vformat("guest%d", at)));
-        }
         rig.pump(SETTLE_PUMPS);
     }
 
@@ -679,7 +676,6 @@ class WorldRun {
         session.teach(late);
         session.clock(late);
         session.rig.release(late);
-        session.seat(late)->session_submit_join(StringName("late"), Array());
         for (int tick = 0; tick < SETTLE_TICKS; ++tick) {
             steer_and_step();
         }

@@ -65,7 +65,8 @@ class MeshStand {
     }
 
     godot::Ref<netw::NetwMultiplayer> make_session(
-        const godot::Ref<netw::LocalMultiplayerPeer> &p_peer
+        const godot::Ref<netw::LocalMultiplayerPeer> &p_peer,
+        const godot::StringName &p_username
     ) {
         godot::Ref<netw::NetwMultiplayer> session
             = netw::NetwMultiplayer::create(godot::Ref<godot::Script>());
@@ -75,13 +76,18 @@ class MeshStand {
                 = session->session_get_inner();
             inner->set_root_path(godot::NodePath("/"));
             inner->set_server_relay_enabled(relays_through_hub);
-            session->session_default_join_held = true;
+            if (!godot::String(p_username).is_empty()) {
+                session->session_prepare_join(p_username, godot::Array());
+            }
             session->set("multiplayer_peer", p_peer);
         }
         return session;
     }
 
-    int seat(int p_id) {
+    int seat(
+        int p_id,
+        const godot::StringName &p_username = godot::StringName()
+    ) {
         REQUIRE_MESSAGE(index_of(p_id) < 0, "that peer id is already seated");
         godot::Ref<netw::LocalMultiplayerPeer> peer;
         peer.instantiate();
@@ -94,7 +100,7 @@ class MeshStand {
         peer->NETW_PEER_VIRTUAL(poll)();
         ids.push_back(p_id);
         peers.push_back(peer);
-        sessions.push_back(make_session(peer));
+        sessions.push_back(make_session(peer, p_username));
         return ids.size() - 1;
     }
 
@@ -149,12 +155,15 @@ public:
         seat(netw::SERVER_PEER);
     }
 
-    void seat_member(int p_id) {
+    void seat_member(
+        int p_id,
+        const godot::StringName &p_username = godot::StringName()
+    ) {
         REQUIRE_MESSAGE(
             p_id != netw::SERVER_PEER,
             "a member seat needs an id other than the server's"
         );
-        seat(p_id);
+        seat(p_id, p_username);
     }
 
     void wire(int p_a, int p_b) {
@@ -283,12 +292,25 @@ public:
     godot::Ref<netw::NetwPlayer> submit_join(int p_id, int p_pumps = 8) {
         netw::NetwMultiplayer *joining = session_of(p_id);
         REQUIRE_MESSAGE(joining != nullptr, "a join needs a seated peer");
+        if (joining == nullptr) {
+            return godot::Ref<netw::NetwPlayer>();
+        }
+        REQUIRE_MESSAGE(
+            joining->player_local().is_null(),
+            "this peer joined when it was wired, so name it with seat_member"
+        );
+        joining->session_submit_prepared_join();
+        return seated(p_id, p_pumps);
+    }
+
+    godot::Ref<netw::NetwPlayer> seated(int p_id, int p_pumps = 8) {
+        netw::NetwMultiplayer *joining = session_of(p_id);
+        REQUIRE_MESSAGE(joining != nullptr, "a join needs a seated peer");
         netw::NetwMultiplayer *host = session_of(netw::SERVER_PEER);
         REQUIRE_MESSAGE(host != nullptr, "a join needs a seated server");
         if (joining == nullptr || host == nullptr) {
             return godot::Ref<netw::NetwPlayer>();
         }
-        joining->session_submit_prepared_join();
         for (int round = 0; round < p_pumps; ++round) {
             if (host->player_of(p_id).is_valid()
                 && joining->player_local().is_valid()) {

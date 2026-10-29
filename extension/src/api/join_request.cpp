@@ -3,6 +3,7 @@
 #include "godot/class_db.hpp"
 #include "godot/utility.hpp"
 #include "netw/api/netw_multiplayer.hpp"
+#include "netw/auth_protocol.hpp"
 #include "netw/log.hpp"
 #include "netw/session/frames.hpp"
 
@@ -110,6 +111,25 @@ PackedStringArray NetwJoinRequest::get_accounts() const {
     return out;
 }
 
+Error NetwJoinRequest::refuse(Error p_code, const String &p_reason) {
+    Error code = p_code;
+    if (code == OK) {
+        NETW_ERROR(
+            sys::SESSION,
+            "NetwJoinRequest.refuse was given OK, so the join was refused. "
+            "Pass the Error to refuse with, or return OK to admit the player."
+        );
+        code = ERR_UNCONFIGURED;
+    }
+    refused_code = code;
+    refused_reason = auth::capped_reason(p_reason);
+    return code;
+}
+
+String NetwJoinRequest::reason_for(Error p_code) const {
+    return p_code == refused_code ? refused_reason : String();
+}
+
 void NetwJoinRequest::_bind_methods() {
     ClassDB::bind_method(
         D_METHOD("get_peer_id"),
@@ -174,6 +194,11 @@ void NetwJoinRequest::_bind_methods() {
         &NetwJoinRequest::is_bound
     );
     ClassDB::bind_method(
+        D_METHOD("refuse", "code", "reason"),
+        &NetwJoinRequest::refuse,
+        DEFVAL(String())
+    );
+    ClassDB::bind_method(
         D_METHOD("set_account", "account"),
         &NetwJoinRequest::set_account
     );
@@ -205,12 +230,12 @@ PackedByteArray JoinRequest::serialize() const {
     JoinFrame frame;
     frame.username = username;
     frame.args = arg_bytes;
+    frame.arg_types = arg_types;
     frame.proof = proof_bytes;
     frame.schema_hash = schema_hash;
     frame.peer_id = peer_id;
     frame.app_tag = app_tag;
     frame.wire_identity = wire_identity;
-    frame.schema_identity = schema_identity;
     return session::frame_write(frame);
 }
 
@@ -226,11 +251,11 @@ bool JoinRequest::deserialize(const PackedByteArray &p_bytes) {
     username = frame.username;
     peer_id = frame.peer_id;
     arg_bytes = frame.args;
+    arg_types = frame.arg_types;
     proof_bytes = frame.proof;
     schema_hash = frame.schema_hash;
     app_tag = frame.app_tag;
     wire_identity = frame.wire_identity;
-    schema_identity = frame.schema_identity;
     return true;
 }
 

@@ -325,24 +325,6 @@ PropertySet *SyncPipeline::set_of(uint64_t p_set) const {
     return plane != nullptr ? plane->property_set_book().get(p_set) : nullptr;
 }
 
-void SyncPipeline::note_schema_seal(const PropertySet *p_set) {
-    const NetwMultiplayer *plane = core();
-    if (plane != nullptr
-        && plane->session_get_state()
-            != NetwMultiplayer::SESSION_STATE_OFFLINE) {
-        return;
-    }
-    schemas_sealed_before_open[p_set->identity_hash()] = true;
-}
-
-int64_t SyncPipeline::sealed_schema_identity() const {
-    uint64_t fold = 0;
-    for (const KeyValue<int64_t, bool> &entry : schemas_sealed_before_open) {
-        fold ^= uint64_t(entry.key);
-    }
-    return int64_t(fold);
-}
-
 Error SyncPipeline::register_property_set(Node *p_node, uint64_t p_set) {
     const PropertySet *declared = set_of(p_set);
     if (p_node == nullptr || declared == nullptr || !declared->get_sealed()) {
@@ -350,7 +332,6 @@ Error SyncPipeline::register_property_set(Node *p_node, uint64_t p_set) {
     }
     NETW_ZONE_NC("SyncPipeline register property set", colors::WIRE);
     NETW_ZONE_VALUE(bindings.size());
-    note_schema_seal(declared);
     repl::BindingBook &book = core()->property_binding_book();
     PropertyBinding *held = nullptr;
     if (const LocalVector<uint64_t> *same = node_bindings(p_node)) {
@@ -1579,6 +1560,15 @@ void SyncPipeline::apply_row(
     const ReceiveAllocations counted(plane);
 #endif
     const int64_t route = plane->liveness_route_of(p_entity.ptr());
+    if (!plane->is_host() && p_sender == SERVER_PEER && p_ordinal >= 0
+        && sync_model->binding_of(route, p_ordinal) != nullptr
+        && !sync_model->admits_schema(route, p_ordinal)) {
+        Node *node = p_entity->get_owner();
+        plane->session_leave_for_schema(
+            node != nullptr ? String(node->get_name()) : String()
+        );
+        return;
+    }
     const PropertyBindingPtr binding
         = sync_model
               ->admit_row(route, p_ordinal, p_sender, p_entity->steering());

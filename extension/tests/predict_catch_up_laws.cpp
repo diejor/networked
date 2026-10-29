@@ -68,7 +68,6 @@ struct Walk {
         }
         rig.declare_world(netw_test::WorldDecl().clocked(TICKRATE, 2));
         rig.join(-1, StringName("host"));
-        rig.join(0, StringName("guest"));
         rig.pump(6);
         rig.step_ticks(p_lobby_ticks);
         NetwMultiplayer *server = rig.server();

@@ -212,14 +212,7 @@ class ReclaimScenario final : public netw_test::FrameScenario {
         routes.clear();
         pump(2);
         apis[HOST]->session_submit_join(StringName("host"), Array());
-        pump(4);
-        for (int at = 1; at < SEATS; ++at) {
-            apis[at]->session_submit_join(
-                StringName(vformat("guest%d", at)),
-                Array()
-            );
-        }
-        pump(8);
+        pump(12);
     }
 
     bool everyone_seated() const {

@@ -305,9 +305,6 @@ RefusalEvidence run_refusal(const RefusalScenario &p_scenario) {
     };
     Node3D *outside = plain_node(netw::gd::scene_root(), "OutsideTheSession");
 
-    if (p_scenario.standing == STANDING_PLAYER) {
-        rig.join(0, StringName("alpha"));
-    }
     const int route = rig.spawn_registered(
         StringName(BODY_ID),
         callable_mp_static(&build_body),

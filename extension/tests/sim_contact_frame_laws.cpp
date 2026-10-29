@@ -323,10 +323,6 @@ class ContactScenario : public netw_test::FrameScenario {
         NetwMultiplayer *server = stand->session(-1);
         Node *arena = stand->arena();
         stand->arm(TICKRATE);
-        if (kind == Kind::AUTHORED) {
-            stand->session(A)->session_submit_join(StringName("a"), Array());
-            stand->pump(8);
-        }
         for (int index = 0; index < cube_count(); ++index) {
             const bool authored = kind == Kind::AUTHORED && index == 0;
             NetwMultiplayer *spawner = authored ? stand->session(A) : server;

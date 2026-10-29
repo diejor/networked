@@ -52,7 +52,6 @@ int seat_body(LoopbackRig &p_rig, Node *p_parent, const char *p_name) {
     for (int at = 0; at < p_rig.count(); ++at) {
         teach_constructor(p_rig, p_rig.client(at));
     }
-    p_rig.join(0, StringName("alpha"));
     const RID entity = p_rig.server()->spawn_registered(
         StringName(BODY_ID),
         named(p_name),

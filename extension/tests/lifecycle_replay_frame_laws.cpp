@@ -128,7 +128,6 @@ class ReplayScenario final : public netw_test::FrameScenario {
         stand->mount();
         host_arena = stand->arena();
         stand->arm(TICKRATE);
-        stand->session(A)->session_submit_join(StringName("a"), Array());
         stand->pump(4);
         NetwMultiplayer *server = stand->session(-1);
         const Ref<netw::NetwPlayer> owner

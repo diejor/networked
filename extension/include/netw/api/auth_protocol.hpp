@@ -16,6 +16,9 @@ public:
         KIND_UNKNOWN = 0,
         KIND_HELLO = 1,
         KIND_PROBE = 2,
+        KIND_GAME = 3,
+        KIND_JOIN = 4,
+        KIND_ANSWER = 5,
     };
 
     enum ProbeStatus {

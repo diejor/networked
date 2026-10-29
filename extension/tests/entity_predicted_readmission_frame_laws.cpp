@@ -218,7 +218,6 @@ class ReadmissionScenario final : public netw_test::FrameScenario {
         stand->mount();
         host_arena = stand->arena();
         stand->arm(TICKRATE);
-        stand->session(A)->session_submit_join(StringName("a"), Array());
         stand->pump(4);
         const int archetype_client = spawn(ARCHETYPE_ID, "Bob");
         const int declared_server = spawn(DECLARED_ID, "Dee");

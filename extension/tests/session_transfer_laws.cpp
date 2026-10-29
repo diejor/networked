@@ -123,28 +123,27 @@ struct Table {
     int waiting = -2;
 
     explicit Table(bool p_one_waits = false, bool p_server_cycled = false)
-        : rig(p_server_cycled ? 0 : CLIENTS, true) {
+        : rig(0, true) {
         if (p_server_cycled) {
             cycle_online(rig.server());
-            for (int at = 0; at < CLIENTS; ++at) {
-                rig.add_client();
-            }
-            rig.pump(SETTLE_PUMPS);
         }
         rig.mount();
         arena = rig.mirror_child("Arena");
+        rig.join(-1, StringName("host"));
+        for (int at = 0; at < CLIENTS; ++at) {
+            rig.add_client(StringName(vformat("guest%d", at)));
+            rig.mount_late(at, false);
+        }
         for (int at = -1; at < CLIENTS; ++at) {
             before.push_back(seat(at)->get_unique_id());
             links.push_back(rig.peer(at));
         }
         if (p_one_waits) {
             waiting = (lowest_client() + 1) % CLIENTS;
+            rig.hold(waiting);
         }
-        rig.join(-1, StringName("host"));
         for (int at = 0; at < CLIENTS; ++at) {
-            if (at != waiting) {
-                rig.join(at, StringName(vformat("guest%d", at)));
-            }
+            rig.mirror_late(at, "Arena");
         }
         rig.pump(SETTLE_PUMPS);
     }
@@ -1117,9 +1116,10 @@ TEST_CASE(
         issued = held > issued ? held : issued;
     }
     REQUIRE(issued > 0);
-    waiting->session_submit_join(StringName("late"), Array());
+    waiting->session_set_prepared_join(StringName("late"), Array());
 
     REQUIRE(int(table.rig.session()->lose_server()) == int(OK));
+    table.rig.release(late);
     table.rig.pump(SETTLE_PUMPS);
 
     const Ref<NetwPlayer> own = waiting->player_local();
@@ -1294,7 +1294,9 @@ TEST_CASE(
                                                        : (late + 1) % CLIENTS;
     const int64_t late_label = table.was(late);
     table.rig.hold(deaf);
-    table.rig.join(late, StringName("late"));
+    table.seat(late)->session_set_prepared_join(StringName("late"), Array());
+    table.rig.release(late);
+    table.rig.pump(8);
     REQUIRE(table.seat(successor)->player_of(late_label).is_valid());
     REQUIRE(table.seat(deaf)->player_of(late_label).is_null());
 
@@ -2235,16 +2237,10 @@ TEST_CASE(
     Table table;
     table.keep_world();
     const int successor = table.lowest_client();
-    Vector<int> missed_clients;
-    for (int at = 0; at < MISSED_JOINS; ++at) {
-        const int missed = table.rig.add_client();
-        table.rig.mount_late(missed);
-        missed_clients.push_back(missed);
-    }
-    table.rig.pump(SETTLE_PUMPS);
     table.rig.hold(successor);
-    for (int missed : missed_clients) {
-        table.seat(missed)->session_submit_join(StringName("missed"), Array());
+    for (int at = 0; at < MISSED_JOINS; ++at) {
+        const int missed = table.rig.add_client(StringName("missed"));
+        table.rig.mount_late(missed);
     }
     table.rig.pump(SETTLE_PUMPS);
     const int seats = table.rig.count();
@@ -2263,9 +2259,8 @@ TEST_CASE(
             }
         }
     }
-    const int late = table.rig.add_client();
+    const int late = table.rig.add_client(StringName("late"));
     table.rig.mount_late(late);
-    table.seat(late)->session_submit_join(StringName("late"), Array());
     table.rig.pump(SETTLE_PUMPS);
     NetwMultiplayer *host = table.seat(successor);
     NETW_CHECK_EQ(int(host->is_structure_halted()), 1);
@@ -2286,7 +2281,10 @@ TEST_CASE(
             NETW_CHECK_EQ(int(taken.has(player->player_id())), 0);
         }
     }
-    NETW_CHECK_EQ(faults.errors(), 0);
+    const int64_t stranded
+        = faults.errors_containing("which is not in this session");
+    NETW_CHECK_EQ(stranded, int64_t(MISSED_JOINS));
+    NETW_CHECK_EQ(faults.errors() - stranded, 0);
 }
 
 TEST_CASE(
@@ -2572,7 +2570,7 @@ bool linked_to(NetwMultiplayer *p_host, int64_t p_peer) {
 }
 
 int join_late(Table &p_table) {
-    const int late = p_table.rig.add_client();
+    const int late = p_table.rig.add_client(StringName("late"));
     p_table.rig.register_constructor(
         p_table.seat(late),
         StringName(BODY_ID),
@@ -2581,7 +2579,6 @@ int join_late(Table &p_table) {
     );
     p_table.rig.mount_late(late, false);
     p_table.rig.mirror_late(late, "Arena");
-    p_table.seat(late)->session_submit_join(StringName("late"), Array());
     return late;
 }
 

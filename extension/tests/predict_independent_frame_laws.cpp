@@ -126,7 +126,6 @@ class IndependentScenario final : public netw_test::FrameScenario {
         stand->mount();
         Node *arena = stand->arena();
         stand->arm(TICKRATE);
-        stand->session(A)->session_submit_join(StringName("a"), Array());
         stand->pump(4);
         NetwMultiplayer *server = stand->session(SERVER);
         const Ref<netw::NetwPlayer> owner

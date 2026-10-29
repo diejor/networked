@@ -433,9 +433,10 @@ struct Saved {
     Ref<MemoryConnection> connection;
     RID database;
 
-    Saved(const String &p_store, bool p_loads_at_spawn = true) : rig(1) {
+    Saved(const String &p_store, bool p_loads_at_spawn = true) : rig(0) {
         schema_model::clear();
         netw::persist::forget_stores();
+        rig.add_client(StringName("hero"));
         rig.mount();
         netw_test::flow_clocks(rig, 30);
         server = rig.server();
@@ -451,7 +452,6 @@ struct Saved {
         types.push_back(int(Variant::STRING));
         rig.register_constructor(server, "saved", build, types);
         rig.register_constructor(rig.client(0), "saved", build, types);
-        rig.join(0, StringName("hero"));
         rig.step_ticks(4);
     }
 

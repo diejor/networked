@@ -135,8 +135,6 @@ public:
         }
         judged = netw_test::minted_script(JUDGED_SOURCE);
         REQUIRE(judged.is_valid());
-        rig.join(0, StringName("author"));
-        rig.join(1, StringName("observer"));
         rig.step_ticks(4);
         crate = rig.spawn_registered(
             StringName("judged_crate"),

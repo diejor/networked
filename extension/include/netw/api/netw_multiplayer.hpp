@@ -918,6 +918,18 @@ private:
     struct LinkHandshake {
         bool completed = false;
         bool proven = false;
+        bool hello_heard = false;
+        bool challenged = false;
+        bool game_completed = false;
+        bool join_sent = false;
+        bool join_received = false;
+        bool joining = false;
+        bool refused = false;
+        int refused_polls = 0;
+        int64_t deadline = 0;
+        godot::PackedByteArray join;
+        std::optional<session::AcceptFrame> admitted;
+        godot::Array admitted_args;
         godot::String challenge;
         godot::String bound_challenge;
         godot::Array proofs;
@@ -939,6 +951,9 @@ private:
     std::optional<JoinRequest> resubmit_join;
     std::optional<JoinRequest> submitted_join;
     bool join_awaiting_admission = false;
+    bool schema_leave_pending = false;
+    std::optional<godot::PackedByteArray> auth_admitted_roster;
+    double auth_timeout_seconds = 3.0;
     display::Hooks display_hooks;
     int64_t display_last_frame = -1;
     std::optional<display::Timing> display_last_timing;
@@ -1445,6 +1460,7 @@ public:
         enums::NetwSession::ExitReason p_reason,
         const godot::String &p_detail
     );
+    void session_leave_for_schema(const godot::String &p_node);
     void session_announce_edge(int p_old, int p_new);
     void session_publish_state();
     godot::Ref<display::Book> get_display_book() const;
@@ -3367,6 +3383,7 @@ public:
     static bool peer_relabels(const godot::Ref<godot::MultiplayerPeer> &p_peer);
     void relabel_follow(const godot::Ref<godot::MultiplayerPeer> &p_peer);
     void session_follow_relabel(int64_t p_successor_was, int64_t p_former_now);
+    void session_follow_relabel_pending(int64_t p_successor_was);
     void session_refuse_relabel(int64_t p_successor_was);
     void session_reset_links(const godot::PackedInt32Array &p_links);
     void session_reset_inner(
@@ -3979,7 +3996,7 @@ public:
     );
     bool session_preflight_join(
         const session::AcceptFrame &p_accepted,
-        const godot::Array &p_args
+        const JoinRequest &p_request
     );
     void session_start_admission(const JoinRequest &p_request);
     void session_admission_settled(int64_t p_peer, uint64_t p_promise);
@@ -3996,6 +4013,11 @@ public:
     );
     void session_prove_next(int64_t p_peer);
     void session_proof_failed(int64_t p_peer, godot::Error p_error);
+    void session_fail_own_join(
+        int64_t p_link,
+        godot::Error p_error,
+        const godot::String &p_reason
+    );
     void session_report_host_refusal(
         int64_t p_peer,
         const godot::String &p_reason
@@ -4009,7 +4031,13 @@ public:
         bool p_proof,
         uint64_t p_promise
     );
-    void session_arm_deadline(Awaited &r_awaited, uint64_t p_declaration);
+    void session_arm_deadline(
+        Awaited &r_awaited,
+        uint64_t p_declaration,
+        int64_t p_peer
+    );
+    double auth_link_seconds();
+    void auth_poll_deadlines(int64_t p_now_msec);
     void session_await(
         int64_t p_peer,
         bool p_proof,
@@ -4175,6 +4203,52 @@ public:
     void auth_disarm();
     void auth_receive(int64_t p_peer, const godot::PackedByteArray &p_data);
     void auth_send_hello(int64_t p_peer);
+    godot::Error auth_send_raw(
+        int64_t p_peer,
+        const godot::PackedByteArray &p_data
+    );
+    bool auth_is_armed() const;
+    void auth_advance(int64_t p_peer);
+    void auth_receive_game(
+        int64_t p_peer,
+        const godot::PackedByteArray &p_data
+    );
+    void auth_receive_join(
+        int64_t p_peer,
+        const godot::PackedByteArray &p_data
+    );
+    void auth_receive_answer(
+        int64_t p_peer,
+        const godot::PackedByteArray &p_data
+    );
+    LinkHandshake *auth_joining_link(int64_t p_peer);
+    bool auth_refuse(
+        int64_t p_peer,
+        godot::Error p_code,
+        const godot::String &p_reason
+    );
+    void auth_poll_refused();
+    void auth_refused_locally(
+        godot::Error p_code,
+        const godot::String &p_reason
+    );
+    void auth_close_refused_peer();
+    godot::PackedByteArray auth_admitted_bytes(
+        const session::AcceptFrame &p_joiner
+    ) const;
+    void session_publish_admitted(
+        const session::AcceptFrame &p_accepted,
+        const godot::Array &p_args
+    );
+    void session_take_join(
+        const godot::PackedByteArray &p_payload,
+        int64_t p_sender
+    );
+    void session_receive_join_answer(
+        const godot::PackedByteArray &p_payload,
+        int64_t p_sender
+    );
+    void session_apply_admitted_roster();
     godot::Error auth_complete_link(int64_t p_peer);
     void auth_forget_link(int64_t p_peer);
 #if defined(NETW_TESTS)
@@ -4429,6 +4503,7 @@ public:
     );
     void session_encode_join_args(JoinRequest &r_request);
     bool session_decode_join_args(JoinRequest &r_request);
+    godot::String session_join_args_refusal(const JoinRequest &p_request);
     bool session_resolve_inbound_join(
         JoinRequest &r_request,
         int64_t p_sender,
@@ -4444,9 +4519,6 @@ public:
         const godot::Array &p_args
     );
     void session_clear_prepared_join();
-#if defined(NETW_TESTS)
-    bool session_default_join_held = false;
-#endif
     void session_dispose();
     void session_submit_prepared_join();
     void session_resubmit_join_on_authority_peer(int64_t p_peer);
@@ -4684,7 +4756,6 @@ public:
     static void entity_move(godot::Node *p_owner, godot::Node *p_new_parent);
 
     SyncPipeline *sync_pipeline() const;
-    int64_t session_schema_identity() const;
     void set_session_api(godot::Object *p_api);
     godot::Object *session_api() const;
     godot::Ref<godot::MultiplayerAPI> get_session_api() const;

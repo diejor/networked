@@ -3614,7 +3614,7 @@ Same as :godot:`SceneMultiplayer.allow_object_decoding <SceneMultiplayer#class_S
 - |void| **set_auth_callback**\ (\ value\: :godot:`Callable`\ )
 - :godot:`Callable` **get_auth_callback**\ (\ )
 
-Same as :godot:`SceneMultiplayer.auth_callback <SceneMultiplayer#class_SceneMultiplayer_property_auth_callback>`. Setting it replaces the built-in authentication.
+Same as :godot:`SceneMultiplayer.auth_callback <SceneMultiplayer#class_SceneMultiplayer_property_auth_callback>`. It runs first on each link and receives what the other peer passed to :ref:`send_auth()<class_NetwMultiplayer_method_send_auth>`. The join continues once the game calls :ref:`complete_auth()<class_NetwMultiplayer_method_complete_auth>`, so the :ref:`Netw.configure_admission()<class_Netw_method_configure_admission>` handler runs after it. Set the same callback on every peer, or the join is refused with :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@GlobalScope_constant_ERR_UNCONFIGURED>`.
 
 .. rst-class:: classref-item-separator
 
@@ -3631,7 +3631,7 @@ Same as :godot:`SceneMultiplayer.auth_callback <SceneMultiplayer#class_SceneMult
 - |void| **set_auth_timeout**\ (\ value\: :godot:`float`\ )
 - :godot:`float` **get_auth_timeout**\ (\ )
 
-Same as :godot:`SceneMultiplayer.auth_timeout <SceneMultiplayer#class_SceneMultiplayer_property_auth_timeout>`, applied to :ref:`inner<class_NetwMultiplayer_property_inner>`. It also limits how long the admission and proof handlers set with :ref:`Netw.configure_admission()<class_Netw_method_configure_admission>` may take on this peer, so a join that waits on the player raises it on both the server and the client.
+Seconds a peer has from connecting until a link is admitted, or ``0`` for no limit. On the server it is a joining client's deadline unless :ref:`NetwAdmissionConfig.timeout()<class_NetwAdmissionConfig_method_timeout>` is declared, and the server tells the client that deadline. A client uses its own value until the server first replies, and on links to other clients. A join that passes its deadline is refused with :godot:`@GlobalScope.ERR_TIMEOUT <@GlobalScope#class_@GlobalScope_constant_ERR_TIMEOUT>`.
 
 .. rst-class:: classref-item-separator
 
@@ -4648,7 +4648,7 @@ Notifies :ref:`CLOCK_BEFORE_TICK_LOOP<class_NetwMultiplayer_constant_CLOCK_BEFOR
 
 :godot:`Error <@GlobalScope#enum_@globalscope_Error>` **complete_auth**\ (\ id\: :godot:`int`\ ) :ref:`🔗<class_NetwMultiplayer_method_complete_auth>`
 
-Same as :godot:`SceneMultiplayer.complete_auth() <SceneMultiplayer#class_SceneMultiplayer_method_complete_auth>`. Returns :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@GlobalScope_constant_ERR_UNCONFIGURED>` when there is no :ref:`inner<class_NetwMultiplayer_property_inner>`.
+Same as :godot:`SceneMultiplayer.complete_auth() <SceneMultiplayer#class_SceneMultiplayer_method_complete_auth>`, called from :ref:`auth_callback<class_NetwMultiplayer_property_auth_callback>` when the game's own check of ``id`` passes. The peer connects once its join is admitted. Returns :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@GlobalScope_constant_ERR_UNCONFIGURED>` when there is no :ref:`inner<class_NetwMultiplayer_property_inner>`.
 
 .. rst-class:: classref-item-separator
 

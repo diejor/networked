@@ -154,7 +154,7 @@ struct Stand {
     LoopbackRig rig;
     Node *host = nullptr;
 
-    explicit Stand(int p_clients, double p_window = 0.0) : rig(p_clients) {
+    explicit Stand(int p_clients, double p_window = 0.0) : rig(0) {
         REQUIRE(gate.is_valid());
         REQUIRE(host_kind.is_valid());
         REQUIRE(level.is_valid());
@@ -179,7 +179,7 @@ struct Stand {
         rig.join(-1, StringName("host"));
         const char *names[] = {"ada", "bob"};
         for (int at = 0; at < p_clients; ++at) {
-            rig.join(at, StringName(names[at]));
+            rig.arrive(StringName(names[at]));
         }
         rig.pump(8);
         Array args;
@@ -653,7 +653,7 @@ TEST_CASE(
 
     lobby->reparent(stand.host);
     settle(stand);
-    const int back = stand.rig.add_client();
+    const int back = stand.rig.add_client(StringName("ada"));
     stand.rig.register_constructor(
         stand.rig.client(back),
         StringName(HOST_ID),
@@ -661,7 +661,6 @@ TEST_CASE(
         Array::make(int(Variant::STRING))
     );
     stand.rig.mount_late(back);
-    stand.rig.join(back, StringName("ada"));
     settle(stand);
 
     Node *mirror = stand.rig.route_node(lobby_route, back);

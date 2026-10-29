@@ -210,8 +210,8 @@ struct ComposedWorld {
 
     ComposedWorld() {
         stand.seat_server();
-        stand.seat_member(OTHER);
-        stand.seat_member(MEMBER);
+        stand.seat_member(OTHER, StringName("seven"));
+        stand.seat_member(MEMBER, StringName("nine"));
         stand.wire(SERVER, OTHER);
         stand.wire(SERVER, MEMBER);
         stand.pump(4);
@@ -245,8 +245,8 @@ struct ComposedWorld {
         stand.step_ticks(6);
 
         REQUIRE(stand.join(SERVER, StringName("one")).is_valid());
-        REQUIRE(stand.join(OTHER, StringName("seven")).is_valid());
-        REQUIRE(stand.join(MEMBER, StringName("nine")).is_valid());
+        REQUIRE(stand.seated(OTHER).is_valid());
+        REQUIRE(stand.seated(MEMBER).is_valid());
 
         world = first_scene(host);
         const Ref<NetwScene> handle = host->scene_handle_of(world);
@@ -299,7 +299,7 @@ struct ComposedWorld {
     }
 
     void admit_latecomer() {
-        stand.seat_member(LATECOMER);
+        stand.seat_member(LATECOMER, StringName("eleven"));
         stand.wire(SERVER, LATECOMER);
         stand.pump(4);
         late = stand.session_of(LATECOMER);
@@ -310,7 +310,7 @@ struct ComposedWorld {
         NETW_CHECK_EQ(int(late->embed_settle()), int(OK));
         netw_test::register_level(late);
         teach_player(late);
-        REQUIRE(stand.join(LATECOMER, StringName("eleven")).is_valid());
+        REQUIRE(stand.seated(LATECOMER).is_valid());
         const Ref<NetwScene> handle = host->scene_handle_of(world);
         REQUIRE(handle.is_valid());
         NETW_CHECK_EQ(int(handle->watch(host->player_of(LATECOMER))), int(OK));

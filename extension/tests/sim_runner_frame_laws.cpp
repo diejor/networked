@@ -223,7 +223,6 @@ public:
         stand->mount();
         host_arena = stand->arena();
         stand->arm(p_tickrate);
-        stand->session(0)->session_submit_join(StringName("first"), Array());
         stand->pump(4);
         return true;
     }

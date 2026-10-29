@@ -289,8 +289,6 @@ TEST_CASE(
     LoopbackRig rig(2);
     rig.mount();
     flow_clocks(rig, TICKRATE);
-    rig.join(0, StringName("author"));
-    rig.join(1, StringName("watcher"));
     const int a = rig.peer_id(0);
     const int c = rig.peer_id(1);
     Array args;

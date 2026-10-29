@@ -64,7 +64,6 @@ TEST_CASE(
     LoopbackRig rig(1);
     rig.pump(4);
     rig.join(-1, StringName("host"));
-    rig.join(0, StringName("alice"));
 
     const CallLog seen;
     rig.client(0)->observe(
@@ -81,9 +80,7 @@ TEST_CASE(
         NetwMultiplayer::SESSION_TREE_PAUSED,
         seen.callable("late")
     );
-    rig.pump(4);
-    rig.join(late, StringName("bob"));
-    rig.pump(4);
+    rig.pump(8);
 
     NETW_CHECK_EQ(int(rig.client(late)->session_is_paused()), 1);
     NETW_CHECK_EQ(seen.count("late"), 1);
@@ -104,7 +101,6 @@ TEST_CASE(
     LoopbackRig rig(1);
     rig.pump(4);
     rig.join(-1, StringName("host"));
-    rig.join(0, StringName("alice"));
 
     const CallLog seen;
     rig.client(0)->observe(
@@ -183,7 +179,6 @@ TEST_CASE(
     NETW_REQUIRE_EQ(rig.server()->clock_initialize(clock), OK);
     rig.server()->clock_engine().set_manual_tick(true);
     rig.join(-1, StringName("host"));
-    rig.join(0, StringName("alice"));
 
     rig.server()->session_pause(String());
     rig.pump(4);

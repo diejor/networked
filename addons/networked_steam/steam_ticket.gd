@@ -93,6 +93,11 @@ func _verify(request: NetwJoinRequest, proof: Variant) -> Variant:
 				_on_peer_disconnected.bind(session),
 				CONNECT_REFERENCE_COUNTED,
 			)
+			session.root.multiplayer.connect(
+				&"peer_authentication_failed",
+				_on_peer_disconnected.bind(session),
+				CONNECT_REFERENCE_COUNTED,
+			)
 
 			var checked: Array = await steam.validate_auth_ticket_response
 			while checked[0] != steam_id:

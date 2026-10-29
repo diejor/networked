@@ -30,6 +30,8 @@ class NetwJoinRequest : public godot::RefCounted {
     godot::String account;
     godot::String account_name;
     godot::ObjectID core_id;
+    godot::Error refused_code = godot::OK;
+    godot::String refused_reason;
 
     const Proven *find(const godot::String &p_account) const;
     void merge(
@@ -88,17 +90,19 @@ public:
     godot::String get_account_name() const {
         return account_name;
     }
+    godot::Error refuse(godot::Error p_code, const godot::String &p_reason);
+    godot::String reason_for(godot::Error p_code) const;
 };
 
 struct JoinFrame {
     godot::StringName username;
     godot::PackedByteArray args;
+    godot::PackedByteArray arg_types;
     godot::PackedByteArray proof;
     int64_t schema_hash = 0;
     int64_t peer_id = 0;
     int64_t app_tag = 0;
     int64_t wire_identity = 0;
-    int64_t schema_identity = 0;
 
     static constexpr auto wire = netw::wire::describe(
         netw::wire::field<&JoinFrame::username>(
@@ -108,6 +112,10 @@ struct JoinFrame {
         netw::wire::field<&JoinFrame::args>(
             "args",
             netw::wire::bytes_capped(4095)
+        ),
+        netw::wire::field<&JoinFrame::arg_types>(
+            "arg_types",
+            netw::wire::bytes_capped(255)
         ),
         netw::wire::field<&JoinFrame::proof>(
             "proof",
@@ -125,10 +133,6 @@ struct JoinFrame {
         netw::wire::field<&JoinFrame::wire_identity>(
             "wire_identity",
             netw::wire::bits(64)
-        ),
-        netw::wire::field<&JoinFrame::schema_identity>(
-            "schema_identity",
-            netw::wire::bits(64)
         )
     );
 };
@@ -137,12 +141,12 @@ struct JoinRequest {
     godot::StringName username;
     godot::Array arg_values;
     godot::PackedByteArray arg_bytes;
+    godot::PackedByteArray arg_types;
     godot::PackedByteArray proof_bytes;
     int64_t schema_hash = 0;
     int64_t peer_id = 0;
     int64_t app_tag = 0;
     int64_t wire_identity = 0;
-    int64_t schema_identity = 0;
 
     godot::PackedByteArray serialize() const;
     bool deserialize(const godot::PackedByteArray &p_bytes);

@@ -170,7 +170,6 @@ class BeachBallScenario final : public netw_test::FrameScenario {
         stand->mount();
         Node *arena = stand->arena();
         stand->arm(TICKRATE, DISPLAY_OFFSET);
-        stand->session(0)->session_submit_join(StringName("first"), Array());
         stand->pump(4);
         NetwMultiplayer *server = stand->session(-1);
         Array args;

@@ -423,8 +423,7 @@ TEST_CASE(
         INFO(row.label);
         netw_test::LoopbackRig rig(1);
         rig.mount();
-        const Ref<NetwPlayer> player
-            = seated(Ref<NetwMultiplayer>(rig.server()), rig.peer_id(0));
+        const Ref<NetwPlayer> player = rig.player(0);
         REQUIRE(rig.server()->player_holds(player));
         written_player = player.ptr();
         Array arg_types;

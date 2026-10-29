@@ -20,12 +20,6 @@ Ref<NetwLivenessCore> book_of(NetwMultiplayer *p_api) {
     return p_api->get_liveness_core();
 }
 
-void join_every_client(LoopbackRig &p_rig) {
-    for (int at = 0; at < p_rig.count(); ++at) {
-        p_rig.join(at, StringName(vformat("peer%d", at)));
-    }
-}
-
 int mint_and_spend(LoopbackRig &p_rig, int p_client, int &r_unspent) {
     NetwMultiplayer *author = p_rig.client(p_client);
     const int64_t route = author->liveness_reserve_route();
@@ -48,7 +42,6 @@ TEST_CASE(
     "session's next route"
 ) {
     LoopbackRig rig(3);
-    join_every_client(rig);
 
     HashSet<int> seen;
     int duplicates = 0;
@@ -84,7 +77,6 @@ TEST_CASE(
     "lands"
 ) {
     LoopbackRig rig(1);
-    join_every_client(rig);
     NetwMultiplayer *author = rig.client(0);
     NETW_REQUIRE_EQ(book_of(author)->lease_remaining(), BLOCK);
 
@@ -121,7 +113,6 @@ TEST_CASE(
     "sender is refused and grants nothing"
 ) {
     LoopbackRig rig(2);
-    join_every_client(rig);
     const int64_t theirs = rig.client(1)->liveness_reserve_route();
     NETW_REQUIRE_EQ(theirs > 0, true);
     NETW_CHECK_EQ(
@@ -139,15 +130,13 @@ TEST_CASE(
     "holds a lease above every route already minted"
 ) {
     LoopbackRig rig(1);
-    join_every_client(rig);
     int greatest = 0;
     for (int at = 0; at < 40; ++at) {
         greatest = int(rig.server()->liveness_reserve_route());
     }
 
     const int late = rig.add_client();
-    rig.pump(2);
-    rig.join(late, StringName("late"));
+    rig.pump(4);
 
     NetwMultiplayer *joiner = rig.client(late);
     NETW_CHECK_EQ(book_of(joiner)->lease_remaining(), BLOCK);
@@ -161,7 +150,6 @@ TEST_CASE(
     "own spawns keep minting from its counter"
 ) {
     LoopbackRig rig(1);
-    join_every_client(rig);
     NETW_CHECK_EQ(book_of(rig.server())->is_leased(), false);
     NETW_CHECK_EQ(book_of(rig.server())->lease_remaining(), 0);
 }

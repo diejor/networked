@@ -74,6 +74,7 @@ public:
     void on_session_online();
     void on_session_left();
     void on_transport_failed();
+    void on_join_refused(godot::Error p_error, const godot::String &p_reason);
 
     godot::Error set_defaults(
         const godot::RID &p_transport,

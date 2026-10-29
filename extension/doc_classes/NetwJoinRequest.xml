@@ -4,7 +4,7 @@
 		A player's request to join a session.
 	</brief_description>
 	<description>
-		The server passes this request to the handler declared with [method Netw.configure_admission], after every [NetwAccountProvider] has verified. A requested [member username] does not verify an account.
+		The server passes this request to the handler declared with [method Netw.configure_admission], after every [NetwAccountProvider] has verified. The joining client is not connected until the handler returns [constant @GlobalScope.OK], and [method refuse] tells it why it was refused. A requested [member username] does not verify an account.
 		[codeblocks]
 		[gdscript]
 		func admit(request: NetwJoinRequest) -&gt; Error:
@@ -44,6 +44,14 @@
 			<param index="0" name="account" type="String" />
 			<description>
 				Returns the display name proven with [param account], or [code]""[/code].
+			</description>
+		</method>
+		<method name="refuse">
+			<return type="int" enum="Error" />
+			<param index="0" name="code" type="int" enum="Error" />
+			<param index="1" name="reason" type="String" default="&quot;&quot;" />
+			<description>
+				Returns [param code] for the admission handler to return, and sends [param reason] to the refused player with it. The player reads both in [signal NetwSession.join_failed] and [signal NetwConnection.failed]. [param reason] is sent only when the handler returns this same [param code], and is cut to 255 UTF-8 bytes. An empty [param reason] sends a default sentence that names [param code]. Passing [constant @GlobalScope.OK] reports an error and refuses with [constant @GlobalScope.ERR_UNCONFIGURED].
 			</description>
 		</method>
 	</methods>

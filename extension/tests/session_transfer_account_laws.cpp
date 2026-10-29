@@ -101,12 +101,9 @@ struct Seated {
     LoopbackRig rig;
 
     explicit Seated(NetwSession::TransferMode p_mode)
-        : rig(CLIENTS, true, false, &serve_accounts) {
+        : rig(CLIENTS, true, &serve_accounts) {
         rig.mount();
         rig.join(-1, StringName("host"));
-        for (int at = 0; at < CLIENTS; ++at) {
-            rig.join(at, StringName(vformat("guest%d", at)));
-        }
         for (int at = -1; at < CLIENTS; ++at) {
             seat(at)->transfer_set_mode(p_mode);
         }

@@ -153,7 +153,6 @@ struct Stand {
         arena = sim.arena();
         REQUIRE(arena != nullptr);
         sim.arm(TICKRATE);
-        join(A);
         Array args;
         args.push_back(String("Spawner"));
         NetwMultiplayer *server = sim.session(SERVER);
@@ -166,14 +165,6 @@ struct Stand {
         host_route = int(server->entity_get_route(made));
         client_host = sim.node_at(A, host_route);
         REQUIRE(client_host != nullptr);
-    }
-
-    void join(int p_client) {
-        sim.session(p_client)->session_submit_join(
-            StringName(vformat("peer%d", p_client)),
-            Array()
-        );
-        sim.pump(4);
     }
 
     Node *made_on(int p_client) const {
@@ -316,9 +307,6 @@ TEST_CASE(
 
         Node *made = spawn_made(stand);
         stand.sim.pump(4);
-        if (late) {
-            stand.join(B);
-        }
         Array args;
         args.push_back(String("Child"));
         const RID child

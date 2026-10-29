@@ -4,14 +4,19 @@
 		Settings for a session's admission handler.
 	</brief_description>
 	<description>
-		The server receives a [NetwJoinRequest] and waits for the handler to return [constant @GlobalScope.OK] before admitting its [NetwPlayer]. The handler may [code]await[/code]. Each [NetwAccountProvider] accepted here proves one kind of account first.
+		The server passes each joining client's [NetwJoinRequest] to the handler, which may [code]await[/code]. The client is not connected and receives nothing until the handler returns [constant @GlobalScope.OK]. Any other [enum @GlobalScope.Error] refuses it, and the client receives that code unchanged in [signal NetwSession.join_failed], with the reason given to [method NetwJoinRequest.refuse].
 		[codeblock]
+		var lobby_open := true
+
 		func _init() -&gt; void:
-		    Netw.configure_admission(admit).accept(PasscodeAccount.new())
+		    Netw.configure_admission(admit)
 
 		func admit(request: NetwJoinRequest) -&gt; Error:
-		    return OK if request.account else ERR_UNAUTHORIZED
+		    if not lobby_open:
+		        return request.refuse(ERR_BUSY, "The match has started.")
+		    return OK
 		[/codeblock]
+		Each [NetwAccountProvider] accepted here proves one kind of account before the handler runs.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -21,6 +26,13 @@
 			<param index="0" name="provider" type="NetwAccountProvider" />
 			<description>
 				Adds [param provider] to the accounts a joining player proves, in preference order. Accept the same providers in the same order on every peer. A config with no provider sends no challenge.
+			</description>
+		</method>
+		<method name="timeout">
+			<return type="NetwAdmissionConfig" />
+			<param index="0" name="seconds" type="float" />
+			<description>
+				Gives a client [param seconds] from connecting to the server to be admitted, in place of [member NetwMultiplayer.auth_timeout]. The server tells the client this deadline, so only the server's value counts. A join still waiting when it passes is refused with [constant @GlobalScope.ERR_TIMEOUT]. The server's own join does not use this deadline, and its handler is given [member NetwMultiplayer.auth_timeout] seconds.
 			</description>
 		</method>
 	</methods>

@@ -291,7 +291,7 @@
 	<signals>
 		<signal name="entered">
 			<description>
-				Emitted when this peer is online.
+				Emitted when this peer is online. A client goes online once the server admits its player, so [signal player_joined] for each player already present and then [signal local_joined] follow in the same frame.
 			</description>
 		</signal>
 		<signal name="exited">
@@ -312,7 +312,11 @@
 			<param index="0" name="code" type="int" enum="Error" />
 			<param index="1" name="reason" type="String" />
 			<description>
-				This peer's join was rejected with [param code] and the [param reason] the server gave. [member local_player] stays [code]null[/code].
+				This peer's join was refused with [param code] and the [param reason] the server gave. [member local_player] stays [code]null[/code]. A client refused while connecting closes its peer and never goes online, so neither [signal entered] nor [signal exited] fires.
+				Networked refuses with three codes, and any other [param code] is the one the admission handler or a [NetwAccountProvider] returned.
+				- [constant @GlobalScope.ERR_UNCONFIGURED] the two peers are set up differently, such as another build, another Networked version or other [method Netw.configure_join] arguments
+				- [constant @GlobalScope.ERR_TIMEOUT] the player was not admitted before [method NetwAdmissionConfig.timeout] or [member NetwMultiplayer.auth_timeout] passed
+				- [constant @GlobalScope.ERR_ALREADY_IN_USE] the account already plays as the server's player
 			</description>
 		</signal>
 		<signal name="local_joined">
@@ -399,10 +403,10 @@
 			[method NetwConnection.join] or [method NetwConnection.host] is creating the [MultiplayerPeer].
 		</constant>
 		<constant name="STATE_CONNECTING" value="2" enum="State">
-			A [MultiplayerPeer] is assigned and connecting, and may still fail.
+			A [MultiplayerPeer] is assigned and connecting, and may still fail. A client stays here until the server admits its player.
 		</constant>
 		<constant name="STATE_ONLINE" value="3" enum="State">
-			Connected, and [signal entered] has fired. This peer's player is admitted later, at [signal local_joined].
+			Connected, and [signal entered] has fired. A client's player is already admitted here. A listen server admits its own player after it goes online, at [signal local_joined].
 		</constant>
 		<constant name="STATE_DISCONNECTING" value="4" enum="State">
 			[signal exiting] has fired and [signal exited] has not.
@@ -429,7 +433,7 @@
 			The connection dropped with no warning.
 		</constant>
 		<constant name="KICKED" value="3" enum="ExitReason">
-			The server kicked this peer with [method kick].
+			The server kicked this peer with [method kick], or this peer left because an entity synchronizes different properties here than on the server.
 		</constant>
 		<constant name="REPLACED" value="4" enum="ExitReason">
 			Another peer was assigned to [member MultiplayerAPI.multiplayer_peer].

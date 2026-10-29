@@ -140,7 +140,6 @@ public:
         LoopbackRig rig(1);
         rig.mount();
         netw_test::flow_clocks(rig, TICKRATE);
-        rig.join(0, StringName("watcher"));
         const int route = rig.spawn_registered(
             StringName(PROBE_ID),
             callable_mp_static(&build_interp_probe),

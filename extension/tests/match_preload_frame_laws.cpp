@@ -83,13 +83,8 @@ class MatchScenario final : public netw_test::FrameScenario {
         stand->mount();
         Node *arena = stand->arena();
         stand->arm(TICKRATE);
-        for (int at = -1; at < 1; ++at) {
-            stand->session(at)->session_submit_join(
-                StringName(vformat("seat%d", at + 1)),
-                Array()
-            );
-            stand->pump(4);
-        }
+        stand->session(-1)->session_submit_join(StringName("seat0"), Array());
+        stand->pump(8);
         NetwMultiplayer *server = stand->session(-1);
         Array args;
         args.push_back(String("Host"));

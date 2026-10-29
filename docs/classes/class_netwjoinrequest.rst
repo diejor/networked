@@ -19,7 +19,7 @@ A player's request to join a session.
 Description
 -----------
 
-The server passes this request to the handler declared with :ref:`Netw.configure_admission()<class_Netw_method_configure_admission>`, after every :ref:`NetwAccountProvider<class_NetwAccountProvider>` has verified. A requested :ref:`username<class_NetwJoinRequest_property_username>` does not verify an account.
+The server passes this request to the handler declared with :ref:`Netw.configure_admission()<class_Netw_method_configure_admission>`, after every :ref:`NetwAccountProvider<class_NetwAccountProvider>` has verified. The joining client is not connected until the handler returns :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>`, and :ref:`refuse()<class_NetwJoinRequest_method_refuse>` tells it why it was refused. A requested :ref:`username<class_NetwJoinRequest_property_username>` does not verify an account.
 
 
 .. tabs::
@@ -74,13 +74,15 @@ Methods
 .. table::
    :widths: auto
 
-   +-----------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | |void|          | :ref:`add_account<class_NetwJoinRequest_method_add_account>`\ (\ account\: :godot:`String`, name\: :godot:`String`, answers_challenge\: :godot:`bool` = true\ ) |
-   +-----------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`bool`   | :ref:`is_bound<class_NetwJoinRequest_method_is_bound>`\ (\ account\: :godot:`String`\ ) |const|                                                                 |
-   +-----------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------+
-   | :godot:`String` | :ref:`name_of<class_NetwJoinRequest_method_name_of>`\ (\ account\: :godot:`String`\ ) |const|                                                                   |
-   +-----------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | |void|                                                | :ref:`add_account<class_NetwJoinRequest_method_add_account>`\ (\ account\: :godot:`String`, name\: :godot:`String`, answers_challenge\: :godot:`bool` = true\ ) |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`bool`                                         | :ref:`is_bound<class_NetwJoinRequest_method_is_bound>`\ (\ account\: :godot:`String`\ ) |const|                                                                 |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`String`                                       | :ref:`name_of<class_NetwJoinRequest_method_name_of>`\ (\ account\: :godot:`String`\ ) |const|                                                                   |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------+
+   | :godot:`Error <@GlobalScope#enum_@globalscope_Error>` | :ref:`refuse<class_NetwJoinRequest_method_refuse>`\ (\ code\: :godot:`Error <@GlobalScope#enum_@globalscope_Error>`, reason\: :godot:`String` = ""\ )           |
+   +-------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 .. rst-class:: classref-section-separator
 
@@ -259,6 +261,18 @@ Returns ``true`` when another server of this game could not have passed on the p
 :godot:`String` **name_of**\ (\ account\: :godot:`String`\ ) |const| :ref:`🔗<class_NetwJoinRequest_method_name_of>`
 
 Returns the display name proven with ``account``, or ``""``.
+
+.. rst-class:: classref-item-separator
+
+----
+
+.. _class_NetwJoinRequest_method_refuse:
+
+.. rst-class:: classref-method
+
+:godot:`Error <@GlobalScope#enum_@globalscope_Error>` **refuse**\ (\ code\: :godot:`Error <@GlobalScope#enum_@globalscope_Error>`, reason\: :godot:`String` = ""\ ) :ref:`🔗<class_NetwJoinRequest_method_refuse>`
+
+Returns ``code`` for the admission handler to return, and sends ``reason`` to the refused player with it. The player reads both in :ref:`NetwSession.join_failed<class_NetwSession_signal_join_failed>` and :ref:`NetwConnection.failed<class_NetwConnection_signal_failed>`. ``reason`` is sent only when the handler returns this same ``code``, and is cut to 255 UTF-8 bytes. An empty ``reason`` sends a default sentence that names ``code``. Passing :godot:`@GlobalScope.OK <@GlobalScope#class_@GlobalScope_constant_OK>` reports an error and refuses with :godot:`@GlobalScope.ERR_UNCONFIGURED <@GlobalScope#class_@GlobalScope_constant_ERR_UNCONFIGURED>`.
 
 .. |virtual| replace:: :abbr:`virtual (This method should typically be overridden by the user to have any effect.)`
 .. |required| replace:: :abbr:`required (This method is required to be overridden when extending its base class.)`

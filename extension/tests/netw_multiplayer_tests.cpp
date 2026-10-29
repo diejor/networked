@@ -1516,11 +1516,6 @@ TEST_CASE(
     "handshake"
 ) {
     netw_test::FaultWatch expected_faults;
-    expected_faults.expect_warning(
-        "[warn][session] Peer * failed authentication and was "
-        "refused.",
-        1
-    );
 
     Transported rig = transported_core();
     Recorder session(rig.core.ptr(), auth_edges());
@@ -1544,11 +1539,6 @@ TEST_CASE(
     "announced"
 ) {
     netw_test::FaultWatch expected_faults;
-    expected_faults.expect_warning(
-        "[warn][session] Peer * failed authentication and was "
-        "refused.",
-        1
-    );
 
     Transported rig = transported_core();
     rig.core->event_arm(true);

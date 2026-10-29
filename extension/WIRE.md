@@ -873,12 +873,12 @@ rides route 0.
 SESSION_JOIN
 [username string]
 [args bytes_capped 4095]
+[arg_types bytes_capped 255]
 [proof bytes_capped 16383]
 [schema_hash bits 64]
 [peer_id svarint 5]
 [app_tag bits 64]
 [wire_identity bits 64]
-[schema_identity bits 64]
 [align_verify]
 
 SESSION_ACCEPT   one accepted membership
@@ -890,8 +890,12 @@ SESSION_ROSTER   the memberships already accepted, sent to a late joiner
 [count varuint 2][SESSION_ACCEPT body] x count
 ```
 
-`app_tag`, `wire_identity` and `schema_identity` ride at their full 64 bits,
-because a masked hash collides. `[args]` is an opaque run. `[proof]` holds
+`app_tag` and `wire_identity` ride at their full 64 bits, because a masked
+hash collides. Property schemas are not part of the join. A client compares
+each entity's `derived` descriptors from SPAWN with its own sets and leaves
+on a mismatch. `[args]` is an opaque run. `[arg_types]`
+holds one `Variant.Type` byte per argument the client passed, so a server
+whose handler refuses them names the argument and both types. `[proof]` holds
 a serialized Godot Variant without objects. It is empty when no proof
 was requested.
 

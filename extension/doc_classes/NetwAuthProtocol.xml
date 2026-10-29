@@ -4,7 +4,14 @@
 		Reads and writes the packets Networked sends during [SceneMultiplayer] authentication.
 	</brief_description>
 	<description>
-		A packet starts with four bytes that say what it is. A joining player sends [code]"NHEL"[/code], then a version byte, an 8-byte build tag, a flags byte, and optional authentication data. [NetwAdmissionConfig] uses a server reply carrying a random challenge. A server browser sends [code]"NPRB"[/code], then a version byte and a flags or status byte, and the reply follows.
+		A packet starts with four bytes that say what it is. A joining player sends [code]"NHEL"[/code], then a version byte, an 8-byte build tag, a flags byte and a 4-byte deadline in milliseconds. The server replies with its own [code]"NHEL"[/code], whose deadline is the time the player has left to be admitted, followed by a random challenge when [NetwAdmissionConfig] accepts a provider. A server browser sends [code]"NPRB"[/code], then a version byte and a flags or status byte, and the reply follows.
+		A joining link carries three more packets after the hello.
+		[codeblock lang=text]
+		"NGAM"  what the other peer passed to NetwMultiplayer.send_auth
+		"NJON"  the player's join
+		"NANS"  the answer. Admitted, refused with an Error and a reason of
+		        at most 255 UTF-8 bytes, or the client's confirmation
+		[/codeblock]
 		A server browser gets its reply and is disconnected, so it never appears in the [MultiplayerAPI].
 	</description>
 	<tutorials>
@@ -111,6 +118,15 @@
 		</constant>
 		<constant name="KIND_PROBE" value="2" enum="Kind">
 			A server browser asking about the server.
+		</constant>
+		<constant name="KIND_GAME" value="3" enum="Kind">
+			Bytes the game sends with [method NetwMultiplayer.send_auth] while [member NetwMultiplayer.auth_callback] runs.
+		</constant>
+		<constant name="KIND_JOIN" value="4" enum="Kind">
+			A client's join, carrying its username and join arguments.
+		</constant>
+		<constant name="KIND_ANSWER" value="5" enum="Kind">
+			The server admitting or refusing a join.
 		</constant>
 		<constant name="PROBE_OK" value="0" enum="ProbeStatus">
 			The reply carries the server info.

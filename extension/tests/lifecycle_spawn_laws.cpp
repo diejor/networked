@@ -152,8 +152,6 @@ public:
         for (int side = -1; side < 2; ++side) {
             register_on(side < 0 ? rig.server() : rig.client(side));
         }
-        rig.join(0, StringName("author"));
-        rig.join(1, StringName("observer"));
         rig.step_ticks(4);
     }
 

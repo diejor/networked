@@ -63,7 +63,7 @@ TEST_CASE(
     "no other peer, because the accept every peer receives and the roster a "
     "late joiner receives both carry the membership and not the values"
 ) {
-    LoopbackRig rig(3);
+    LoopbackRig rig(0);
     rig.mount();
     rig.pump(4);
 
@@ -72,14 +72,16 @@ TEST_CASE(
         netw::Netw::configure_join(Callable(holder, StringName("seat")))
             .is_valid()
     );
-    Node *joiner = scripted_handler(rig.branch(0));
+    const int at = rig.add_client(StringName("ana"), one_arg(SECRET));
+    rig.mount_late(at, false);
+    Node *joiner = scripted_handler(rig.branch(at));
     REQUIRE(
         netw::Netw::configure_join(Callable(joiner, StringName("seat")))
             .is_valid()
     );
+    rig.pump(4);
 
-    const Ref<netw::NetwPlayer> seated
-        = rig.join(0, StringName("ana"), one_arg(SECRET));
+    const Ref<netw::NetwPlayer> seated = rig.client(at)->player_local();
     REQUIRE(seated.is_valid());
 
     const Array carried = holder->get(StringName("carried"));
@@ -105,11 +107,11 @@ TEST_CASE(
     "every route that mints one, so a client that learned a peer from the "
     "accept and then from the roster holds a single object for it"
 ) {
-    LoopbackRig rig(2);
+    LoopbackRig rig(0);
     rig.pump(4);
 
-    REQUIRE(rig.join(0, StringName("ana")).is_valid());
-    REQUIRE(rig.join(1, StringName("bo")).is_valid());
+    rig.arrive(StringName("ana"));
+    rig.arrive(StringName("bo"));
     rig.pump(4);
 
     const int first = rig.peer_id(0);
@@ -138,13 +140,11 @@ TEST_CASE(
     "reconnect that reuses a peer id reads as a new player and the handle "
     "the game still holds from the previous one reports itself inactive"
 ) {
-    LoopbackRig rig(1);
+    LoopbackRig rig(0);
     rig.pump(4);
 
     NetwMultiplayer *host = rig.server();
-    const int reused = rig.peer_id(0);
-
-    REQUIRE(rig.join(0, StringName("ana")).is_valid());
+    const int reused = rig.peer_id(rig.arrive(StringName("ana")));
     const Ref<netw::NetwPlayer> before = host->peer_get_player(reused);
     REQUIRE(before.is_valid());
     const int64_t first_membership = host->player_incarnation(reused);
@@ -157,7 +157,6 @@ TEST_CASE(
     again.username = StringName("bo");
     again.app_tag = host->auth_app_tag_of();
     again.wire_identity = netw::SessionCore::compute_wire_identity();
-    again.schema_identity = host->session_schema_identity();
     host->session_receive_join(again.serialize(), reused);
     rig.pump(4);
 
@@ -194,13 +193,13 @@ TEST_CASE(
     "player and no other peer, which reads only the account name, whether "
     "it learned the player from the accept or from the roster"
 ) {
-    LoopbackRig rig(2);
+    LoopbackRig rig(0);
     rig.mount();
     rig.pump(4);
     account_gate(rig.branch(-1));
 
-    REQUIRE(rig.join(0, StringName("ana")).is_valid());
-    REQUIRE(rig.join(1, StringName("bo")).is_valid());
+    rig.arrive(StringName("ana"));
+    rig.arrive(StringName("bo"));
     rig.pump(4);
 
     const int ana = rig.peer_id(0);
@@ -229,7 +228,7 @@ TEST_CASE(
     "limit the server advertises once admitted, and follows the server when "
     "it advertises another address without joining a second time"
 ) {
-    LoopbackRig rig(1);
+    LoopbackRig rig(0);
     rig.mount();
     rig.pump(4);
     Ref<netw::NetwServerInfo> info;
@@ -239,11 +238,12 @@ TEST_CASE(
     rig.server()->config_settle();
 
     const Ref<netw::NetwConnection> served = rig.server()->get_connection();
-    const Ref<netw::NetwConnection> first = rig.client(0)->get_connection();
     served->set_join_address(String("203.0.113.4:21253"));
     NETW_CHECK_EQ(served->get_max_players(), int64_t(8));
 
-    REQUIRE(rig.join(0, StringName("ana")).is_valid());
+    const Ref<netw::NetwConnection> first
+        = rig.client(rig.arrive(StringName("ana")))->get_connection();
+    REQUIRE(rig.client(0)->player_local().is_valid());
     CHECK(bool(first->get_join_address() == "203.0.113.4:21253"));
     NETW_CHECK_EQ(first->get_max_players(), int64_t(8));
 

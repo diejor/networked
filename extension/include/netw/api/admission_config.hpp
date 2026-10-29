@@ -12,6 +12,7 @@ class NetwAdmissionConfig : public godot::RefCounted {
     GDCLASS(NetwAdmissionConfig, godot::RefCounted)
 
     godot::LocalVector<godot::Ref<NetwAccountProvider>> providers;
+    double timeout_seconds = 0.0;
 
 protected:
     static void _bind_methods();
@@ -25,6 +26,10 @@ public:
     }
     godot::Ref<NetwAccountProvider> provider_at(int64_t p_index) const {
         return providers[uint32_t(p_index)];
+    }
+    godot::Ref<NetwAdmissionConfig> timeout(double p_seconds);
+    double timeout_of() const {
+        return timeout_seconds;
     }
 };
 

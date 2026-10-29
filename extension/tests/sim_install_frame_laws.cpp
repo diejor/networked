@@ -246,7 +246,6 @@ class InstallScenario final : public netw_test::FrameScenario {
         stand->mount();
         Node *arena = stand->arena();
         stand->arm(TICKRATE);
-        stand->session(0)->session_submit_join(StringName("first"), Array());
         stand->pump(4);
         for (int kind = 0; kind < KINDS; ++kind) {
             if (!seat(kind, arena)) {
@@ -556,7 +555,6 @@ class RestScenario final : public netw_test::FrameScenario {
         stand->mount();
         Node *arena = stand->arena();
         stand->arm(30);
-        stand->session(0)->session_submit_join(StringName("first"), Array());
         stand->pump(4);
 
         NetwMultiplayer *server = stand->session(-1);

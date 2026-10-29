@@ -44,7 +44,10 @@ struct NativeSessionPair {
     int client_id = 0;
 };
 
-SessionSide make_side(const godot::Ref<LocalMultiplayerPeer> &p_peer) {
+SessionSide make_side(
+    const godot::Ref<LocalMultiplayerPeer> &p_peer,
+    const godot::StringName &p_username = godot::StringName()
+) {
     SessionSide side;
     side.peer = p_peer;
     side.inner.instantiate();
@@ -52,6 +55,9 @@ SessionSide make_side(const godot::Ref<LocalMultiplayerPeer> &p_peer) {
     side.inner->set_multiplayer_peer(p_peer);
     side.core.instantiate();
     side.core->session_set_inner(side.inner);
+    if (!godot::String(p_username).is_empty()) {
+        side.core->session_prepare_join(p_username, godot::Array());
+    }
     side.core->NETW_API_VIRTUAL(set_multiplayer_peer)(p_peer);
     return side;
 }
@@ -63,7 +69,7 @@ NativeSessionPair make_native_pair() {
     const godot::Ref<LocalMultiplayerPeer> client_peer
         = pair.session->create_client_peer();
     pair.client_id = client_peer->get_unique_id();
-    pair.client = make_side(client_peer);
+    pair.client = make_side(client_peer, godot::StringName("client"));
     return pair;
 }
 
@@ -71,11 +77,17 @@ void adopt_transport_roster(SessionSide &p_side) {
     p_side.core->set_peer_ids(netw::gd::api_peer_ids(p_side.inner));
 }
 
+void pump_pair(NativeSessionPair &p_pair, int p_rounds = 4) {
+    for (int round = 0; round < p_rounds; ++round) {
+        p_pair.server.inner->poll();
+        p_pair.client.inner->poll();
+        p_pair.server.core->NETW_API_VIRTUAL(poll)();
+        p_pair.client.core->NETW_API_VIRTUAL(poll)();
+    }
+}
+
 void settle_pair(NativeSessionPair &p_pair) {
-    p_pair.server.inner->poll();
-    p_pair.client.inner->poll();
-    p_pair.server.core->NETW_API_VIRTUAL(poll)();
-    p_pair.client.core->NETW_API_VIRTUAL(poll)();
+    pump_pair(p_pair);
     adopt_transport_roster(p_pair.server);
     adopt_transport_roster(p_pair.client);
 }
@@ -162,10 +174,7 @@ TEST_CASE(
 ) {
     NativeSessionPair pair = make_native_pair();
 
-    pair.server.inner->poll();
-    pair.client.inner->poll();
-    pair.server.core->NETW_API_VIRTUAL(poll)();
-    pair.client.core->NETW_API_VIRTUAL(poll)();
+    pump_pair(pair);
 
     NETW_CHECK_EQ(netw::gd::api_peer_ids(pair.server.inner).size(), 1);
     NETW_CHECK_EQ(pair.server.core->NETW_API_VIRTUAL(get_peer_ids)().size(), 1);
@@ -185,6 +194,8 @@ TEST_CASE(
     NativeSessionPair pair = make_native_pair();
     settle_pair(pair);
     arm_inbound_sink(pair.client);
+    const int64_t packets_before = pair.client.core->get_received_packets();
+    const int64_t bytes_before = pair.client.core->get_received_bytes();
 
     const godot::PackedByteArray payload = clock_reply(pair.client);
     pair.server.core->send_datagram(pair.client_id, payload, true);
@@ -194,8 +205,10 @@ TEST_CASE(
     NETW_CHECK_EQ(inbound_sink.count, 1);
     NETW_CHECK_EQ(inbound_sink.sender, 1);
 
-    const int64_t counted_packets = pair.client.core->get_received_packets();
-    const int64_t counted_bytes = pair.client.core->get_received_bytes();
+    const int64_t counted_packets
+        = pair.client.core->get_received_packets() - packets_before;
+    const int64_t counted_bytes
+        = pair.client.core->get_received_bytes() - bytes_before;
 
     const NetwCarrierFrame header = pair.client.core->receive_header(
         inbound_sink.sender,

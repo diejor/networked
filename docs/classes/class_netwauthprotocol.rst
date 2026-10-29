@@ -19,9 +19,18 @@ Reads and writes the packets Networked sends during :godot:`SceneMultiplayer` au
 Description
 -----------
 
-A packet starts with four bytes that say what it is. A joining player sends ``"NHEL"``, then a version byte, an 8-byte build tag, a flags byte, and optional authentication data. :ref:`NetwAdmissionConfig<class_NetwAdmissionConfig>` uses a server reply carrying a random challenge. A server browser sends ``"NPRB"``, then a version byte and a flags or status byte, and the reply follows.
+A packet starts with four bytes that say what it is. A joining player sends ``"NHEL"``, then a version byte, an 8-byte build tag, a flags byte and a 4-byte deadline in milliseconds. The server replies with its own ``"NHEL"``, whose deadline is the time the player has left to be admitted, followed by a random challenge when :ref:`NetwAdmissionConfig<class_NetwAdmissionConfig>` accepts a provider. A server browser sends ``"NPRB"``, then a version byte and a flags or status byte, and the reply follows.
 
-A server browser gets its reply and is disconnected, so it never appears in the :godot:`MultiplayerAPI`.
+A joining link carries three more packets after the hello.
+
+.. code:: text
+
+    "NGAM"  what the other peer passed to NetwMultiplayer.send_auth
+    "NJON"  the player's join
+    "NANS"  the answer. Admitted, refused with an Error and a reason of
+            at most 255 UTF-8 bytes, or the client's confirmation
+
+\ A server browser gets its reply and is disconnected, so it never appears in the :godot:`MultiplayerAPI`.
 
 .. rst-class:: classref-reftable-group
 
@@ -91,6 +100,30 @@ A player joining.
 :ref:`Kind<enum_NetwAuthProtocol_Kind>` **KIND_PROBE** = ``2``
 
 A server browser asking about the server.
+
+.. _class_NetwAuthProtocol_constant_KIND_GAME:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`Kind<enum_NetwAuthProtocol_Kind>` **KIND_GAME** = ``3``
+
+Bytes the game sends with :ref:`NetwMultiplayer.send_auth()<class_NetwMultiplayer_method_send_auth>` while :ref:`NetwMultiplayer.auth_callback<class_NetwMultiplayer_property_auth_callback>` runs.
+
+.. _class_NetwAuthProtocol_constant_KIND_JOIN:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`Kind<enum_NetwAuthProtocol_Kind>` **KIND_JOIN** = ``4``
+
+A client's join, carrying its username and join arguments.
+
+.. _class_NetwAuthProtocol_constant_KIND_ANSWER:
+
+.. rst-class:: classref-enumeration-constant
+
+:ref:`Kind<enum_NetwAuthProtocol_Kind>` **KIND_ANSWER** = ``5``
+
+The server admitting or refusing a join.
 
 .. rst-class:: classref-item-separator
 

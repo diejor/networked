@@ -200,12 +200,10 @@ TEST_CASE(
 ) {
     MeshStand mesh;
     mesh.seat_server();
-    mesh.seat_member(9);
-    mesh.wire(1, 9);
-    mesh.pump(4);
-
     const Ref<NetwPlayer> host_seat = mesh.join(1, StringName("one"));
-    const Ref<NetwPlayer> member_seat = mesh.join(9, StringName("nine"));
+    mesh.seat_member(9, StringName("nine"));
+    mesh.wire(1, 9);
+    const Ref<NetwPlayer> member_seat = mesh.seated(9);
 
     REQUIRE(host_seat.is_valid());
     REQUIRE(member_seat.is_valid());
@@ -255,18 +253,14 @@ TEST_CASE(
 ) {
     MeshStand mesh;
     mesh.seat_server();
-    mesh.seat_member(9);
-    mesh.wire(1, 9);
-    mesh.pump(4);
-
     REQUIRE(mesh.join(1, StringName("one")).is_valid());
-    REQUIRE(mesh.join(9, StringName("nine")).is_valid());
+    mesh.seat_member(9, StringName("nine"));
+    mesh.wire(1, 9);
+    REQUIRE(mesh.seated(9).is_valid());
 
-    mesh.seat_member(11);
+    mesh.seat_member(11, StringName("eleven"));
     mesh.wire(1, 11);
-    mesh.pump(4);
-
-    REQUIRE(mesh.join(11, StringName("eleven")).is_valid());
+    REQUIRE(mesh.seated(11).is_valid());
 
     NETW_CHECK_EQ(int(mesh.session_of(11)->get_connected_players().size()), 3);
     CHECK(mesh.session_of(11)->player_of(1).is_valid());

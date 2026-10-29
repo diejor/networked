@@ -423,7 +423,6 @@ TEST_CASE(
 ) {
     LoopbackRig rig(1);
     rig.mount();
-    rig.join(0, StringName("driver"));
     Node *arena = rig.mirror_child("Arena");
 
     const int route = rig.spawn_registered(

@@ -275,7 +275,6 @@ RID seat_fresh_client(LoopbackRig &p_rig) {
     p_rig.declare_scene(StringName("Arena"));
     p_rig.pump(4);
     p_rig.enter_scene(StringName("Arena"));
-    p_rig.join(fresh, StringName("alice"));
     const RID mirror = p_rig.mirror_scene(fresh, StringName("Arena"));
     p_rig.pump(4);
     REQUIRE(p_rig.server()->scene_admit_peer(
@@ -331,7 +330,6 @@ TEST_CASE(
     const RID arena = rig.declare_scene(StringName("Arena"));
     rig.pump(4);
     rig.enter_scene(StringName("Arena"));
-    rig.join(fresh, StringName("alice"));
     NetwMultiplayer *host = rig.server();
     NetwMultiplayer *client = rig.client(fresh);
     const int peer = rig.peer_id(fresh);

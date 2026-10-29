@@ -514,7 +514,7 @@
 			<return type="int" enum="Error" />
 			<param index="0" name="id" type="int" />
 			<description>
-				Same as [method SceneMultiplayer.complete_auth]. Returns [constant @GlobalScope.ERR_UNCONFIGURED] when there is no [member inner].
+				Same as [method SceneMultiplayer.complete_auth], called from [member auth_callback] when the game's own check of [param id] passes. The peer connects once its join is admitted. Returns [constant @GlobalScope.ERR_UNCONFIGURED] when there is no [member inner].
 			</description>
 		</method>
 		<method name="core_of" qualifiers="static">
@@ -3201,10 +3201,10 @@
 			Same as [member SceneMultiplayer.allow_object_decoding], applied to [member inner].
 		</member>
 		<member name="auth_callback" type="Callable" setter="set_auth_callback" getter="get_auth_callback" default="Callable()">
-			Same as [member SceneMultiplayer.auth_callback]. Setting it replaces the built-in authentication.
+			Same as [member SceneMultiplayer.auth_callback]. It runs first on each link and receives what the other peer passed to [method send_auth]. The join continues once the game calls [method complete_auth], so the [method Netw.configure_admission] handler runs after it. Set the same callback on every peer, or the join is refused with [constant @GlobalScope.ERR_UNCONFIGURED].
 		</member>
 		<member name="auth_timeout" type="float" setter="set_auth_timeout" getter="get_auth_timeout" default="3.0">
-			Same as [member SceneMultiplayer.auth_timeout], applied to [member inner]. It also limits how long the admission and proof handlers set with [method Netw.configure_admission] may take on this peer, so a join that waits on the player raises it on both the server and the client.
+			Seconds a peer has from connecting until a link is admitted, or [code]0[/code] for no limit. On the server it is a joining client's deadline unless [method NetwAdmissionConfig.timeout] is declared, and the server tells the client that deadline. A client uses its own value until the server first replies, and on links to other clients. A join that passes its deadline is refused with [constant @GlobalScope.ERR_TIMEOUT].
 		</member>
 		<member name="connected_players" type="NetwPlayer[]" setter="" getter="player_all" default="[]">
 			Every player, sorted by peer id. Same as [member players], except that a player who is leaving stays here a little longer.

@@ -94,7 +94,7 @@ struct World {
     bool outside_scenes = false;
 
     World(double p_window, int p_clients, bool p_migrates = false)
-        : rig(p_clients, p_migrates) {
+        : rig(0, p_migrates) {
         REQUIRE(gate_shape.is_valid());
         REQUIRE(spawner.is_valid());
         spawner_script = spawner.ptr();
@@ -119,7 +119,7 @@ struct World {
         rig.join(-1, StringName("host"));
         const char *names[] = {"ada", "bob", "cy"};
         for (int seat_at = 0; seat_at < p_clients; ++seat_at) {
-            seat(seat_at, names[seat_at]);
+            late(names[seat_at]);
         }
     }
 
@@ -148,10 +148,10 @@ struct World {
         );
     }
 
-    void seat(int p_seat, const char *p_name, bool p_watch = true) {
+    void seat(int p_seat, bool p_watch) {
         teach(p_seat);
         rig.mirror_scene(p_seat, StringName("Arena"), true);
-        rig.join(p_seat, StringName(p_name));
+        rig.pump(4);
         if (p_watch) {
             NETW_REQUIRE_EQ(
                 int(rig.server()->scene_watch(arena, rig.peer_id(p_seat))),
@@ -163,9 +163,9 @@ struct World {
     }
 
     int late(const char *p_name, bool p_watch = true) {
-        const int made = rig.add_client();
+        const int made = rig.add_client(StringName(p_name));
         rig.mount_late(made, false);
-        seat(made, p_name, p_watch);
+        seat(made, p_watch);
         return made;
     }
 
@@ -730,8 +730,8 @@ public:
         config->return_window(60.0);
         for (int seat_at = 0; seat_at < SEAT_LATE; ++seat_at) {
             create(seat_at);
-            connect(seat_at);
         }
+        connect(SEAT_SERVER);
         apis[SEAT_SERVER]->session_initialize(config);
         pump(1);
         for (int seat_at = 0; seat_at < SEAT_LATE; ++seat_at) {
@@ -742,16 +742,22 @@ public:
         branches[SEAT_SERVER]->add_child(gate);
         netw::Netw::configure_admission(Callable(gate, StringName("admit")));
         for (int seat_at = 0; seat_at < SEAT_LATE; ++seat_at) {
+            if (seat_at != SEAT_SERVER) {
+                connect(seat_at);
+            }
             join(seat_at);
         }
         pump(SETTLE);
     }
 
     void create(int p_seat) {
+        const char *names[SEAT_COUNT] = {"", "ada", "bob", "cy", "dee"};
         apis[p_seat] = NetwMultiplayer::create(Ref<Script>());
-        apis[p_seat]->session_default_join_held = true;
         apis[p_seat]->session_get_inner()->set_root_path(NodePath("/"));
         apis[p_seat]->transfer_set_mode(mode);
+        if (p_seat != SEAT_SERVER) {
+            apis[p_seat]->session_prepare_join(StringName(names[p_seat]), {});
+        }
     }
 
     void connect(int p_seat) {
@@ -793,8 +799,9 @@ public:
     }
 
     void join(int p_seat) {
-        const char *names[SEAT_COUNT] = {"host", "ada", "bob", "cy", "dee"};
-        apis[p_seat]->session_submit_join(StringName(names[p_seat]), Array());
+        if (p_seat == SEAT_SERVER) {
+            apis[p_seat]->session_submit_join(StringName("host"), Array());
+        }
         pump(4);
     }
 

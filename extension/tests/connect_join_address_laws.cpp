@@ -79,10 +79,9 @@ struct Seated {
 
     explicit Seated(const String &p_address)
         : directories(p_address),
-          rig(1, false, false, &join_through_directory) {
+          rig(1, false, &join_through_directory) {
         rig.mount();
         rig.join(-1, StringName("host"));
-        rig.join(0, StringName("guest"));
         rig.pump(SETTLE_PUMPS);
     }
 
