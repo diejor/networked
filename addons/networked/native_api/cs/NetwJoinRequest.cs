@@ -11,8 +11,10 @@ namespace Networked;
 /// <remarks>
 /// The server passes this request to the handler declared with
 /// <see cref="Netw.ConfigureAdmission"/>, after every
-/// <see cref="NetwAccountProvider"/> has verified. A requested
-/// <see cref="NetwJoinRequest.UserName"/> does not verify an account.
+/// <see cref="NetwAccountProvider"/> has verified. The joining client is not
+/// connected until the handler returns <c>@GlobalScope.OK</c>, and
+/// <see cref="NetwJoinRequest.Refuse"/> tells it why it was refused. A
+/// requested <see cref="NetwJoinRequest.UserName"/> does not verify an account.
 /// <code>
 /// private Error Admit(Variant value)
 /// {
@@ -283,6 +285,38 @@ public sealed class NetwJoinRequest : NetwRefCounted
         NetwThunks.Call1(_bindIsBound, Checked, in slot0, ref answered);
         slot0.Dispose();
         bool result = VariantUtils.ConvertToBool(answered);
+        answered.Dispose();
+        return result;
+    }
+
+    private static readonly IntPtr _bindRefuse =
+        NetwApi.MethodBind("NetwJoinRequest", "refuse", 3228710962UL);
+
+    /// <summary>
+    /// Returns <paramref name="code"/> for the admission handler to return, and
+    /// sends <paramref name="reason"/> to the refused player with it. The
+    /// player reads both in <see cref="NetwSession.JoinFailed"/> and
+    /// <see cref="NetwConnection.Failed"/>. <paramref name="reason"/> is sent
+    /// only when the handler returns this same <paramref name="code"/>, and is
+    /// cut to 255 UTF-8 bytes. An empty <paramref name="reason"/> sends a
+    /// default sentence that names <paramref name="code"/>. Passing
+    /// <c>@GlobalScope.OK</c> reports an error and refuses with
+    /// <c>@GlobalScope.ERR_UNCONFIGURED</c>.
+    /// </summary>
+    public Error Refuse(Error code, string reason = "")
+    {
+        godot_variant slot0 = VariantUtils.CreateFromInt((long)code);
+        godot_variant slot1 = VariantUtils.CreateFromString(reason);
+        godot_variant answered = default;
+        NetwThunks.Call2(
+            _bindRefuse,
+            Checked,
+            in slot0,
+            in slot1,
+            ref answered);
+        slot0.Dispose();
+        slot1.Dispose();
+        Error result = (Error)VariantUtils.ConvertToInt64(answered);
         answered.Dispose();
         return result;
     }

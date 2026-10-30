@@ -279,11 +279,9 @@ public sealed class Netw : NetwRefCounted
     ///     return OK if request.account else ERR_UNAUTHORIZED
     /// </code>
     /// <para>
-    /// A peer joins when <paramref name="handler"/> returns
-    /// <c>@GlobalScope.OK</c>. Each <see cref="NetwAccountProvider"/> passed to
-    /// <see cref="NetwAdmissionConfig.Accept"/> proves its account before
-    /// <paramref name="handler"/> runs, and both may <c>await</c> within
-    /// <see cref="NetwMultiplayer.AuthTimeout"/>.
+    /// A joining client is not connected until <paramref name="handler"/>
+    /// returns <c>@GlobalScope.OK</c>. <see cref="NetwAdmissionConfig"/> shows
+    /// a lobby that admits players only while it is open.
     /// </para>
     /// </summary>
     public static NetwAdmissionConfig ConfigureAdmission(Callable handler)

@@ -43,24 +43,21 @@ const char *SESSION_ENDED_MID_SPAWN
 const double CLOCKLESS_TICKRATE = 30.0;
 constexpr int BLOB_CAP = 4095;
 
-const GameCall SPAWN_FUNCTION = {
-    sys::SPAWN,
-    "The Netw.configure_spawn function",
-    "func(...) -> Node",
-    -1
-};
-const GameCall SPAWN_CONSTRUCTOR = {
-    sys::SPAWN,
-    "The NetwMultiplayer.spawn_register_constructor function",
-    "func(...) -> Node, taking one argument per arg_types entry",
-    -1
-};
-const GameCall DESPAWN_HOOK = {
-    sys::SPAWN,
-    "The NetwDespawnConfig.before_removal method",
-    "func() -> void",
-    0
-};
+const GameCall SPAWN_FUNCTION
+    = {sys::SPAWN,
+       "The Netw.configure_spawn function",
+       "func(...) -> Node",
+       -1};
+const GameCall SPAWN_CONSTRUCTOR
+    = {sys::SPAWN,
+       "The NetwMultiplayer.spawn_register_constructor function",
+       "func(...) -> Node, taking one argument per arg_types entry",
+       -1};
+const GameCall DESPAWN_HOOK
+    = {sys::SPAWN,
+       "The NetwDespawnConfig.before_removal method",
+       "func() -> void",
+       0};
 
 bool build_called = true;
 

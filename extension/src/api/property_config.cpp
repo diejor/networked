@@ -14,12 +14,11 @@ using repl::PropertySet;
 
 namespace {
 
-const GameCall CARRY_STEP = {
-    sys::PREDICTION,
-    "NetwPropertyConfig.carry_step",
-    "func(value: Variant, ctx: NetwPredictCarryContext) -> Variant",
-    2
-};
+const GameCall CARRY_STEP
+    = {sys::PREDICTION,
+       "NetwPropertyConfig.carry_step",
+       "func(value: Variant, ctx: NetwPredictCarryContext) -> Variant",
+       2};
 
 Callable &carry_binder() {
     static Callable binder;

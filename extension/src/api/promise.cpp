@@ -17,12 +17,11 @@ const char *SIG_ANSWERED = "answered";
 
 const GameCall PROMISE_THEN
     = {sys::SESSION, "The NetwPromise.then callback", "func(result)", 1};
-const GameCall PROMISE_CATCH = {
-    sys::SESSION,
-    "The NetwPromise.catch_error callback",
-    "func(code: Error, detail: String)",
-    2
-};
+const GameCall PROMISE_CATCH
+    = {sys::SESSION,
+       "The NetwPromise.catch_error callback",
+       "func(code: Error, detail: String)",
+       2};
 const GameCall PROMISE_SETTLED
     = {sys::SESSION, "The NetwPromise.when_settled callback", "func()", 0};
 

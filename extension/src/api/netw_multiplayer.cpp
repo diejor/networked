@@ -3178,12 +3178,11 @@ void NetwMultiplayer::auth_receive_game(
         disconnect_peer(p_peer);
         return;
     }
-    static const GameCall AUTH_CALLBACK = {
-        sys::SESSION,
-        "NetwMultiplayer.auth_callback",
-        "func(peer_id: int, data: PackedByteArray)",
-        2
-    };
+    static const GameCall AUTH_CALLBACK
+        = {sys::SESSION,
+           "NetwMultiplayer.auth_callback",
+           "func(peer_id: int, data: PackedByteArray)",
+           2};
     Array args;
     args.push_back(p_peer);
     args.push_back(auth::payload_of(p_data));
@@ -5474,12 +5473,11 @@ int64_t NetwMultiplayer::action_gate_count() const {
 
 Node *NetwMultiplayer::session_root() const {
     if (session_root_reader.is_valid()) {
-        static const GameCall ROOT_READER = {
-            sys::SESSION,
-            "The NetwMultiplayer.session_set_root reader",
-            "func() -> Node",
-            0
-        };
+        static const GameCall ROOT_READER
+            = {sys::SESSION,
+               "The NetwMultiplayer.session_set_root reader",
+               "func() -> Node",
+               0};
         const Variant answered
             = game_call(session_root_reader, Array(), ROOT_READER);
         Node *declared = Object::cast_to<Node>(gd::live_object(answered));

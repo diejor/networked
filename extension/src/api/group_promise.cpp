@@ -14,18 +14,16 @@ namespace {
 const char *SIG_PEER_COMPLETED = "peer_completed";
 const char *SIG_SETTLED = "settled";
 
-const GameCall GROUP_THEN = {
-    sys::SESSION,
-    "The NetwGroupPromise.then callback",
-    "func(results: Dictionary)",
-    1
-};
-const GameCall GROUP_CATCH = {
-    sys::SESSION,
-    "The NetwGroupPromise.catch_error callback",
-    "func(code: Error, detail: String)",
-    2
-};
+const GameCall GROUP_THEN
+    = {sys::SESSION,
+       "The NetwGroupPromise.then callback",
+       "func(results: Dictionary)",
+       1};
+const GameCall GROUP_CATCH
+    = {sys::SESSION,
+       "The NetwGroupPromise.catch_error callback",
+       "func(code: Error, detail: String)",
+       2};
 
 } // namespace
 

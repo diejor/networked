@@ -66,12 +66,11 @@ void answer_waits(Source &r_source, bool p_fetched) {
     }
 }
 
-const GameCall TOKEN_FETCH = {
-    sys::SESSION,
-    "The NetwIdToken.provide fetch",
-    "func(nonce: String) -> NetwPromise",
-    1
-};
+const GameCall TOKEN_FETCH
+    = {sys::SESSION,
+       "The NetwIdToken.provide fetch",
+       "func(nonce: String) -> NetwPromise",
+       1};
 
 } // namespace
 

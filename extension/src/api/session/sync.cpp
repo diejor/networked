@@ -57,12 +57,11 @@ using repl::PropertySet;
 
 namespace {
 
-const GameCall MIGRATION_STEP = {
-    sys::TABLE,
-    "The NetwSchema.migrate or NetwPersistenceConfig.migrate step",
-    "func(values: Dictionary) -> Dictionary",
-    1
-};
+const GameCall MIGRATION_STEP
+    = {sys::TABLE,
+       "The NetwSchema.migrate or NetwPersistenceConfig.migrate step",
+       "func(values: Dictionary) -> Dictionary",
+       1};
 
 constexpr double SHUTDOWN_NOTIFY_DELAY = 0.5;
 

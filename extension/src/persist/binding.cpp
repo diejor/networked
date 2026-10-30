@@ -18,19 +18,17 @@ namespace netw::persist {
 
 namespace {
 
-const GameCall MIGRATION_STEP = {
-    sys::TABLE,
-    "The NetwSchema.migrate or NetwPersistenceConfig.migrate step",
-    "func(values: Dictionary) -> Dictionary",
-    1
-};
+const GameCall MIGRATION_STEP
+    = {sys::TABLE,
+       "The NetwSchema.migrate or NetwPersistenceConfig.migrate step",
+       "func(values: Dictionary) -> Dictionary",
+       1};
 
-const GameCall RECORD_ID = {
-    sys::TABLE,
-    "The NetwPersistenceConfig.record_id provider",
-    "func() -> StringName",
-    0
-};
+const GameCall RECORD_ID
+    = {sys::TABLE,
+       "The NetwPersistenceConfig.record_id provider",
+       "func() -> StringName",
+       0};
 
 Node *node_of(ObjectID p_id) {
     return Object::cast_to<Node>(gd::object_of(p_id));

@@ -9,18 +9,27 @@ namespace Networked;
 /// Settings for a session's admission handler.
 /// </summary>
 /// <remarks>
-/// The server receives a <see cref="NetwJoinRequest"/> and waits for the
-/// handler to return <c>@GlobalScope.OK</c> before admitting its
-/// <see cref="NetwPlayer"/>. The handler may <c>await</c>. Each
-/// <see cref="NetwAccountProvider"/> accepted here proves one kind of account
-/// first.
+/// The server passes each joining client's <see cref="NetwJoinRequest"/> to the
+/// handler, which may <c>await</c>. The client is not connected and receives
+/// nothing until the handler returns <c>@GlobalScope.OK</c>. Any other
+/// <c>@GlobalScope.Error</c> refuses it, and the client receives that code
+/// unchanged in <see cref="NetwSession.JoinFailed"/>, with the reason given to
+/// <see cref="NetwJoinRequest.Refuse"/>.
 /// <code>
+/// var lobby_open := true
+///
 /// func _init() -&gt; void:
-///     Netw.configure_admission(admit).accept(PasscodeAccount.new())
+///     Netw.configure_admission(admit)
 ///
 /// func admit(request: NetwJoinRequest) -&gt; Error:
-///     return OK if request.account else ERR_UNAUTHORIZED
+///     if not lobby_open:
+///         return request.refuse(ERR_BUSY, "The match has started.")
+///     return OK
 /// </code>
+/// <para>
+/// Each <see cref="NetwAccountProvider"/> accepted here proves one kind of
+/// account before the handler runs.
+/// </para>
 /// </remarks>
 public sealed class NetwAdmissionConfig : NetwRefCounted
 {
@@ -52,6 +61,30 @@ public sealed class NetwAdmissionConfig : NetwRefCounted
         IntPtr answered = default;
         NetwThunks.Ptrcall1_IntPtr_IntPtr(
             _bindAccept,
+            Checked,
+            in slot0,
+            ref answered);
+        return NetwAdmissionConfig.Adopt(answered);
+    }
+
+    private static readonly IntPtr _bindTimeout =
+        NetwApi.MethodBind("NetwAdmissionConfig", "timeout", 1717963889UL);
+
+    /// <summary>
+    /// Gives a client <paramref name="seconds"/> from connecting to the server
+    /// to be admitted, in place of <see cref="NetwMultiplayer.AuthTimeout"/>.
+    /// The server tells the client this deadline, so only the server's value
+    /// counts. A join still waiting when it passes is refused with
+    /// <c>@GlobalScope.ERR_TIMEOUT</c>. The server's own join does not use this
+    /// deadline, and its handler is given
+    /// <see cref="NetwMultiplayer.AuthTimeout"/> seconds.
+    /// </summary>
+    public NetwAdmissionConfig Timeout(double seconds)
+    {
+        double slot0 = seconds;
+        IntPtr answered = default;
+        NetwThunks.Ptrcall1_Double_IntPtr(
+            _bindTimeout,
             Checked,
             in slot0,
             ref answered);

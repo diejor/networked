@@ -27,12 +27,11 @@ const char *SIG_SPAWNED = "spawned";
 const char *SIG_DESPAWNED = "despawned";
 const char *KEY_CLEAR_SESSION = "spawner-compat-clear-session";
 
-const GameCall SPAWNER_FUNCTION = {
-    sys::SPAWN,
-    "The MultiplayerSpawner.spawn_function",
-    "func(data: Variant) -> Node",
-    1
-};
+const GameCall SPAWNER_FUNCTION
+    = {sys::SPAWN,
+       "The MultiplayerSpawner.spawn_function",
+       "func(data: Variant) -> Node",
+       1};
 
 Variant duplicate_arg(const Variant &p_data) {
     if (p_data.get_type() == Variant::ARRAY) {

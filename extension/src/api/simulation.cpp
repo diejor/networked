@@ -15,12 +15,11 @@ namespace netw {
 
 namespace {
 
-const GameCall SIMULATION_STEP = {
-    sys::PREDICTION,
-    "NetwSimulation.step",
-    "func(delta: float, tick: int, is_fresh: bool) -> void",
-    3
-};
+const GameCall SIMULATION_STEP
+    = {sys::PREDICTION,
+       "NetwSimulation.step",
+       "func(delta: float, tick: int, is_fresh: bool) -> void",
+       3};
 
 const StringName &network_tick_name() {
     static const StringName name("_network_tick");

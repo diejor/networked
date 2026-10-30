@@ -13,12 +13,11 @@ namespace netw {
 
 namespace {
 
-const GameCall CHANNEL_HANDLER = {
-    sys::LIVENESS,
-    "The NetwChannel.register handler",
-    "func(sender: int, payload: PackedByteArray) -> void",
-    2
-};
+const GameCall CHANNEL_HANDLER
+    = {sys::LIVENESS,
+       "The NetwChannel.register handler",
+       "func(sender: int, payload: PackedByteArray) -> void",
+       2};
 
 } // namespace
 

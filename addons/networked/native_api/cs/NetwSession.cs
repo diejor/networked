@@ -92,12 +92,13 @@ public sealed class NetwSession : NetwRefCounted
         Creating = 1,
         /// <summary>
         /// A <see cref="MultiplayerPeer"/> is assigned and connecting, and may
-        /// still fail.
+        /// still fail. A client stays here until the server admits its player.
         /// </summary>
         Connecting = 2,
         /// <summary>
-        /// Connected, and <see cref="NetwSession.Entered"/> has fired. This
-        /// peer's player is admitted later, at
+        /// Connected, and <see cref="NetwSession.Entered"/> has fired. A
+        /// client's player is already admitted here. A listen server admits its
+        /// own player after it goes online, at
         /// <see cref="NetwSession.LocalJoined"/>.
         /// </summary>
         Online = 3,
@@ -145,7 +146,9 @@ public sealed class NetwSession : NetwRefCounted
         /// </summary>
         ConnectionLost = 2,
         /// <summary>
-        /// The server kicked this peer with <see cref="NetwSession.Kick"/>.
+        /// The server kicked this peer with <see cref="NetwSession.Kick"/>, or
+        /// this peer left because an entity synchronizes different properties
+        /// here than on the server.
         /// </summary>
         Kicked = 3,
         /// <summary>
@@ -208,7 +211,10 @@ public sealed class NetwSession : NetwRefCounted
     }
 
     /// <summary>
-    /// Emitted when this peer is online.
+    /// Emitted when this peer is online. A client goes online once the server
+    /// admits its player, so <see cref="NetwSession.PlayerJoined"/> for each
+    /// player already present and then <see cref="NetwSession.LocalJoined"/>
+    /// follow in the same frame.
     /// </summary>
     public event Action Entered
     {
@@ -311,8 +317,21 @@ public sealed class NetwSession : NetwRefCounted
     }
 
     /// <summary>
-    /// This peer's join was rejected with <c>code</c> and the <c>reason</c> the
-    /// server gave. <see cref="NetwSession.LocalPlayer"/> stays <c>null</c>.
+    /// This peer's join was refused with <c>code</c> and the <c>reason</c> the
+    /// server gave. <see cref="NetwSession.LocalPlayer"/> stays <c>null</c>. A
+    /// client refused while connecting closes its peer and never goes online,
+    /// so neither <see cref="NetwSession.Entered"/> nor
+    /// <see cref="NetwSession.Exited"/> fires. Networked refuses with three
+    /// codes, and any other <c>code</c> is the one the admission handler or a
+    /// <see cref="NetwAccountProvider"/> returned.
+    /// - <c>@GlobalScope.ERR_UNCONFIGURED</c> the two peers are set up
+    /// differently, such as another build, another Networked version or other
+    /// <see cref="Netw.ConfigureJoin"/> arguments
+    /// - <c>@GlobalScope.ERR_TIMEOUT</c> the player was not admitted before
+    /// <see cref="NetwAdmissionConfig.Timeout"/> or
+    /// <see cref="NetwMultiplayer.AuthTimeout"/> passed
+    /// - <c>@GlobalScope.ERR_ALREADY_IN_USE</c> the account already plays as
+    /// the server's player
     /// </summary>
     public event Action<Error, string> JoinFailed
     {

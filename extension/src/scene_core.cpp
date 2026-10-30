@@ -11,12 +11,11 @@ namespace netw {
 
 namespace {
 
-const GameCall SCENE_OBSERVER = {
-    sys::SCENE,
-    "The NetwScene.observe callback",
-    "func(present: bool, subject) -> bool",
-    2
-};
+const GameCall SCENE_OBSERVER
+    = {sys::SCENE,
+       "The NetwScene.observe callback",
+       "func(present: bool, subject) -> bool",
+       2};
 
 } // namespace
 

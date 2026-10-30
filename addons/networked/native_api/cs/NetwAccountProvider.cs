@@ -26,8 +26,8 @@ namespace Networked;
 ///     return OK
 /// </code>
 /// <para>
-/// Proving and verifying count against
-/// <see cref="NetwMultiplayer.AuthTimeout"/>. <see cref="NetwIdToken"/> is a
+/// Proving and verifying count against the join deadline of
+/// <see cref="NetwAdmissionConfig.Timeout"/>. <see cref="NetwIdToken"/> is a
 /// ready provider for signed tokens.
 /// </para>
 /// </remarks>

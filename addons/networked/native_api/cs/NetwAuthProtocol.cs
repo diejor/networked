@@ -11,12 +11,23 @@ namespace Networked;
 /// </summary>
 /// <remarks>
 /// A packet starts with four bytes that say what it is. A joining player sends
-/// <c>"NHEL"</c>, then a version byte, an 8-byte build tag, a flags byte, and
-/// optional authentication data. <see cref="NetwAdmissionConfig"/> uses a
-/// server reply carrying a random challenge. A server browser sends
+/// <c>"NHEL"</c>, then a version byte, an 8-byte build tag, a flags byte and a
+/// 4-byte deadline in milliseconds. The server replies with its own
+/// <c>"NHEL"</c>, whose deadline is the time the player has left to be
+/// admitted, followed by a random challenge when
+/// <see cref="NetwAdmissionConfig"/> accepts a provider. A server browser sends
 /// <c>"NPRB"</c>, then a version byte and a flags or status byte, and the reply
-/// follows. A server browser gets its reply and is disconnected, so it never
-/// appears in the <see cref="MultiplayerApi"/>.
+/// follows. A joining link carries three more packets after the hello.
+/// <code>
+/// "NGAM"  what the other peer passed to NetwMultiplayer.send_auth
+/// "NJON"  the player's join
+/// "NANS"  the answer. Admitted, refused with an Error and a reason of
+///         at most 255 UTF-8 bytes, or the client's confirmation
+/// </code>
+/// <para>
+/// A server browser gets its reply and is disconnected, so it never appears in
+/// the <see cref="MultiplayerApi"/>.
+/// </para>
 /// </remarks>
 public sealed class NetwAuthProtocol : NetwRefCounted
 {
@@ -48,6 +59,19 @@ public sealed class NetwAuthProtocol : NetwRefCounted
         /// A server browser asking about the server.
         /// </summary>
         Probe = 2,
+        /// <summary>
+        /// Bytes the game sends with <see cref="NetwMultiplayer.SendAuth"/>
+        /// while <see cref="NetwMultiplayer.AuthCallback"/> runs.
+        /// </summary>
+        Game = 3,
+        /// <summary>
+        /// A client's join, carrying its username and join arguments.
+        /// </summary>
+        Join = 4,
+        /// <summary>
+        /// The server admitting or refusing a join.
+        /// </summary>
+        Answer = 5,
     }
 
     public enum ProbeStatus : long

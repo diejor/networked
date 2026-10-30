@@ -92,24 +92,21 @@ PackedByteArray call_frame(
     return stream.to_bytes();
 }
 
-const GameCall CHANNEL_HANDLER = {
-    sys::TRANSPORT,
-    "The NetwMultiplayer.rpc_channel_register handler",
-    "func(entity: RID, payload: PackedByteArray, sender: int)",
-    3
-};
-const GameCall RPC_LOCAL = {
-    sys::TRANSPORT,
-    "The method Netw.rpc runs on this peer",
-    "a function that takes the arguments given to Netw.rpc",
-    -1
-};
-const GameCall RPC_CONTROLLER_LOCAL = {
-    sys::TRANSPORT,
-    "The method Netw.rpc_controller runs on this peer",
-    "a function that takes the arguments given to Netw.rpc_controller",
-    -1
-};
+const GameCall CHANNEL_HANDLER
+    = {sys::TRANSPORT,
+       "The NetwMultiplayer.rpc_channel_register handler",
+       "func(entity: RID, payload: PackedByteArray, sender: int)",
+       3};
+const GameCall RPC_LOCAL
+    = {sys::TRANSPORT,
+       "The method Netw.rpc runs on this peer",
+       "a function that takes the arguments given to Netw.rpc",
+       -1};
+const GameCall RPC_CONTROLLER_LOCAL
+    = {sys::TRANSPORT,
+       "The method Netw.rpc_controller runs on this peer",
+       "a function that takes the arguments given to Netw.rpc_controller",
+       -1};
 
 } // namespace
 

@@ -12,12 +12,11 @@ using PerPeer = Leave::PerPeer;
 
 namespace {
 
-const GameCall LEAVE_POLICY_CUSTOM = {
-    sys::INTEREST,
-    "The NetwInterest.on_leave_policy custom_callback",
-    "func(peer_id: int, layer_id: StringName)",
-    2
-};
+const GameCall LEAVE_POLICY_CUSTOM
+    = {sys::INTEREST,
+       "The NetwInterest.on_leave_policy custom_callback",
+       "func(peer_id: int, layer_id: StringName)",
+       2};
 
 const StringName &hide_key() {
     static const StringName key("hide");

@@ -45,36 +45,31 @@ namespace netw {
 
 namespace {
 
-const GameCall PERCEPTION_CUSTOM = {
-    sys::INTEREST,
-    "The NetwInterest.on_perception_policy custom_callback",
-    "func(visible: bool, peer_id: int, layer_id: StringName)",
-    3
-};
-const GameCall LAYER_DRIVER = {
-    sys::INTEREST,
-    "NetwInterestLayer.driver",
-    "func(layer: NetwInterestLayer) -> Array[NetwEntity]",
-    1
-};
-const GameCall LAYER_DRIVER_RID = {
-    sys::INTEREST,
-    "The NetwMultiplayer.interest_layer_set_driver_callback callback",
-    "func(layer: RID) -> Array[RID]",
-    1
-};
-const GameCall LAYER_MONITOR = {
-    sys::INTEREST,
-    "NetwInterestLayer.monitor",
-    "func(entity: NetwEntity, peer_id: int, visible: bool)",
-    3
-};
-const GameCall LAYER_MONITOR_RID = {
-    sys::INTEREST,
-    "The NetwMultiplayer.interest_layer_set_monitor_callback callback",
-    "func(visible: bool, entity: RID, peer_id: int)",
-    3
-};
+const GameCall PERCEPTION_CUSTOM
+    = {sys::INTEREST,
+       "The NetwInterest.on_perception_policy custom_callback",
+       "func(visible: bool, peer_id: int, layer_id: StringName)",
+       3};
+const GameCall LAYER_DRIVER
+    = {sys::INTEREST,
+       "NetwInterestLayer.driver",
+       "func(layer: NetwInterestLayer) -> Array[NetwEntity]",
+       1};
+const GameCall LAYER_DRIVER_RID
+    = {sys::INTEREST,
+       "The NetwMultiplayer.interest_layer_set_driver_callback callback",
+       "func(layer: RID) -> Array[RID]",
+       1};
+const GameCall LAYER_MONITOR
+    = {sys::INTEREST,
+       "NetwInterestLayer.monitor",
+       "func(entity: NetwEntity, peer_id: int, visible: bool)",
+       3};
+const GameCall LAYER_MONITOR_RID
+    = {sys::INTEREST,
+       "The NetwMultiplayer.interest_layer_set_monitor_callback callback",
+       "func(visible: bool, entity: RID, peer_id: int)",
+       3};
 
 } // namespace
 
@@ -1791,10 +1786,7 @@ void NetwMultiplayer::layer_set_monitor(
     if (view.is_null() || !p_callback.is_valid()) {
         return;
     }
-    game_call_declared(
-        p_callback,
-        p_typed ? LAYER_MONITOR : LAYER_MONITOR_RID
-    );
+    game_call_declared(p_callback, p_typed ? LAYER_MONITOR : LAYER_MONITOR_RID);
     LayerMonitorRow row;
     row.watch = p_callback;
     row.typed = p_typed;

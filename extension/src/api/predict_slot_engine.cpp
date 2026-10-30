@@ -33,12 +33,11 @@ using repl::PropertyBindingPtr;
 
 namespace {
 
-const GameCall SIMULATION_STEP = {
-    sys::PREDICTION,
-    "NetwSimulation.step",
-    "func(delta: float, tick: int, is_fresh: bool) -> void",
-    3
-};
+const GameCall SIMULATION_STEP
+    = {sys::PREDICTION,
+       "NetwSimulation.step",
+       "func(delta: float, tick: int, is_fresh: bool) -> void",
+       3};
 
 constexpr int ARRIVAL_BUCKET_MAX = NetwPredictStats::ARRIVAL_BUCKETS - 1;
 constexpr int REPLAY_DEPTH_BUCKET_MAX

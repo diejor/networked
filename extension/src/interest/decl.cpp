@@ -9,18 +9,16 @@ namespace netw::interest {
 
 namespace {
 
-const GameCall INTEREST_ENTER = {
-    sys::INTEREST,
-    "The NetwInterest.on_enter callback",
-    "func(layer_id: StringName, peer_id: int)",
-    2
-};
-const GameCall INTEREST_LEAVE = {
-    sys::INTEREST,
-    "The NetwInterest.on_leave callback",
-    "func(layer_id: StringName, peer_id: int)",
-    2
-};
+const GameCall INTEREST_ENTER
+    = {sys::INTEREST,
+       "The NetwInterest.on_enter callback",
+       "func(layer_id: StringName, peer_id: int)",
+       2};
+const GameCall INTEREST_LEAVE
+    = {sys::INTEREST,
+       "The NetwInterest.on_leave callback",
+       "func(layer_id: StringName, peer_id: int)",
+       2};
 
 void fire_each(
     const Array &callbacks,

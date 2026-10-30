@@ -184,8 +184,7 @@ void NetwMultiplayer::session_follow_relabel(
     int64_t p_successor_was,
     int64_t p_former_now
 ) {
-    if (session_get_state() == SESSION_STATE_CONNECTING
-        && !has_server_role()) {
+    if (session_get_state() == SESSION_STATE_CONNECTING && !has_server_role()) {
         session_follow_relabel_pending(p_successor_was);
         return;
     }

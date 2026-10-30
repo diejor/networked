@@ -2063,11 +2063,12 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind("NetwMultiplayer", "set_auth_timeout", 373806689UL);
 
     /// <summary>
-    /// Same as <c>SceneMultiplayer.auth_timeout</c>, applied to
-    /// <see cref="NetwMultiplayer.Inner"/>. It also limits how long the
-    /// admission and proof handlers set with
-    /// <see cref="Netw.ConfigureAdmission"/> may take on this peer, so a join
-    /// that waits on the player raises it on both the server and the client.
+    /// Seconds a peer has from connecting until a link is admitted, or <c>0</c>
+    /// for no limit. On the server it is a joining client's deadline unless
+    /// <see cref="NetwAdmissionConfig.Timeout"/> is declared, and the server
+    /// tells the client that deadline. A client uses its own value until the
+    /// server first replies, and on links to other clients. A join that passes
+    /// its deadline is refused with <c>@GlobalScope.ERR_TIMEOUT</c>.
     /// </summary>
     public double AuthTimeout
     {
@@ -2291,8 +2292,13 @@ public sealed class NetwMultiplayer : NetwRefCounted
             1611583062UL);
 
     /// <summary>
-    /// Same as <c>SceneMultiplayer.auth_callback</c>. Setting it replaces the
-    /// built-in authentication.
+    /// Same as <c>SceneMultiplayer.auth_callback</c>. It runs first on each
+    /// link and receives what the other peer passed to
+    /// <see cref="NetwMultiplayer.SendAuth"/>. The join continues once the game
+    /// calls <see cref="NetwMultiplayer.CompleteAuth"/>, so the
+    /// <see cref="Netw.ConfigureAdmission"/> handler runs after it. Set the
+    /// same callback on every peer, or the join is refused with
+    /// <c>@GlobalScope.ERR_UNCONFIGURED</c>.
     /// </summary>
     public Callable AuthCallback
     {
@@ -10335,8 +10341,10 @@ public sealed class NetwMultiplayer : NetwRefCounted
         NetwApi.MethodBind("NetwMultiplayer", "complete_auth", 844576869UL);
 
     /// <summary>
-    /// Same as <c>SceneMultiplayer.complete_auth</c>. Returns
-    /// <c>@GlobalScope.ERR_UNCONFIGURED</c> when there is no
+    /// Same as <c>SceneMultiplayer.complete_auth</c>, called from
+    /// <see cref="NetwMultiplayer.AuthCallback"/> when the game's own check of
+    /// <paramref name="id"/> passes. The peer connects once its join is
+    /// admitted. Returns <c>@GlobalScope.ERR_UNCONFIGURED</c> when there is no
     /// <see cref="NetwMultiplayer.Inner"/>.
     /// </summary>
     public Error CompleteAuth(long id)

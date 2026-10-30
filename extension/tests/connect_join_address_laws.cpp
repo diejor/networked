@@ -78,8 +78,7 @@ struct Seated {
     LoopbackRig rig;
 
     explicit Seated(const String &p_address)
-        : directories(p_address),
-          rig(1, false, &join_through_directory) {
+        : directories(p_address), rig(1, false, &join_through_directory) {
         rig.mount();
         rig.join(-1, StringName("host"));
         rig.pump(SETTLE_PUMPS);

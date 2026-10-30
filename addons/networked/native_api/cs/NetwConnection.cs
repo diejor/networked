@@ -60,11 +60,12 @@ namespace Networked;
 /// <b>Connecting</b> <see cref="NetwConnection.Join"/> and
 /// <see cref="NetwConnection.Host"/> create the peer, assign it, and settle
 /// their <see cref="NetwPromise"/> once the session is online. A failure
-/// arrives once through <see cref="NetwConnection.Failed"/>, and a player the
-/// server refuses arrives through <see cref="NetwSession.JoinFailed"/> instead.
-/// <b>Sharing</b> <see cref="NetwConnection.JoinAddress"/> is the address the
-/// server advertises, and <see cref="NetwConnection.MaxPlayers"/> is its player
-/// limit. A client reads both from the server once its join is accepted, and
+/// arrives once through <see cref="NetwConnection.Failed"/>. A player the
+/// server refuses also arrives through <see cref="NetwSession.JoinFailed"/>,
+/// with the same code and reason. <b>Sharing</b>
+/// <see cref="NetwConnection.JoinAddress"/> is the address the server
+/// advertises, and <see cref="NetwConnection.MaxPlayers"/> is its player limit.
+/// A client reads both from the server once its join is accepted, and
 /// <see cref="NetwConnection.JoinAddressChanged"/> reports each change.
 /// <see cref="NetwConnection.CurrentEndpoint"/> names the
 /// <see cref="NetwEndpoint.PeerClass"/>, so a service can share both.
@@ -179,12 +180,12 @@ public sealed class NetwConnection : NetwRefCounted
     /// Emitted once when an attempt fails, and never for
     /// <see cref="NetwConnection.Cancel"/>. A connection to it reads the
     /// failure of the <see cref="NetwPromise"/> that started the attempt, so a
-    /// caller may drop that promise. A join whose connection closes fails with
-    /// <c>@GlobalScope.ERR_CANT_CONNECT</c> when the server never answered. It
-    /// fails with <c>@GlobalScope.ERR_CONNECTION_ERROR</c> when the server
-    /// answered and then refused the join or ran out of time. Running out of
-    /// time means <see cref="NetwMultiplayer.AuthTimeout"/> ended the join on
-    /// one of the peers.
+    /// caller may drop that promise. A join the server refuses fails with the
+    /// <c>error</c> and <c>reason</c> of <see cref="NetwSession.JoinFailed"/>,
+    /// also when the game assigned the peer itself. A join whose connection
+    /// closes with no answer fails with <c>@GlobalScope.ERR_CANT_CONNECT</c>
+    /// when the server was never reached, and with
+    /// <c>@GlobalScope.ERR_CONNECTION_ERROR</c> when it was.
     /// </summary>
     public event Action<Error, string> Failed
     {

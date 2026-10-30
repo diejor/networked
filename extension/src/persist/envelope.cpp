@@ -9,12 +9,11 @@ namespace netw::persist {
 
 namespace {
 
-const GameCall MIGRATION_STEP = {
-    sys::TABLE,
-    "The NetwSchema.migrate or NetwPersistenceConfig.migrate step",
-    "func(values: Dictionary) -> Dictionary",
-    1
-};
+const GameCall MIGRATION_STEP
+    = {sys::TABLE,
+       "The NetwSchema.migrate or NetwPersistenceConfig.migrate step",
+       "func(values: Dictionary) -> Dictionary",
+       1};
 
 const char *KEY_FORMAT = "format_version";
 const char *KEY_KIND = "kind";

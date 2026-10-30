@@ -16,8 +16,8 @@ HashSet<uint64_t> &reported_calls() {
 }
 
 bool first_report(const Callable &p_fn, const GameCall &p_site) {
-    const uint64_t key = (uint64_t(p_fn.hash()) << 32)
-        ^ uint64_t(String(p_site.what).hash());
+    const uint64_t key
+        = (uint64_t(p_fn.hash()) << 32) ^ uint64_t(String(p_site.what).hash());
     if (reported_calls().has(key)) {
         return false;
     }

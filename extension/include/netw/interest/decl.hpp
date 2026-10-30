@@ -83,6 +83,7 @@ class Facet {
         const godot::StringName &layer_id,
         const godot::Callable &callback
     );
+
 public:
     Decl *declaration() {
         return &decl;

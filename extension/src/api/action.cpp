@@ -32,19 +32,11 @@ Node *live_node(int64_t p_id) {
 const GameCall ACTION_PREDICT
     = {sys::PREDICTION, "NetwAction.predict", "func() -> Node", 0};
 
-const GameCall ACTION_REVERT = {
-    sys::PREDICTION,
-    "NetwAction.revert",
-    "func(node: Node) -> void",
-    1
-};
+const GameCall ACTION_REVERT
+    = {sys::PREDICTION, "NetwAction.revert", "func(node: Node) -> void", 1};
 
-const GameCall ACTION_CONFIRM = {
-    sys::PREDICTION,
-    "NetwAction.confirm",
-    "func(node: Node) -> void",
-    1
-};
+const GameCall ACTION_CONFIRM
+    = {sys::PREDICTION, "NetwAction.confirm", "func(node: Node) -> void", 1};
 
 } // namespace
 

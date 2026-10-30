@@ -12,26 +12,23 @@ namespace netw {
 
 namespace {
 
-const GameCall EFFECT_REVERT = {
-    sys::PREDICTION,
-    "The NetwMultiplayer.lagcomp_effect_arm revert",
-    "func() -> void",
-    0
-};
+const GameCall EFFECT_REVERT
+    = {sys::PREDICTION,
+       "The NetwMultiplayer.lagcomp_effect_arm revert",
+       "func() -> void",
+       0};
 
-const GameCall EFFECT_CONFIRMED = {
-    sys::PREDICTION,
-    "The NetwMultiplayer.lagcomp_effect_watch confirmed callback",
-    "func() -> void",
-    0
-};
+const GameCall EFFECT_CONFIRMED
+    = {sys::PREDICTION,
+       "The NetwMultiplayer.lagcomp_effect_watch confirmed callback",
+       "func() -> void",
+       0};
 
-const GameCall EFFECT_DENIED = {
-    sys::PREDICTION,
-    "The NetwMultiplayer.lagcomp_effect_watch denied callback",
-    "func() -> void",
-    0
-};
+const GameCall EFFECT_DENIED
+    = {sys::PREDICTION,
+       "The NetwMultiplayer.lagcomp_effect_watch denied callback",
+       "func() -> void",
+       0};
 
 } // namespace
 
@@ -112,11 +109,7 @@ void NetwEffectLedger::resolve(const StringName &p_key, bool p_keep) {
         game_call(revert, Array(), EFFECT_REVERT);
     }
     if (observer.is_valid()) {
-        game_call(
-            observer,
-            Array(),
-            p_keep ? EFFECT_CONFIRMED : EFFECT_DENIED
-        );
+        game_call(observer, Array(), p_keep ? EFFECT_CONFIRMED : EFFECT_DENIED);
     }
 }
 

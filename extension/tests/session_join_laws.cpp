@@ -492,9 +492,7 @@ TEST_CASE(
 
         const netw::session::AcceptFrame starved
             = netw_test::accepted_row(core.ptr(), 12, StringName("grace"));
-        CHECK_FALSE(
-            core->session_preflight_join(starved, netw::JoinRequest())
-        );
+        CHECK_FALSE(core->session_preflight_join(starved, netw::JoinRequest()));
 
         NETW_CHECK_EQ(int(handler->get(StringName("seated"))), 1);
         CHECK_FALSE(core->player_has(12));

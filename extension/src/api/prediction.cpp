@@ -21,33 +21,29 @@ namespace netw {
 
 namespace {
 
-const GameCall PREDICT_INPUT_CALL = {
-    sys::PREDICTION,
-    "NetwPrediction.predict_input",
-    "func(entity: NetwEntity, tick: int) -> Dictionary",
-    2
-};
+const GameCall PREDICT_INPUT_CALL
+    = {sys::PREDICTION,
+       "NetwPrediction.predict_input",
+       "func(entity: NetwEntity, tick: int) -> Dictionary",
+       2};
 
-const GameCall WITNESS_CONTACTS_CALL = {
-    sys::PREDICTION,
-    "NetwPrediction.witness_contacts",
-    "func() -> Dictionary",
-    0
-};
+const GameCall WITNESS_CONTACTS_CALL
+    = {sys::PREDICTION,
+       "NetwPrediction.witness_contacts",
+       "func() -> Dictionary",
+       0};
 
-const GameCall CORRECTION_PATH_CALL = {
-    sys::PREDICTION,
-    "NetwPrediction.correction_path_clear",
-    "func(current: Dictionary, proposed: Dictionary) -> bool",
-    2
-};
+const GameCall CORRECTION_PATH_CALL
+    = {sys::PREDICTION,
+       "NetwPrediction.correction_path_clear",
+       "func(current: Dictionary, proposed: Dictionary) -> bool",
+       2};
 
-const GameCall SENSOR_CALL = {
-    sys::PREDICTION,
-    "A NetwPrediction.sensors entry",
-    "func() -> Variant",
-    0
-};
+const GameCall SENSOR_CALL
+    = {sys::PREDICTION,
+       "A NetwPrediction.sensors entry",
+       "func() -> Variant",
+       0};
 
 } // namespace
 
